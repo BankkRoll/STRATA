@@ -261,10 +261,40 @@
     }
   ],
   "comparison": {
-    "release": null,
-    "measuredOn": null,
-    "machine": null,
-    "methodology": [],
-    "results": []
+    "release": "v0.1.0",
+    "measuredOn": "2026-10-09",
+    "machine": "8-core / 16-thread desktop, 32 GB RAM, NVMe SSD, Windows 11",
+    "methodology": [
+      "Same machine, same volume, elevated session for every tool, run back to back with Strata first. No cache was dropped and there was no reboot beforehand.",
+      "Wall-clock time from start until the tool has a complete size total for the drive.",
+      "Strata: strata-cli MFT scan, which reads the Master File Table unbuffered, so the OS file cache does not help it. WizTree: command-line scan with a minimal CSV export.",
+      "Windows File Explorer: the Properties dialog on everything Select all picks in the drive root, which is how you see what fills a drive in Explorer. Timed from opening the dialog until its Size, Size on disk and Contains fields stop changing, read with UI Automation. Explorer leaves out hidden and protected items, so it totals less of the drive than the other tools.",
+      "Peak memory is the peak working set of the measured process. Explorer has no process of its own for this, so it is not reported.",
+      "Each tool at the version listed, default settings."
+    ],
+    "results": [
+      {
+        "metric": "Full scan, system volume",
+        "detail": "4.75M entries, 461 GiB in use, NVMe SSD",
+        "unit": "s",
+        "lowerIsBetter": true,
+        "values": [
+          { "tool": "Strata", "version": "0.1.0", "value": 26.2 },
+          { "tool": "WizTree", "version": "4.28", "value": 86 },
+          { "tool": "Windows File Explorer", "value": 559.7, "detail": "Totals 2.73M items and 208 GiB; hidden and protected items are left out" }
+        ]
+      },
+      {
+        "metric": "Peak memory, system volume",
+        "detail": "peak working set during the full scan",
+        "unit": "MiB",
+        "lowerIsBetter": true,
+        "values": [
+          { "tool": "Strata", "version": "0.1.0", "value": 918 },
+          { "tool": "WizTree", "version": "4.28", "value": 2857 },
+          { "tool": "Windows File Explorer", "value": null, "detail": "No process of its own to measure" }
+        ]
+      }
+    ]
   }
 }

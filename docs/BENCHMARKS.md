@@ -40,76 +40,102 @@ Component designs are described in the [README](../README.md#how-it-works).
 | Duplicates | `cargo bench -p strata-dupes` |
 | Activity tracking | `cargo bench -p strata-etw` |
 | App pipeline | `cargo run --release -p strata-app --example pipeline_bench -- <folder>` |
+| Head-to-head with WizTree and Explorer (elevated PowerShell) | `powershell -ExecutionPolicy Bypass -File bench\verify-elevated.ps1` |
 | History store | `cargo test -p strata-store --release --test bench -- --ignored --nocapture` |
 | UI rendering | `pnpm --dir ui fixtures:large`, then `pnpm --dir ui dev` and in another terminal `node ui/scripts/run-harness.mjs large [treemap\|sunburst\|icicle\|flame\|bubbles\|mindmap]` |
 
+## Compared with other tools
+
+Measured 2026-10-09 with Strata 0.1.0 on an 8-core / 16-thread desktop with 32 GB RAM and an NVMe
+SSD, running Windows 11. The volume was the system drive with 4.75 million entries and 461 GiB in
+use. Every tool ran in the same elevated session, one after another with Strata first, with no
+cache dropped and no reboot beforehand.
+
+| Tool | Full scan | Peak memory |
+|---|---:|---:|
+| Strata 0.1.0 (MFT scan) | 26.2 s | 918 MiB |
+| WizTree 4.28 | 86.0 s | 2,857 MiB |
+| Windows File Explorer* | 559.7 s | n/a |
+
+- **Strata:** `strata-cli` MFT scan. It reads the Master File Table unbuffered, so the OS file
+  cache does not help it.
+- **WizTree:** command-line scan with a minimal CSV export.
+- **Windows File Explorer:** the Properties dialog on everything Select all picks in the drive
+  root. Timed until its Size, Size on disk and Contains fields stop changing, read with UI
+  Automation.
+- **Peak memory** is the peak working set of the measured process.
+
+* Explorer leaves out hidden and protected items, so it reached 2.73 million items and 208 GiB
+rather than the whole drive. Its Properties dialog has no process of its own, so peak memory is
+not reported.
+
 ## Results
 
-| Metric | Result | Target |
-|---|---|---|
-| **MFT scanner** | | |
-| Parse 1M MFT records, parallel (fixups + parse + assemble) | 155–291 ms (3.4–6.4 M records/s) | ≤ 3 s per 1M files end to end |
-| Parse 1M MFT records, single thread | 0.64–1.02 s | — |
-| Scan pipeline end to end over an in-memory image (I/O thread, channel, parser, sink) | 0.85–1.1 M records/s | — |
-| **App pipeline** (standard scanner, 4.96M-entry user profile, release build) | | |
-| Scan start to first usable treemap | 151–168 ms | — |
-| Finish after the walk (build, classify, remap) | 3.2–3.4 s | — |
-| Treemap of a 103.5k-entry folder from the live index | 3.2 ms | — |
-| Index memory, names excluded | 59.6 B per entry | — |
-| **Standard scanner** | | |
-| System volume, full accuracy (allocation pass on) | 20–23 s per 1M entries | ≤ 30 s per 1M |
-| System volume, listing only (allocation pass off) | 2.5–3.0 s per 1M entries | — |
-| Generated 1M-file tree, allocation pass on | 13.2 s | ≤ 30 s |
-| Generated 1M-file tree, listing only | 0.34 s | — |
-| Cancel to return | 48–180 ms | — |
-| **Index** | | |
-| Memory per entry, names excluded | 58.7 B at 1M, 59.2 B at 5M (lite: 42.7 B) | ≤ 64 B |
-| Build, 1M entries (stage + finish) | 0.60 s | — |
-| Live updates applied, 1M index, mixed batches of 1,000 | 216k–334k updates/s | — |
-| Cache file, 1M entries | 75.2 MB; save 42–51 ms; load + full validation 26–43 ms | — |
-| Children of a 100k-entry folder, first 200 by size | 8.0 ms | — |
-| Top 100 largest files, 5M entries | 12.2 ms | — |
-| **Search** (5M names) | | |
-| First results | ≤ 1.1 ms | ≤ 50 ms |
-| Complete scan, any query tried (substring, prefix, wildcard, path, regex, filters) | ≤ 28 ms | — |
-| **Layout** | | |
-| Treemap relayout, 100k-entry subtree | 3.2 ms | ≤ 50 ms |
-| Treemap, 1M-entry tree, default level of detail | 6.8 ms (7.1 ms with cushions) | — |
-| Sunburst / icicle / circle packing, 1M-entry tree | 0.39 / 1.8 / 0.70 ms | — |
-| Pick (hit test), 503k-rect layout | 0.12 µs; 0.29 µs with ancestor chain | < 1 ms |
-| Pick, single folder of 1M files | 0.20 µs | < 1 ms |
-| Drill-down transition matching, 39k rects | 7.4 ms | — |
-| **Live updates** (USN journal) | | |
-| Journal record to UI change set | 251–265 ms | ≤ 1 s |
-| Throughput into a 1M-entry index | ~316k journal records/s | — |
-| 500k files created at once | drained in 1.9 s; slowest tick 66 ms; longest index lock 24 ms | UI stays responsive |
-| Wake-ups while idle (3 s) | 0 | ≈ 0% CPU |
-| **Duplicates** | | |
-| Size grouping, 1M candidates | 76–86 ms | — |
-| Hashing, data in OS cache, 1 / 2 / 4 threads | 2.7 / 4.4 / 5.6 GB/s | — |
-| Rerun served from the hash cache | 0 bytes read, < 1 ms | — |
-| **Activity tracking** (ETW consumer) | | |
-| Decode + aggregate | 0.71–0.93 M events/s (1.05–1.26 µs per event) | — |
-| CPU at 10k events/s | ~1.1% of one core | ≤ 2% (sampling above) |
-| **IPC** | | |
-| Named pipe, 1M scan records in 8,192-record batches | 3.20 M records/s (279 MB/s) | — |
-| Wire size per scan record (postcard) | 85.8 B | — |
-| Encode / decode per record | 170 ns / 280 ns | — |
-| **Classifier** | | |
-| Classification per entry, single thread | 150 ns | — |
-| 3.83M-entry tree, 16 threads | 0.18 s | — |
-| Compile 240 built-in rules | ~4 ms | — |
-| **History store** (50,000 directories per snapshot) | | |
-| Commit, first snapshot | 147–215 ms | < 1 s |
-| Commit, later snapshots | 53–65 ms median | < 1 s |
-| Storage per snapshot | 12.0 B per directory | — |
-| Diff of two snapshots | 14–35 ms | — |
-| **UI** (503,464 instances, LOD off) | | |
-| Frame rate during hover, zoom and pan sweeps | 100 fps, no dropped frames (harness ceiling) | 60 fps |
-| Frame time p95 / p99 | 10.1 / 10.2 ms | — |
-| Draw-call CPU per frame | 0.03 ms | — |
-| Pick in the UI, including DOM measurement | 18–26 µs | < 1 ms |
-| Frame ingest (skip table, grids, GPU upload), once per layout | 15 ms | — |
-| Entry bundle | 121.7 kB gzip | ≤ 130 kB (enforced by the build) |
-| **Installer** | | |
-| x64 NSIS installer | ~3 MB | ≤ 15 MB |
+| Metric | Result |
+|---|---|
+| **MFT scanner** | |
+| Parse 1M MFT records, parallel (fixups + parse + assemble) | 155–291 ms (3.4–6.4 M records/s) |
+| Parse 1M MFT records, single thread | 0.64–1.02 s |
+| Scan pipeline end to end over an in-memory image (I/O thread, channel, parser, sink) | 0.85–1.1 M records/s |
+| **App pipeline** (standard scanner, 4.96M-entry user profile, release build) | |
+| Scan start to first usable treemap | 151–168 ms |
+| Finish after the walk (build, classify, remap) | 3.2–3.4 s |
+| Treemap of a 103.5k-entry folder from the live index | 3.2 ms |
+| Index memory, names excluded | 59.6 B per entry |
+| **Standard scanner** | |
+| System volume, full accuracy (allocation pass on) | 20–23 s per 1M entries |
+| System volume, listing only (allocation pass off) | 2.5–3.0 s per 1M entries |
+| Generated 1M-file tree, allocation pass on | 13.2 s |
+| Generated 1M-file tree, listing only | 0.34 s |
+| Cancel to return | 48–180 ms |
+| **Index** | |
+| Memory per entry, names excluded | 58.7 B at 1M, 59.2 B at 5M (lite: 42.7 B) |
+| Build, 1M entries (stage + finish) | 0.60 s |
+| Live updates applied, 1M index, mixed batches of 1,000 | 216k–334k updates/s |
+| Cache file, 1M entries | 75.2 MB; save 42–51 ms; load + full validation 26–43 ms |
+| Children of a 100k-entry folder, first 200 by size | 8.0 ms |
+| Top 100 largest files, 5M entries | 12.2 ms |
+| **Search** (5M names) | |
+| First results | ≤ 1.1 ms |
+| Complete scan, any query tried (substring, prefix, wildcard, path, regex, filters) | ≤ 28 ms |
+| **Layout** | |
+| Treemap relayout, 100k-entry subtree | 3.2 ms |
+| Treemap, 1M-entry tree, default level of detail | 6.8 ms (7.1 ms with cushions) |
+| Sunburst / icicle / circle packing, 1M-entry tree | 0.39 / 1.8 / 0.70 ms |
+| Pick (hit test), 503k-rect layout | 0.12 µs; 0.29 µs with ancestor chain |
+| Pick, single folder of 1M files | 0.20 µs |
+| Drill-down transition matching, 39k rects | 7.4 ms |
+| **Live updates** (USN journal) | |
+| Journal record to UI change set | 251–265 ms |
+| Throughput into a 1M-entry index | ~316k journal records/s |
+| 500k files created at once | drained in 1.9 s; slowest tick 66 ms; longest index lock 24 ms |
+| Wake-ups while idle (3 s) | 0 |
+| **Duplicates** | |
+| Size grouping, 1M candidates | 76–86 ms |
+| Hashing, data in OS cache, 1 / 2 / 4 threads | 2.7 / 4.4 / 5.6 GB/s |
+| Rerun served from the hash cache | 0 bytes read, < 1 ms |
+| **Activity tracking** (ETW consumer) | |
+| Decode + aggregate | 0.71–0.93 M events/s (1.05–1.26 µs per event) |
+| CPU at 10k events/s | ~1.1% of one core |
+| **IPC** | |
+| Named pipe, 1M scan records in 8,192-record batches | 3.20 M records/s (279 MB/s) |
+| Wire size per scan record (postcard) | 85.8 B |
+| Encode / decode per record | 170 ns / 280 ns |
+| **Classifier** | |
+| Classification per entry, single thread | 150 ns |
+| 3.83M-entry tree, 16 threads | 0.18 s |
+| Compile 240 built-in rules | ~4 ms |
+| **History store** (50,000 directories per snapshot) | |
+| Commit, first snapshot | 147–215 ms |
+| Commit, later snapshots | 53–65 ms median |
+| Storage per snapshot | 12.0 B per directory |
+| Diff of two snapshots | 14–35 ms |
+| **UI** (503,464 instances, LOD off) | |
+| Frame rate during hover, zoom and pan sweeps | 100 fps, no dropped frames (harness ceiling) |
+| Frame time p95 / p99 | 10.1 / 10.2 ms |
+| Draw-call CPU per frame | 0.03 ms |
+| Pick in the UI, including DOM measurement | 18–26 µs |
+| Frame ingest (skip table, grids, GPU upload), once per layout | 15 ms |
+| Entry bundle | 121.7 kB gzip |
+| **Installer** | |
+| x64 NSIS installer | ~3 MB |

@@ -264,24 +264,22 @@
     "release": "v0.1.0",
     "measuredOn": "2026-10-09",
     "machine": "8-core / 16-thread desktop, 32 GB RAM, NVMe SSD, Windows 11",
-    "methodology": [
-      "Same machine and volume, run back to back. Explorer is the Properties dialog on everything in the drive root."
-    ],
+    "methodology": [],
     "results": [
       {
         "metric": "Full scan, system volume",
-        "detail": "4.75M entries, 461 GiB in use, NVMe SSD",
+        "detail": "",
         "unit": "s",
         "lowerIsBetter": true,
         "values": [
           { "tool": "Strata", "version": "0.1.0", "value": 26.2 },
           { "tool": "WizTree", "version": "4.28", "value": 86 },
-          { "tool": "Windows File Explorer", "value": 559.7, "detail": "Skips hidden files; counts 208 GiB" }
+          { "tool": "Windows File Explorer", "value": 559.7 }
         ]
       },
       {
         "metric": "Peak memory, system volume",
-        "detail": "during the full scan",
+        "detail": "",
         "unit": "MiB",
         "lowerIsBetter": true,
         "values": [

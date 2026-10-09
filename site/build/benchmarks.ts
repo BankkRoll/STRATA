@@ -561,7 +561,7 @@ function bars(title: string, r: ComparisonResult, first?: ComparisonResult): str
   );
 
   return `<div class="vs__chart">
-  <div class="vs__chart-head"><h5 class="vs__chart-title">${esc(title)}</h5><span class="vs__chart-sub">${esc(r.detail)}${r.lowerIsBetter ? " · lower is better" : ""}</span></div>
+  <div class="vs__chart-head"><h5 class="vs__chart-title">${esc(title)}</h5>${r.detail ? `<span class="vs__chart-sub">${esc(r.detail)}</span>` : ""}</div>
   <div class="vs__rows${first ? " has-first" : ""}" aria-hidden="true">${first ? `<div class="vs__cols"><span>Median</span><span>First run</span></div>` : ""}${rows.join("\n")}</div>
   ${table}
 </div>`;

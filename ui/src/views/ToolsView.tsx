@@ -1,5 +1,5 @@
 /**
- * Built-in Windows tools (SPEC §15.6). Each card shows what the tool does;
+ * Built-in Windows tools. Each card shows what the tool does;
  * choosing it asks the backend for the exact command, shows that command
  * verbatim in a confirmation, and only then runs it. Captured output (DISM)
  * streams into a log region. Hibernation is guidance only and never runs.

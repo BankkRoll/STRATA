@@ -1,5 +1,5 @@
 /**
- * Dependency injection for the wave-2 views (cleanup, tools, insights,
+ * Dependency injection for the feature views (cleanup, tools, insights,
  * duplicates, activity, history, settings).
  *
  * Kept separate from `services.tsx` so the two evolve independently: the
@@ -94,7 +94,7 @@ export type SettingsApi = Pick<
   | "reportIssue"
 >;
 
-/** Everything the wave-2 views need from the backend. */
+/** Everything the feature views need from the backend. */
 export interface FeatureServices {
   cleanup: CleanupApi;
   tools: ToolsApi;

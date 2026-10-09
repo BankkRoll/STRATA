@@ -1,5 +1,5 @@
 /**
- * History / timeline (SPEC §18): volume usage over time and a "what changed"
+ * History / timeline: volume usage over time and a "what changed"
  * diff between any two snapshots (grown, shrunk, new and deleted large
  * folders). Folders that still exist link to the detail panel.
  */

@@ -1,5 +1,5 @@
 /**
- * Search plumbing for the command palette (SPEC §17).
+ * Search plumbing for the command palette.
  *
  * - {@link fuzzyMatch}: scores palette commands against the typed text.
  * - {@link SearchStream}: streaming filename results from the backend search

@@ -1,5 +1,5 @@
 /**
- * Entry context menu (SPEC §16.1). Every action is listed; unavailable ones
+ * Entry context menu. Every action is listed; unavailable ones
  * are disabled with their reason shown, never hidden or faked. Keyboard:
  * Up/Down/Home/End move, Enter/Space run, Escape closes and returns focus.
  */

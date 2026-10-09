@@ -3,7 +3,7 @@
  * Serialized names match the Rust `serde` names in `strata-core`.
  */
 
-/** Which size every view aggregates (SPEC §7); serde name of `strata_core::SizeMode`. */
+/** Which size every view aggregates; serde name of `strata_core::SizeMode`. */
 export type SizeMode = "allocated" | "logical";
 
 /** Cleanup safety tier (`strata_core::Safety`). */
@@ -15,7 +15,7 @@ export type TreemapStyle = "flat" | "cushion";
 /** Visual views that render a layout. */
 export type VisualView = "treemap" | "sunburst" | "icicle" | "flame" | "bubbles" | "mindmap";
 
-/** Non-visual views from UI wave 2 (insights, cleanup, settings); each is a lazy chunk. */
+/** Non-visual views (insights, cleanup, settings); each is a lazy chunk. */
 export type FeatureView =
   | "cleanup"
   | "recommendations"

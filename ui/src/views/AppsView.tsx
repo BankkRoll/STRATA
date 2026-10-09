@@ -1,5 +1,5 @@
 /**
- * Apps (SPEC §12.3): every installed app's footprint broken down by
+ * Apps: every installed app's footprint broken down by
  * location, attribution confidence with evidence, registry-vs-measured
  * mismatches, Uninstall (the app's own uninstaller, confirmed) and Clean
  * caches (queued for review), plus orphaned app data from uninstalled apps.

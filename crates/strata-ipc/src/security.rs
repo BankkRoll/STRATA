@@ -1,5 +1,4 @@
-//! Pipe security: the DACL, the pipe name, and peer verification (SPEC §4,
-//! §15.7).
+//! Pipe security: the DACL, the pipe name, and peer verification.
 //!
 //! The helper runs elevated and accepts commands that read raw volumes and
 //! delete files, so the pipe is a trust boundary. Defenses, in order:

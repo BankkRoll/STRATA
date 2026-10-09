@@ -1,5 +1,5 @@
 /**
- * Built-in Windows tool actions (SPEC §15.6).
+ * Built-in Windows tool actions.
  *
  * Two-step by design: `tools_prepare` returns the exact command and a
  * description the user reads (`strata_clean::tools::CommandSpec`), and only

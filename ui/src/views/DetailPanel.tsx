@@ -1,5 +1,5 @@
 /**
- * Detail panel for the selection (SPEC §16.3). Each section has designed
+ * Detail panel for the selection. Each section has designed
  * empty ("none"), unknown ("not available") and loading states; the whole
  * panel has empty, loading, error, multi-selection and partial-scan states.
  */

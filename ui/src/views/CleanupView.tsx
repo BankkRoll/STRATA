@@ -1,5 +1,5 @@
 /**
- * Cleanup queue and flow (SPEC §15.2–15.5): queue with tier totals → review
+ * Cleanup queue and flow: queue with tier totals → review
  * (grouped, expandable, deselect, Careful acknowledgements, method choice
  * with Recycle Bin availability and large-delete confirmation) → pre-flight
  * (moved / changed / locked with polite close or skip) → execute with

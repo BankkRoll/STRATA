@@ -1,5 +1,5 @@
 /**
- * ETW activity tracking (SPEC §11): opt-in, helper-only, local-only.
+ * ETW activity tracking: opt-in, helper-only, local-only.
  * Top writers per window, per-directory writers for the detail panel, and
  * one-click clearing.
  */

@@ -2,10 +2,12 @@
 
 The project site at <https://bankkroll.github.io/STRATA/>: a static Vite + TypeScript page.
 
-The interactive demo is not a recording. It imports the app's WebGL2 renderers, layout-frame
-decoder and view controller from `ui/src` (via the `@ui` alias) and replays the layout
-fixtures that `strata-layout` exports for the UI tests. The demo window is styled by the app's
-own `ui/src/styles.css`, scoped to `.strata-app` at build time.
+The interactive demo is the app itself. `pnpm --dir site build` also builds `ui/vite.demo.config.ts`
+(entry `ui/src/demo/`) into `site/dist/demo/`: the real app shell and stylesheet over the sample tree
+that `strata-layout` exports for the UI tests, with layouts computed in the browser by a TypeScript
+port of the layout engine (checked byte for byte against the Rust fixtures). Only Explore works;
+every other area shows the app's own unavailable state. The page embeds it in a same-origin iframe
+at 1280×800, scaled to fit.
 
 ## Develop
 
@@ -16,7 +18,8 @@ pnpm --dir site build     # type-check and build to site/dist
 pnpm --dir site preview   # serve the build
 ```
 
-Append `?nogl` to the URL to see the SVG fallback used when WebGL2 is unavailable.
+Append `?nogl` to the URL to see the app's own state for machines without WebGL2.
+`pnpm --dir ui demo` serves the demo on its own.
 
 ## Content
 
@@ -31,5 +34,5 @@ Append `?nogl` to the URL to see the SVG fallback used when WebGL2 is unavailabl
 ## Deploy
 
 `.github/workflows/pages.yml` builds and deploys to GitHub Pages on every push to `main` that
-touches `site/`, `ui/src/` or the workflow, and on manual runs. The repository's Pages source
+touches `site/`, `ui/src/`, the demo build config or the workflow, and on manual runs. The repository's Pages source
 must be set to **GitHub Actions**.

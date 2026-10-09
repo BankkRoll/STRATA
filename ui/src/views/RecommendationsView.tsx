@@ -1,5 +1,5 @@
 /**
- * "Free up space" (SPEC §16.2): ranked, explainable findings. Each one can
+ * "Free up space": ranked, explainable findings. Each one can
  * be expanded to read why and preview its items (deselecting any), then
  * added to the cleanup queue in one click — or, for findings Windows should
  * handle, opens the matching tool with its command shown first.

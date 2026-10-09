@@ -337,12 +337,14 @@ const rowLabel = (label: string, detail?: string): string =>
   `<div class="chart__label"><span class="chart__name">${esc(label)}</span>${detail ? `<span class="chart__detail">${esc(detail)}</span>` : ""}</div>`;
 
 function srTable(caption: string, head: string[], rows: string[][]): string {
-  return `<table class="visually-hidden"><caption>${esc(caption)}</caption><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows
+  // NOTE: the hiding wrapper is a block because tables ignore `width: 1px` and
+  // `overflow: hidden`, so a hidden table still widened the page on phones.
+  return `<div class="visually-hidden"><table><caption>${esc(caption)}</caption><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows
     .map((r) => `<tr><th scope="row">${esc(r[0] ?? "")}</th>${r
       .slice(1)
       .map((c) => `<td>${esc(c)}</td>`)
       .join("")}</tr>`)
-    .join("")}</tbody></table>`;
+    .join("")}</tbody></table></div>`;
 }
 
 function strip(chart: StripChart): string {

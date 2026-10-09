@@ -1,5 +1,5 @@
 /**
- * Command palette (Ctrl+K / Ctrl+F, SPEC §17): fuzzy-matched commands plus
+ * Command palette (Ctrl+K / Ctrl+F): fuzzy-matched commands plus
  * streaming filename results from the backend search engine. Implements the
  * ARIA combobox + listbox pattern; the input keeps focus and arrow keys move
  * the active option.
@@ -107,7 +107,7 @@ export function CommandPalette({ initial, onClose }: CommandPaletteProps) {
     };
   }, [services]);
 
-  // Debounced re-query (~30 ms, SPEC §17) while typing.
+  // Debounced re-query (~30 ms) while typing.
   useEffect(() => {
     const text = query.trim();
     if (text.length < 2) return;

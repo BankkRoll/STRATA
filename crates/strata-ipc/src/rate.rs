@@ -1,4 +1,4 @@
-//! Per-connection request rate limiting (SPEC §4).
+//! Per-connection request rate limiting.
 
 use std::time::{Duration, Instant};
 

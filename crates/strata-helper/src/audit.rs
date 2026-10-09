@@ -1,4 +1,4 @@
-//! Audit records for privileged actions (SPEC §15.7).
+//! Audit records for privileged actions.
 //!
 //! The helper has no database. Each privileged request sends its records to
 //! the client as `Response::Audit` events with the request's id: `Started`

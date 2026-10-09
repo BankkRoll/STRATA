@@ -1,4 +1,4 @@
-//! The elevated Strata helper (SPEC §4) and the app's client for it.
+//! The elevated Strata helper and the app's client for it.
 //!
 //! The unelevated app never opens raw volumes or deletes with elevated
 //! rights itself; it asks this helper over a named pipe secured by

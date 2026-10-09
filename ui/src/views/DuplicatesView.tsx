@@ -1,5 +1,5 @@
 /**
- * Duplicates (SPEC §14): background scan with progress and cancel, groups
+ * Duplicates: background scan with progress and cancel, groups
  * sorted by wasted bytes, a keep suggestion with its reason, and guardrailed
  * selection (never every copy). Selected copies go to the cleanup queue, or,
  * behind explicit warnings, are replaced with hardlinks to the kept copy.

@@ -8,7 +8,7 @@
  */
 import { createContext, useContext } from "react";
 import { getCapabilities } from "./lib/backend";
-import { CommandBus } from "./lib/commands";
+import { CommandBus, type CommandBusDeps } from "./lib/commands";
 import { fetchEntryDetail, type EntryDetail } from "./lib/detail";
 import { BatchedEntryInfoProvider, tauriEntryInfoFetcher, type EntryInfoProvider } from "./lib/entries";
 import type { ViewKind } from "./lib/layout/frame";
@@ -59,6 +59,12 @@ export interface Services {
   appName(id: number): string | null;
   /** Backend command names this build implements. */
   capabilities(): ReadonlySet<string>;
+  /**
+   * Why commands missing from {@link capabilities} are unavailable, when the
+   * reason is not "this build lacks them" (the website demo runs without
+   * the engine). Unset in the app.
+   */
+  unavailableReason?: string;
   /** Entry action dispatch. */
   bus: CommandBus;
   /** GPU renderer factory (`null` when WebGL2 is unavailable). */
@@ -91,7 +97,22 @@ export function createStoreBus(
   capabilities: () => ReadonlySet<string>,
   writeClipboard: (text: string) => Promise<void> = (t) => navigator.clipboard.writeText(t),
 ): CommandBus {
-  return new CommandBus({
+  return new CommandBus(storeBusDeps(capabilities, writeClipboard));
+}
+
+/**
+ * The dependencies {@link createStoreBus} wires, for buses that extend
+ * {@link CommandBus}.
+ *
+ * @param capabilities - Capability lookup.
+ * @param writeClipboard - Clipboard writer.
+ * @returns Bus dependencies driving the shared store.
+ */
+export function storeBusDeps(
+  capabilities: () => ReadonlySet<string>,
+  writeClipboard: (text: string) => Promise<void> = (t) => navigator.clipboard.writeText(t),
+): CommandBusDeps {
+  return {
     capabilities,
     writeClipboard,
     ui: {
@@ -113,7 +134,7 @@ export function createStoreBus(
         useApp.getState().notify(message);
       },
     },
-  });
+  };
 }
 
 /**

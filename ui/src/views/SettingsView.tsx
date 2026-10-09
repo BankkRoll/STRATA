@@ -13,7 +13,7 @@
  *   and import (`settings_export` / `settings_import`).
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { LoadState, useCapability, useLoad } from "../components/feature";
+import { LoadState, useCapability, useLoad, useUnavailableReason } from "../components/feature";
 import { Icon } from "../components/icons";
 import { useFeatures } from "../features";
 import { errorMessage } from "../lib/backend";
@@ -393,6 +393,7 @@ export interface SettingsPageProps {
 /** The Settings page body. */
 export function SettingsPage({ initial, canSave }: SettingsPageProps) {
   const editor = useSettingsEditor(initial, canSave);
+  const unavailable = useUnavailableReason();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"ui" | "json">("ui");
   const [active, setActive] = useState<CategoryId>("general");
@@ -550,7 +551,7 @@ export function SettingsPage({ initial, canSave }: SettingsPageProps) {
             draft && editor ? (
               <JsonView settings={editor.saved} unsaved={!sameValue(editor.saved, editor.draft)} onImported={editor.replace} />
             ) : (
-              <p className="smuted settings__empty">The JSON view needs the settings store, which this build doesn’t include.</p>
+              <p className="smuted settings__empty">{unavailable ? `The JSON view needs the settings store. ${unavailable}` : "The JSON view needs the settings store, which this build doesn’t include."}</p>
             )
           ) : (
             <>
@@ -564,7 +565,7 @@ export function SettingsPage({ initial, canSave }: SettingsPageProps) {
               {!editor && (
                 <div className="settings__notice" role="note">
                   <Icon name="info" size={16} />
-                  <p>Saving settings isn’t available in this build. The tools below still work where the engine supports them.</p>
+                  <p>{unavailable ? `Settings aren’t available here. ${unavailable}` : "Saving settings isn’t available in this build. The tools below still work where the engine supports them."}</p>
                 </div>
               )}
               {SETTINGS_CATEGORIES.map((c) => {

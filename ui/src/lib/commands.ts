@@ -11,7 +11,7 @@ import { call, errorMessage } from "./backend";
 import { addToQueue } from "./cleanup";
 import { fetchEntryPath } from "./entries";
 
-/** Actions on entries (SPEC §16.1 context menu). */
+/** Actions on entries, as offered by the context menu. */
 export type EntryAction =
   | "open"
   | "reveal"

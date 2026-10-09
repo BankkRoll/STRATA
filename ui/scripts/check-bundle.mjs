@@ -1,6 +1,6 @@
 // Bundle budget check, run after `vite build`.
 //
-// Keeps cold start fast (SPEC §2: first paint ≤ 600 ms) by capping the entry
+// Keeps cold start fast (target: first paint within 600 ms) by capping the entry
 // chunk's gzip size, requires the non-default views to stay in lazy chunks,
 // and fails if the dev-only fixture harness leaks into production output.
 import { readFileSync, readdirSync } from "node:fs";
@@ -13,7 +13,7 @@ const LAZY = [
   "CircleRenderer",
   "CommandPalette",
   "CheatSheet",
-  // Wave-2 views: each must stay its own chunk so the entry keeps its budget.
+  // Feature views: each must stay its own chunk so the entry keeps its budget.
   "CleanupView",
   "RecommendationsView",
   "LargestView",

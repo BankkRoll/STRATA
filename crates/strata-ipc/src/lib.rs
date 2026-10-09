@@ -1,4 +1,4 @@
-//! The helper ↔ app channel (SPEC §4).
+//! The helper ↔ app channel.
 //!
 //! The unelevated app talks to the elevated `strata-helper` over a named
 //! pipe. This crate defines everything on that pipe:

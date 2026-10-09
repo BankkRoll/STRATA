@@ -1,9 +1,9 @@
 /**
- * User-facing appearance settings.
+ * User-facing appearance settings for the running session.
  *
- * Persistence moves to the SQLite settings store (`strata-store`,
- * `appearance.*` keys) when the settings commands are wired; until then these
- * live only for the session.
+ * `store/prefs.ts` seeds theme and units from the persisted settings
+ * (`appearance.*` keys) at startup; changes made through these setters are
+ * not written back, so they last only for the session.
  */
 import { create } from "zustand";
 import type { SizeUnits } from "../lib/format";
@@ -16,7 +16,7 @@ export interface SettingsState {
   theme: ThemePreference;
   /** Size units (`appearance.units`): binary shown as KB/MB/GB, or SI. */
   units: SizeUnits;
-  /** Overlay category patterns for color-blind users (SPEC §12.5). */
+  /** Overlay category patterns for color-blind users. */
   patterns: boolean;
   setTheme: (theme: ThemePreference) => void;
   setUnits: (units: SizeUnits) => void;

@@ -1,9 +1,9 @@
 /**
  * Page bootstrap: scroll reveals, the architecture captions, copy buttons on
- * the benchmark reproduction commands, and the lazy demo. The demo module (renderer,
- * fixtures) loads only when its section nears the viewport, so the first paint costs a few kilobytes of script.
+ * the benchmark reproduction commands, and the demo frame. The demo (the app
+ * and its sample data) loads only when its section nears the viewport, so the
+ * first paint costs a few kilobytes of script.
  */
-import "virtual:strata-app.css";
 import "./styles/site.css";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -96,34 +96,72 @@ function copyButtons(): void {
   }
 }
 
+/** Window size the demo renders at; the page scales it to fit. */
+const DEMO_WIDTH = 1280;
+/** Posted by the demo when the visitor presses Escape to leave it (`ui/src/demo/main.tsx`). */
+const DEMO_LEAVE = "strata-demo:leave";
+/** Tells the demo the scale the page draws it at, so the map renders at that scale. */
+const DEMO_SCALE = "strata-demo:scale";
+
+/**
+ * The demo: the app itself, built from `ui/` into `demo/` (see
+ * `ui/vite.demo.config.ts`), loaded when its section nears the viewport.
+ *
+ * NOTE: it runs in a same-origin iframe instead of being mounted into this
+ * page. The app owns its document: global styles, theme attributes on
+ * `<html>`, the document title and window-level shortcuts. A frame keeps all
+ * of that exactly as in the app, keeps it from touching the page, and keeps
+ * React out of the page's own script.
+ *
+ * Below 900 px the window is still shown, scaled down, but inert: the shell
+ * is a desktop layout and its targets would be a few pixels wide.
+ */
 function demo(): void {
   const root = document.querySelector<HTMLElement>("[data-demo]");
-  if (!root) return;
+  const status = root?.querySelector<HTMLElement>("[data-demo-status]");
+  if (!root || !status) return;
+  status.textContent = "Loading the demo…";
+  let frame: HTMLIFrameElement | null = null;
+  const scale = () => Math.min(1, root.clientWidth / DEMO_WIDTH);
+  const fit = () => {
+    root.style.setProperty("--demo-scale", String(scale()));
+    frame?.contentWindow?.postMessage({ type: DEMO_SCALE, scale: scale() }, location.origin);
+  };
+  fit();
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(fit).observe(root);
+  else window.addEventListener("resize", fit);
+
   const start = () => {
-    import("./demo/demo")
-      .then(async ({ mountDemo }) => {
-        const handle = await mountDemo(root);
-        // Zoom out of the drill folder once most of the window is visible.
-        const io = new IntersectionObserver(
-          (entries) => {
-            if (!entries.some((e) => e.isIntersecting)) return;
-            io.disconnect();
-            setTimeout(() => {
-              handle.playIntro();
-            }, 350);
-          },
-          { threshold: 0.55 },
-        );
-        io.observe(root);
-      })
-      .catch((err: unknown) => {
-        console.error(err);
-        const state = root.querySelector<HTMLElement>("[data-state]");
-        if (state) {
-          state.className = "state state--error";
-          state.innerHTML = "<h2>The demo could not load</h2><p>Reload the page to try again.</p>";
-        }
-      });
+    const narrow = window.matchMedia("(max-width: 899px)");
+    const f = document.createElement("iframe");
+    frame = f;
+    f.className = "demo-window__frame";
+    f.title = "Strata demo: the app on a sample volume";
+    const query = new URLSearchParams({ scale: String(scale()) });
+    // `?nogl` passes through to show the app's no-WebGL state.
+    if (new URLSearchParams(location.search).has("nogl")) query.set("nogl", "");
+    f.src = `${import.meta.env.BASE_URL}demo/?${query.toString()}`;
+    f.addEventListener(
+      "load",
+      () => {
+        status.hidden = true;
+        fit();
+      },
+      { once: true },
+    );
+    const interactive = () => {
+      f.inert = narrow.matches;
+      root.classList.toggle("is-static", narrow.matches);
+    };
+    interactive();
+    narrow.addEventListener("change", interactive);
+    window.addEventListener("message", (e: MessageEvent<unknown>) => {
+      if (e.origin !== location.origin || e.source !== f.contentWindow) return;
+      if (typeof e.data === "object" && e.data !== null && (e.data as { type?: unknown }).type === DEMO_LEAVE) {
+        document.getElementById("demo-title")?.focus();
+      }
+    });
+    root.append(f);
   };
   if (typeof IntersectionObserver === "undefined") {
     start();

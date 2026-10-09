@@ -1,7 +1,7 @@
 /*
  * Site styles. Dark by default; `prefers-color-scheme: light` swaps the
- * tokens. The demo window (`.strata-app`) uses the app's own scoped
- * stylesheet; rules here only lay it out on the page.
+ * tokens. The demo is the app in an iframe with its own stylesheet; rules
+ * here only size and frame it on the page.
  *
  * The system is deliberately flat: neutral surfaces, 1px hairlines, one
  * accent for primary actions and focus, and no gradients, glows or blurs.
@@ -408,237 +408,77 @@ li > p code {
 }
 
 /* -----------------------------------------------------------------------------
- * Demo window
+ * Demo
+ *
+ * The demo is the app itself in an iframe (see `demo()` in main.ts). It
+ * renders at a fixed 1280×800 window size and is scaled down to the content
+ * width, so it looks exactly like the app at 100%, only smaller.
  * -------------------------------------------------------------------------- */
 
 .demo {
   padding-bottom: clamp(64px, 9vw, 120px);
 }
 
-.demo__stage {
-  max-width: none;
-}
-
-.strata-app {
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--text);
-  text-align: left;
-}
-
-.window {
-  display: flex;
-  flex-direction: column;
+.demo-window {
+  --demo-scale: 1;
+  position: relative;
+  aspect-ratio: 1280 / 800;
   overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--line-2);
-  background: var(--bg);
+  border-radius: 8px;
+  background: var(--surface);
+  /* A hairline around the window, like the Windows 11 frame. */
+  box-shadow: 0 0 0 1px var(--line-2);
 }
 
-.window__titlebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding-left: 12px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 12px;
-  user-select: none;
+.demo-window:focus-within {
+  box-shadow: 0 0 0 2px var(--focus);
 }
 
-.window__icon {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.window__caption {
-  display: flex;
-  margin-left: auto;
-  height: 100%;
-  color: var(--text-muted);
-}
-
-.window__caption svg {
-  width: 46px;
-  height: 100%;
-  padding: 11px 18px;
-  overflow: visible;
-}
-
-.window .topbar {
-  flex-wrap: wrap;
-  row-gap: 8px;
-}
-
-.window .topbar__controls {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.window .segmented button {
-  font-size: 13px;
-}
-
-.window .visual {
-  flex: none;
-  min-height: 0;
-}
-
-.window .visual__surface {
-  flex: none;
-  aspect-ratio: 3 / 2;
-  cursor: default;
-  /* NOTE: the app captures every touch for marquee and pan; on a web page,
-     vertical swipes must still scroll. */
-  touch-action: pan-y pinch-zoom;
-}
-
-.drill-cue {
+.demo-window__frame {
   position: absolute;
-  z-index: 1;
-  border-radius: 2px;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1280px;
+  height: 800px;
+  border: 0;
+  transform: scale(var(--demo-scale));
+  transform-origin: 0 0;
+}
+
+.demo-window.is-static .demo-window__frame {
   pointer-events: none;
-  opacity: 0;
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  transition: opacity 200ms var(--ease);
 }
 
-.drill-cue.is-on {
-  opacity: 1;
-}
-
-.drill-cue.is-delayed.is-on {
-  transition-delay: 450ms;
-}
-
-.drill-cue__tag {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.visual__fallback {
+.demo-window__status {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: var(--ink-3);
+  font-size: 14px;
+  text-align: center;
 }
 
-.window .state[hidden] {
+.demo__hint {
+  margin-top: 16px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.demo__hint--narrow {
   display: none;
 }
 
-.window .visual__footer {
-  flex-wrap: wrap;
-  row-gap: 4px;
-  padding-block: 8px;
-  min-height: 48px;
-}
+@media (max-width: 899px) {
+  .demo__hint--wide {
+    display: none;
+  }
 
-.window .legend {
-  max-height: none;
-}
-
-.demo-hint {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: 12px;
-  white-space: nowrap;
-  transition: color var(--fast) var(--ease);
-}
-
-.demo-hint.is-notice {
-  color: var(--accent);
-}
-
-.detail-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px 16px;
-  min-height: 56px;
-  padding: 8px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 12px;
-}
-
-.detail-strip__swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  outline: 1px solid rgb(0 0 0 / 0.15);
-  outline-offset: -1px;
-}
-
-.detail-strip__main {
-  display: grid;
-  min-width: 0;
-  flex: 0 1 220px;
-}
-
-.detail-strip__name {
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-strip__path {
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-strip__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-}
-
-.detail-strip__facts div {
-  display: grid;
-}
-
-.detail-strip__facts dt {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.detail-strip__facts dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.detail-strip .tier {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.detail-strip__muted {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.detail-strip__perf {
-  margin-left: auto;
-  font: 11px var(--font-mono);
-  color: var(--text-muted);
-  white-space: nowrap;
+  .demo__hint--narrow {
+    display: block;
+  }
 }
 
 .demo__caption {
@@ -655,6 +495,10 @@ li > p code {
   letter-spacing: -0.01em;
 }
 
+.demo__title:focus {
+  outline: none;
+}
+
 .demo__caption p {
   max-width: 68ch;
   color: var(--ink-2);
@@ -665,66 +509,6 @@ li > p code {
   .demo__caption {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     gap: 48px;
-  }
-}
-
-@media (max-width: 760px) {
-  .window__titlebar {
-    height: 28px;
-  }
-
-  .window__caption svg {
-    width: 36px;
-    padding: 9px 13px;
-  }
-
-  .window .topbar {
-    padding: 8px;
-  }
-
-  .window .crumbs {
-    flex-basis: 100%;
-  }
-
-  .window .topbar__controls {
-    flex: 1 1 100%;
-    gap: 8px;
-  }
-
-  .window .segmented {
-    flex: 1 1 auto;
-  }
-
-  .window .segmented button {
-    flex: 1 1 auto;
-    padding: 4px 6px;
-    font-size: 12px;
-  }
-
-  .window .legend {
-    flex-basis: 100%;
-  }
-
-  .window .legend li:nth-child(n + 7) {
-    display: none;
-  }
-
-  .demo-hint {
-    margin-left: 0;
-    white-space: normal;
-  }
-
-  .detail-strip {
-    flex-wrap: wrap;
-  }
-
-  .detail-strip__main {
-    flex: 1 1 calc(100% - 40px);
-  }
-
-  .detail-strip__perf {
-    margin-left: 0;
-    flex-basis: 100%;
   }
 }
 

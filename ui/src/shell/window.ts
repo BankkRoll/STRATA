@@ -3,9 +3,9 @@
  * controls behind it.
  *
  * The custom title bar needs the main window to run without native
- * decorations. Until the window is configured that way the native frame
- * stays and the in-app bar shows no window controls, so there are never two
- * sets of caption buttons. The decision is:
+ * decorations. If the window is decorated anyway, the native frame stays and
+ * the in-app bar shows no window controls, so there are never two sets of
+ * caption buttons. The decision is:
  *
  * 1. `?titlebar=custom|native` in the URL, or the `strata.flags.titleBar`
  *    storage flag, forces a mode (development and support).

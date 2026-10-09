@@ -1,5 +1,5 @@
 /**
- * Cleanup queue, review, pre-flight, execution and undo (SPEC §15.2–15.5).
+ * Cleanup queue, review, pre-flight, execution and undo.
  *
  * The queue lives in the backend: it resolves entry ids to paths, scan
  * identities (file reference, size, mtime) and safety tiers, and refuses
@@ -12,8 +12,6 @@
  *   the Rust serde tags).
  * - Pure review rules ({@link reviewBlockers}) shared by the review screen
  *   and its tests, so "can I press Delete?" has one definition.
- *
- * The full contract table is in `docs/tracks/ui-wave2.md`.
  */
 import { call } from "./backend";
 import { callWithChannel, listenEvent } from "./bridge";

@@ -1,8 +1,8 @@
 /**
  * Paged rows for the list / tree-table pane.
  *
- * `list_children` returns one binary row page (SPEC §3: bulk data travels
- * as binary): a 32-byte header, fixed 64-byte row records, then a UTF-16LE
+ * `list_children` returns one binary row page (bulk data travels as binary,
+ * not JSON): a 32-byte header, fixed 64-byte row records, then a UTF-16LE
  * name blob. {@link decodeRowPage} reads it; {@link RowSource} is what the
  * table depends on.
  */

@@ -3,16 +3,15 @@
  *
  * Responsibilities:
  * - {@link decodeColorKey} / {@link encodeColorKey}: the bit layout of the
- *   `u32` color key every layout record carries (documented in
- *   `docs/tracks/ui.md`). All modes are packed into one key, so switching
- *   color mode is a shader uniform change, never a relayout.
+ *   `u32` color key every layout record carries. All modes are packed into
+ *   one key, so switching color mode is a shader uniform change, never a
+ *   relayout.
  * - Fixed accessible palettes with light and dark variants for categories
- *   (SPEC §12.5) and safety tiers, plus a pattern per category for
- *   color-blind users.
+ *   and safety tiers, plus a pattern per category for color-blind users.
  * - {@link buildPaletteTexture}: the RGBA lookup texture the renderers sample.
  */
 
-/** What block colors encode (SPEC §16.1). */
+/** What block colors encode. */
 export type ColorMode = "category" | "fileType" | "age" | "app" | "safety" | "recent";
 
 /** Every color mode with its label, in menu order. */
@@ -115,7 +114,7 @@ export interface CategoryInfo {
 }
 
 /**
- * The 15 categories in display order (SPEC §12.5). Hues are spaced so
+ * The 15 categories in display order. Hues are spaced so
  * neighbors differ in lightness as well as hue, and each also carries a
  * distinct pattern, so no category relies on hue alone.
  */
@@ -184,7 +183,7 @@ export const AGE_BUCKETS: readonly { maxSecs: number; label: string }[] = [
   { maxSecs: Number.POSITIVE_INFINITY, label: "Older" },
 ];
 
-/** Age bucket for a suspicious timestamp (SPEC §13). */
+/** Age bucket for a suspicious timestamp. */
 export const AGE_SUSPICIOUS = 31;
 
 /**

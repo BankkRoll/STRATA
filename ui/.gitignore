@@ -1,2 +1,5 @@
 # Large dev-harness fixtures (~40 MB); regenerate with `pnpm fixtures:large`.
 /src/dev/__fixtures__/large/
+
+# Standalone build of the website demo (`pnpm build:demo`).
+/dist-demo/

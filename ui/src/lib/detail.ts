@@ -1,5 +1,5 @@
 /**
- * The detail panel's data contract (SPEC §16.3): `entry_detail` returns one
+ * The detail panel's data contract: `entry_detail` returns one
  * {@link EntryDetail} as JSON. Sections the backend cannot fill yet are
  * `null` (unknown) rather than empty, so the panel can tell "none" from
  * "not available".
@@ -13,7 +13,7 @@ export type ReparseKind = "symlink" | "mount_point" | "wof" | "cloud" | "dedup" 
 /** Cloud placeholder state (`strata_core::CloudState`). */
 export type CloudState = "online_only" | "locally_available" | "always_keep";
 
-/** Attribution confidence (SPEC §12.3). */
+/** Attribution confidence. */
 export type Confidence = "exact" | "high" | "heuristic";
 
 /** One timestamp with its provenance. Times are Unix ms UTC. */
@@ -55,7 +55,7 @@ export interface EntryDetail {
     mftChanged: DetailTime;
     /** `$FILE_NAME` created time (forensics, advanced). */
     fileNameCreated: DetailTime | null;
-    /** Last-access updates are disabled or system-managed on this volume (SPEC §13). */
+    /** Last-access updates are disabled or system-managed on this volume. */
     accessUnreliable: boolean;
   };
   /** Raw `strata_core::EntryFlags` bits. */
@@ -66,7 +66,7 @@ export interface EntryDetail {
   hardlinks: { paths: string[]; countedAt: string } | null;
   /** Alternate data streams. */
   streams: { name: string; logical: number; allocated: number }[];
-  /** Content sniffing result (SPEC §12.4), or `null` when not sniffed. */
+  /** Content sniffing result, or `null` when not sniffed. */
   detectedType: { label: string; claimedExtension: string | null; mismatch: boolean } | null;
   /** Classification, or `null` when unclassified. */
   classification: {

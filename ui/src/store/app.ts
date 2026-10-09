@@ -2,7 +2,7 @@
  * Shared view state: what is shown, how, and what is selected.
  *
  * Every view reads the same root, selection, size mode, color mode and
- * filters (SPEC §16), so switching views keeps context. Per-frame state
+ * filters, so switching views keeps context. Per-frame state
  * (hover, animation) deliberately lives outside React; see `store/hover.ts`.
  */
 import { create } from "zustand";

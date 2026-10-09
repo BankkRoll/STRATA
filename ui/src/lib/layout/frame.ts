@@ -7,9 +7,10 @@
  * - Expose each section as zero-copy typed-array views ({@link NodeBuffer},
  *   {@link AggregateTable}, {@link LabelTable}, cushions, {@link TransitionBuffer}).
  *
- * Byte layouts are specified in `docs/tracks/layout.md` (records) and
- * `docs/tracks/ui.md` (frame container). Everything is little-endian, which
- * matches every platform WebView2 runs on; typed arrays are used directly.
+ * Byte layouts are specified in `strata-layout`'s `buffer` module (records)
+ * and `src-tauri/src/frame.rs` (frame container). Everything is
+ * little-endian, which matches every platform WebView2 runs on; typed arrays
+ * are used directly.
  */
 
 /** `"STLF"` read as a little-endian u32. */

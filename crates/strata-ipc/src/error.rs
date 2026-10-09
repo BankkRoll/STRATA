@@ -12,7 +12,7 @@ use crate::security::TrustError;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum IpcError {
     /// The peer is gone (closed its end, crashed, or the pipe broke). The UI
-    /// shows the "helper disconnected" banner and offers to reconnect (§4).
+    /// shows the "helper disconnected" banner and offers to reconnect.
     #[error("the other end of the pipe disconnected")]
     Disconnected,
     /// The operation did not finish in time.

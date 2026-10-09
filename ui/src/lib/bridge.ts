@@ -1,5 +1,5 @@
 /**
- * Small helpers the wave-2 bridge modules share on top of `backend.ts`:
+ * Small helpers the feature bridge modules share on top of `backend.ts`:
  * subscribing to backend events and invoking commands that stream progress
  * over a Tauri `Channel`. Kept separate from `backend.ts` so that module
  * stays the single owner of `invoke`.

@@ -1,5 +1,5 @@
 /**
- * Detail-panel sections backed by the wave-2 contracts: directory size
+ * Detail-panel sections backed by the feature services: directory size
  * history (sparkline), recent writers from activity tracking, and the
  * classifier's "why" explanation for the selected path.
  */

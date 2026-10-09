@@ -6,6 +6,8 @@ on:
     paths:
       - "site/**"
       - "ui/src/**"
+      - "ui/vite.demo.config.ts"
+      - "ui/package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -35,8 +37,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      # NOTE: the site imports the app's renderer from ui/src, so the whole workspace
-      # (including the ui package's dependencies) is installed.
+      # NOTE: the site build also builds the app demo from ui/ into site/dist/demo,
+      # so the whole workspace (including the ui package's dependencies) is installed.
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir site build
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

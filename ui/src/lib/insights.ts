@@ -1,6 +1,6 @@
 /**
- * Index-backed analysis views (SPEC §16.2): largest files, file types,
- * categories, apps (SPEC §12.3) and recommendations ("Free up space").
+ * Index-backed analysis views: largest files, file types,
+ * categories, apps and recommendations ("Free up space").
  *
  * Every result is computed by the backend from the index, classifier and
  * app catalog; the UI only renders and filters. Sizes follow the requested
@@ -47,7 +47,7 @@ export interface LargestQuery {
   /** Entry id to search under, or `null` for the whole volume. */
   scope: number | null;
   kind: "files" | "folders";
-  /** Default 1000 (SPEC §16.2). */
+  /** Default 1000. */
   limit: number;
   sizeMode: SizeMode;
   filters: LargestFilters;
@@ -92,7 +92,7 @@ export interface ExtensionRow {
   group: string;
   files: number;
   bytes: number;
-  /** Files whose sniffed content disagrees with the extension (SPEC §12.4). */
+  /** Files whose sniffed content disagrees with the extension. */
   mismatched: number;
 }
 
@@ -153,7 +153,7 @@ export interface FootprintLocation {
   safety: Safety | null;
 }
 
-/** An installed app and everything attributed to it (SPEC §12.3). */
+/** An installed app and everything attributed to it. */
 export interface AppFootprint {
   /** Catalog id (stable across sessions). */
   id: string;

@@ -1,5 +1,5 @@
 /**
- * Duplicate finder (SPEC §14): background scan status, groups sorted by
+ * Duplicate finder: background scan status, groups sorted by
  * wasted bytes, keep suggestions, guardrailed selection and the optional
  * replace-with-hardlinks action.
  *

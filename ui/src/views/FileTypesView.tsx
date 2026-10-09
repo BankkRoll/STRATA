@@ -1,5 +1,5 @@
 /**
- * File types (SPEC §16.2): breakdown by extension (bars + full table) and by
+ * File types: breakdown by extension (bars + full table) and by
  * sniffed content type. Choosing a type opens Largest files filtered to it.
  */
 import { BarList } from "../components/charts";

@@ -1,12 +1,9 @@
 /**
- * Volume list, scan state and elevation for the home screen (SPEC §5, §16.2).
+ * Volume list, scan state and elevation for the home screen.
  *
  * `list_volumes` returns {@link VolumeInfo}[]; the backend emits the
  * `volumes://changed` event (payload: the full list) on hot-plug and on every
  * scan state change, so the home screen never polls.
- *
- * NOTE: the platform track owns volume discovery; this type is the UI's
- * proposal until its contract merges (see `docs/tracks/ui.md`).
  */
 import { listen } from "@tauri-apps/api/event";
 import { call, inTauri } from "./backend";
@@ -85,7 +82,7 @@ export interface HelperStatus {
   message?: string | null;
 }
 
-/** "Since last scan" summary (SPEC §18), or `null` when there is no history. */
+/** "Since last scan" summary, or `null` when there is no history. */
 export interface SinceLastScan {
   deltaBytes: number;
   sinceMs: number;

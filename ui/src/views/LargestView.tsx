@@ -1,5 +1,5 @@
 /**
- * Largest files and folders (SPEC §16.2): global or under the current
+ * Largest files and folders: global or under the current
  * folder, top-N (default 1000) with combinable filters. Selecting a row
  * drives the shared selection, so the detail panel explains it.
  */

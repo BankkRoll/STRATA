@@ -8,7 +8,7 @@
  */
 import { isTauri } from "@tauri-apps/api/core";
 import { useId, useMemo, useState, type ReactNode } from "react";
-import { ConfirmDialog, LoadState, SafetyBadge, useCapability, useLoad } from "../components/feature";
+import { ConfirmDialog, LoadState, SafetyBadge, useCapability, useLoad, useUnavailableReason } from "../components/feature";
 import { Icon, type IconName } from "../components/icons";
 import { useFeatures } from "../features";
 import { call, errorMessage, getAppInfo } from "../lib/backend";
@@ -36,6 +36,17 @@ export function missingReason(command: string): string {
   return `Not available in this build: the engine doesn’t provide ${command} yet.`;
 }
 
+/**
+ * {@link missingReason}, or the services' own reason when they give one
+ * (the website demo).
+ *
+ * @returns Reason lookup by command name.
+ */
+export function useMissingReason(): (command: string) => string {
+  const reason = useUnavailableReason();
+  return (command) => reason ?? missingReason(command);
+}
+
 /** Props for {@link CapButton}. */
 interface CapButtonProps {
   /** Backend commands the action needs. */
@@ -52,7 +63,8 @@ interface CapButtonProps {
 function CapButton({ commands, icon, primary, danger, busy, onClick, children }: CapButtonProps) {
   const ok = useCapability(...commands);
   const rid = useId();
-  const reason = ok ? undefined : missingReason(commands.join(", "));
+  const whyMissing = useMissingReason();
+  const reason = ok ? undefined : whyMissing(commands.join(", "));
   return (
     <>
       <button
@@ -107,8 +119,9 @@ function Result({ tone, children }: { tone: "ok" | "error" | "info"; children: R
 function RulePacks() {
   const features = useFeatures();
   const can = useCapability("rules_list");
+  const whyMissing = useMissingReason();
   const [load, reload] = useLoad(() => features.settings.fetchRules(), [features], can);
-  if (!can) return <p className="smuted">{missingReason("rules_list")}</p>;
+  if (!can) return <p className="smuted">{whyMissing("rules_list")}</p>;
   return (
     <LoadState load={load} feature="Rules" command="rules_list" onRetry={reload}>
       {(rules) => <PackTable rules={rules} />}
@@ -325,6 +338,7 @@ export function ExplainResult({ e }: { e: Explanation }) {
 function PathTester() {
   const features = useFeatures();
   const can = useCapability("rules_explain");
+  const whyMissing = useMissingReason();
   const id = useId();
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
@@ -370,11 +384,11 @@ function PathTester() {
             setPath(e.target.value);
           }}
         />
-        <button type="submit" className="btn btn--sm btn--primary" aria-disabled={!can || path.trim() === "" || busy ? true : undefined} data-tip={can ? undefined : missingReason("rules_explain")}>
+        <button type="submit" className="btn btn--sm btn--primary" aria-disabled={!can || path.trim() === "" || busy ? true : undefined} data-tip={can ? undefined : whyMissing("rules_explain")}>
           {busy ? "Explaining…" : "Explain"}
         </button>
       </form>
-      {!can && <p className="smuted">{missingReason("rules_explain")}</p>}
+      {!can && <p className="smuted">{whyMissing("rules_explain")}</p>}
       {result && ("error" in result ? <Result tone="error">{result.error}</Result> : <ExplainResult e={result.ok} />)}
     </>
   );
@@ -405,6 +419,7 @@ export function HelperPanels() {
   const features = useFeatures();
   const helper = useVolumes((s) => s.helper);
   const canStatus = useCapability("helper_service_status");
+  const whyMissing = useMissingReason();
   const [svc, reloadSvc] = useLoad(() => features.settings.fetchHelperService(), [features], canStatus);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -442,7 +457,7 @@ export function HelperPanels() {
           <dt>Helper service</dt>
           <dd>
             {!canStatus ? (
-              <span className="smuted">{missingReason("helper_service_status")}</span>
+              <span className="smuted">{whyMissing("helper_service_status")}</span>
             ) : svc.state === "ready" ? (
               <span className={svc.data.running ? "state-pill state-pill--ok" : "state-pill"}>{svc.data.installed ? (svc.data.running ? "Installed and running" : "Installed, not running") : "Not installed"}</span>
             ) : svc.state === "loading" ? (

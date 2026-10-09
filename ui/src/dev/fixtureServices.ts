@@ -1,15 +1,15 @@
 /**
- * DEV ONLY. Services backed by the layout fixtures exported from
- * `strata-layout` (`VecTree::synthetic`), for the `?fixture=` harness. Never
- * imported by production code paths: `main.tsx` reaches this module only
- * behind `import.meta.env.DEV`.
+ * Services backed by the layout fixtures exported from `strata-layout`
+ * (`VecTree::synthetic`), for the `?fixture=` harness and the website demo
+ * (`src/demo/`, a separate build). Never part of the app bundle: `main.tsx`
+ * reaches this module only behind `import.meta.env.DEV`.
  *
  * Names are synthetic ("folder #12") because the fixture tree has none.
  */
 import { createStoreBus, type Services } from "../services";
 import type { EntryDetail } from "../lib/detail";
 import { BatchedEntryInfoProvider, type EntryInfo, type EntryInfoProvider } from "../lib/entries";
-import { decodeFrame, ViewKind } from "../lib/layout/frame";
+import { ViewKind } from "../lib/layout/frame";
 import { BaseLayoutStream, type LayoutRequest } from "../lib/layout/stream";
 import { decodeColorKey } from "../lib/palette";
 import type { Row, RowPage, RowQuery } from "../lib/rows";
@@ -18,21 +18,8 @@ import type { Safety } from "../lib/types";
 import type { VolumeInfo } from "../lib/volumes";
 import { createRenderer } from "../render/registry";
 
-const smallUrls = import.meta.glob<string>("../lib/layout/__fixtures__/*.bin", { query: "?url", import: "default", eager: true });
-const largeUrls = import.meta.glob<string>("./__fixtures__/large/*.bin", { query: "?url", import: "default", eager: true });
-
-async function fetchBytes(url: string): Promise<ArrayBuffer> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`fixture ${url}: HTTP ${r.status}`);
-  return r.arrayBuffer();
-}
-
-function urlOf(name: string, large: boolean): string | undefined {
-  return large ? largeUrls[`./__fixtures__/large/${name}`] : smallUrls[`../lib/layout/__fixtures__/${name}`];
-}
-
 /** One node of the fixture tree. */
-interface Node {
+export interface FixtureNode {
   size: number;
   parent: number;
   key: number;
@@ -45,24 +32,30 @@ const NOW = Date.now();
 /** Loaded fixture data. */
 export interface FixtureData {
   large: boolean;
-  nodes: Node[];
+  nodes: FixtureNode[];
   children: number[][];
   frames: Map<string, ArrayBuffer>;
   drillRoot: number;
+  /** Display names; the harness defaults say plainly that the data is a fixture. */
+  labels?: {
+    /** Volume label. */
+    volume: string;
+    /** Name of the root entry (id 0), also the first path segment. */
+    root: string;
+  };
 }
 
 /**
- * Loads the fixture set.
+ * Decodes `tree.bin` (16 bytes per node: `size:u64 parent:u32 info:u32`,
+ * where `info` is the color key with bit 31 set for directories).
  *
- * @param large - Use the 1M-node treemap (`pnpm fixtures:large`).
- * @returns Decoded tree and raw frames.
+ * @param bytes - The file.
+ * @returns Nodes by id and each node's children.
  */
-export async function loadFixtures(large: boolean): Promise<FixtureData> {
-  const treeUrl = urlOf(large ? "tree-1m.bin" : "tree.bin", large);
-  if (!treeUrl) throw new Error(large ? "Large fixtures missing: run `pnpm --dir ui fixtures:large`." : "Fixtures missing: run `pnpm --dir ui fixtures`.");
-  const tree = new DataView(await fetchBytes(treeUrl));
-  const nodes: Node[] = [];
-  for (let o = 0; o < tree.byteLength; o += 16) {
+export function decodeTree(bytes: ArrayBuffer): Pick<FixtureData, "nodes" | "children"> {
+  const tree = new DataView(bytes);
+  const nodes: FixtureNode[] = [];
+  for (let o = 0; o + 16 <= tree.byteLength; o += 16) {
     const info = tree.getUint32(o + 12, true);
     nodes.push({
       size: tree.getUint32(o, true) + tree.getUint32(o + 4, true) * 2 ** 32,
@@ -73,18 +66,7 @@ export async function loadFixtures(large: boolean): Promise<FixtureData> {
   }
   const children: number[][] = nodes.map(() => []);
   for (let i = 1; i < nodes.length; i++) children[nodes[i]?.parent ?? 0]?.push(i);
-  const frames = new Map<string, ArrayBuffer>();
-  const names = large
-    ? ["treemap-1m"]
-    : ["treemap", "treemap-drill", "icicle", "flame", "sunburst", "bubbles", "mindmap"];
-  await Promise.all(
-    names.map(async (n) => {
-      const u = urlOf(`${n}.frame.bin`, large);
-      if (u) frames.set(n, await fetchBytes(u));
-    }),
-  );
-  const drill = frames.get("treemap-drill");
-  return { large, nodes, children, frames, drillRoot: drill ? decodeFrame(drill.slice(0)).root : -1 };
+  return { nodes, children };
 }
 
 /** Replays fixture frames for layout requests. */
@@ -125,8 +107,12 @@ export class FixtureLayoutStream extends BaseLayoutStream {
   }
 }
 
-function nameOf(n: Node, id: number): string {
-  return id === 0 ? "Fixture root" : `${n.dir ? "folder" : "file"} #${id}`;
+function rootName(data: FixtureData): string {
+  return data.labels?.root ?? "Fixture root";
+}
+
+function nameOf(data: FixtureData, id: number): string {
+  return id === 0 ? rootName(data) : `${data.nodes[id]?.dir ? "folder" : "file"} #${id}`;
 }
 
 function countBelow(data: FixtureData, id: number): number {
@@ -145,7 +131,7 @@ function info(data: FixtureData, id: number): EntryInfo {
   const k = decodeColorKey(n.key);
   return {
     id,
-    name: nameOf(n, id),
+    name: nameOf(data, id),
     isDir: n.dir,
     allocated: n.size,
     logical: Math.round(n.size * 0.97),
@@ -190,8 +176,8 @@ class FixtureSearch implements SearchStream {
     const results: SearchResult[] = [];
     for (let id = 1; id < this.data.nodes.length && results.length < 200; id++) {
       const n = this.data.nodes[id];
-      if (!n || !nameOf(n, id).toLowerCase().includes(text)) continue;
-      results.push({ volumeId: "fixture", id, name: nameOf(n, id), parentPath: `Fixture root\\…\\#${n.parent}`, isDir: n.dir, allocated: n.size, logical: n.size });
+      if (!n || !nameOf(this.data, id).toLowerCase().includes(text)) continue;
+      results.push({ volumeId: "fixture", id, name: nameOf(this.data, id), parentPath: `${rootName(this.data)}\\…\\#${n.parent}`, isDir: n.dir, allocated: n.size, logical: n.size });
     }
     queueMicrotask(() => {
       for (const l of this.listeners) l({ seq, results, done: true, total: results.length });
@@ -230,7 +216,7 @@ export function fixtureServices(data: FixtureData): Services {
   const volume: VolumeInfo = {
     id: "fixture",
     mountPoints: [],
-    label: data.large ? "Synthetic 1M fixture" : "Synthetic fixture",
+    label: data.labels?.volume ?? (data.large ? "Synthetic 1M fixture" : "Synthetic fixture"),
     filesystem: "NTFS",
     devDrive: false,
     kind: "fixed",
@@ -255,7 +241,7 @@ export function fixtureServices(data: FixtureData): Services {
         const kids = (data.children[q.parent] ?? []).slice();
         const dir = q.sort.desc ? -1 : 1;
         kids.sort((a, b) => {
-          if (q.sort.key === "name") return dir * nameOf(data.nodes[a] as Node, a).localeCompare(nameOf(data.nodes[b] as Node, b));
+          if (q.sort.key === "name") return dir * nameOf(data, a).localeCompare(nameOf(data, b));
           return dir * ((data.nodes[a]?.size ?? 0) - (data.nodes[b]?.size ?? 0)) || a - b;
         });
         const page = kids.slice(q.offset, q.offset + q.limit).map((id) => row(data, id));
@@ -269,7 +255,7 @@ export function fixtureServices(data: FixtureData): Services {
         id,
         volumeId: "fixture",
         name: i.name,
-        path: `Fixture root\\…\\${i.name}`,
+        path: `${rootName(data)}\\…\\${i.name}`,
         isDir: i.isDir,
         iconDataUrl: null,
         sizes: { logical: i.logical, allocated: i.allocated, adsLogical: 0, adsAllocated: 0, dirOverhead: i.isDir ? 4096 : 0, compressionRatio: i.logical > 0 ? i.allocated / i.logical : null, estimated: false },
@@ -300,7 +286,7 @@ export function fixtureServices(data: FixtureData): Services {
       list: () => Promise.resolve([volume]),
       watch: () => () => undefined,
       helperStatus: () => Promise.resolve({ elevated: false, mode: "none" }),
-      sinceLastScan: () => Promise.resolve({ deltaBytes: Math.round(total * 0.03), sinceMs: NOW - 5 * 86_400_000, biggest: { path: "Fixture root\\folder #1", deltaBytes: Math.round(total * 0.02) } }),
+      sinceLastScan: () => Promise.resolve({ deltaBytes: Math.round(total * 0.03), sinceMs: NOW - 5 * 86_400_000, biggest: { path: `${rootName(data)}\\folder #1`, deltaBytes: Math.round(total * 0.02) } }),
       startScan: () => Promise.reject(new Error("The fixture harness cannot scan.")),
       cancelScan: () => Promise.resolve(null),
       elevate: () => Promise.reject(new Error("The fixture harness has no helper.")),

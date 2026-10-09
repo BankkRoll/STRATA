@@ -1,5 +1,5 @@
 /**
- * Test doubles for the wave-2 feature services: every call rejects with
+ * Test doubles for the feature services: every call rejects with
  * BackendUnavailableError unless a test overrides it, plus small synthetic
  * fixtures (placeholder paths only).
  */

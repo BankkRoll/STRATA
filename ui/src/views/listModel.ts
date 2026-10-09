@@ -147,7 +147,7 @@ export interface Column {
 
 const SAFETY_TEXT = { safe: "Safe", probably: "Probably", careful: "Careful", never: "Never" } as const;
 
-/** All columns (SPEC §16.2), in default order. */
+/** All columns, in default order. */
 export const COLUMNS: readonly Column[] = [
   { id: "name", label: "Name", width: 280, sort: "name", numeric: false, text: (r) => r.name },
   { id: "allocated", label: "On disk", width: 96, sort: "size", numeric: true, text: (r, c) => formatBytes(r.allocated, { units: c.units }) },

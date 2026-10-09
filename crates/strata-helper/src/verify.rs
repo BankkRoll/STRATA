@@ -1,4 +1,4 @@
-//! Client verification policies (SPEC §4 pipe security).
+//! Client verification policies for the helper pipe.
 //!
 //! Both build on `strata_ipc::security::TrustPolicy` (image path +
 //! Authenticode signer, checked before a single byte of the client is read)

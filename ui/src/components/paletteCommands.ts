@@ -1,5 +1,5 @@
 /**
- * Commands the palette can run (SPEC §17), built from the current state so
+ * Commands the palette can run, built from the current state so
  * labels like "Scan D:" match the real volume list.
  */
 import { call, errorMessage } from "../lib/backend";
@@ -44,7 +44,7 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
   const settings = useSettings.getState();
   const hasVolume = app.volumeId !== null;
   const caps = services.capabilities();
-  const need = (cmd: string, reason: string): Availability => (caps.has(cmd) ? ok : { enabled: false, reason });
+  const need = (cmd: string, reason: string): Availability => (caps.has(cmd) ? ok : { enabled: false, reason: services.unavailableReason ?? reason });
   const out: PaletteCommand[] = [];
 
   const needVolume: Availability = hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." };
@@ -285,7 +285,7 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
     group: "Actions",
     availability: need("recycle_bin_empty", "Cleanup tools are not part of this build yet."),
     run: () => {
-      // The backend shows its own confirmation before emptying (SPEC §15.6).
+      // The backend shows its own confirmation before emptying.
       call<null>("recycle_bin_empty").catch((err: unknown) => {
         useApp.getState().notify(errorMessage(err));
       });

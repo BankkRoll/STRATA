@@ -16,7 +16,8 @@ import { FeaturesContext } from "../features";
 import type { VolumeInfo } from "../lib/volumes";
 import type { Services } from "../services";
 import { FIXTURE_FEATURE_COMMANDS, fixtureFeatures } from "./fixtureFeatures";
-import { FIXTURE_KINDS, fixtureServices, loadFixtures } from "./fixtureServices";
+import { loadFixtures } from "./fixtureFiles";
+import { FIXTURE_KINDS, fixtureServices } from "./fixtureServices";
 
 /** Frame-time statistics of one benchmark run. */
 export interface BenchResult {

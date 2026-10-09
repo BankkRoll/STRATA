@@ -4,7 +4,7 @@
  * offset 0, `uvec4` meta at offset 16 via `vertexAttribIPointer`).
  *
  * - Flat style, or cushion style from the parallel cushion section using
- *   the shading formula in `docs/tracks/layout.md`.
+ *   the shading formula in `strata-layout`'s `cushion` module.
  * - Directory frames are tinted toward the background so nesting reads;
  *   aggregates are hatched; leaves get a 1-device-pixel border.
  * - Hover and selection are uniforms / a per-instance byte, so neither

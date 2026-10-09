@@ -1,5 +1,5 @@
 /**
- * The list / tree-table pane (SPEC §16.2): a virtualized ARIA treegrid of the
+ * The list / tree-table pane: a virtualized ARIA treegrid of the
  * current root's children with lazy paging, sortable / resizable / choosable
  * columns, an inline %-of-parent bar, full keyboard navigation with
  * type-ahead, and copy/export. It is also the accessible alternative to every

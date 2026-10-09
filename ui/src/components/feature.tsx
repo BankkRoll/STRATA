@@ -1,12 +1,12 @@
 /**
- * Building blocks shared by the wave-2 views: capability checks, the
+ * Building blocks shared by the feature views: capability checks, the
  * designed "unavailable" state, async loading with loading/error states,
  * view framing, safety badges and an accessible confirmation dialog.
  */
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BackendUnavailableError, errorMessage } from "../lib/backend";
 import type { Safety } from "../lib/types";
-import { useServices } from "../services";
+import { ServicesContext, useServices } from "../services";
 import { Icon } from "./icons";
 import "../views/features.css";
 
@@ -70,16 +70,29 @@ export interface UnavailableProps {
   children?: ReactNode;
 }
 
+/**
+ * Why missing commands are unavailable when the services say so
+ * (`Services.unavailableReason`), else `null` for "not in this build".
+ */
+export function useUnavailableReason(): string | null {
+  return useContext(ServicesContext)?.unavailableReason ?? null;
+}
+
 /** Designed state for a feature whose backend command is not in this build. */
 export function Unavailable({ feature, command, children }: UnavailableProps) {
+  const reason = useUnavailableReason();
   return (
     <div className="state state--quiet unavailable" role="note">
       <Icon name="info" size={28} />
-      <h2>{feature} isn’t available in this build</h2>
+      <h2>{reason ? `${feature} isn’t available here` : `${feature} isn’t available in this build`}</h2>
       {children && <p>{children}</p>}
-      <p className="detail__muted">
-        The engine doesn’t provide <code>{command}</code> yet. Nothing here is simulated.
-      </p>
+      {reason ? (
+        <p className="detail__muted">{reason}</p>
+      ) : (
+        <p className="detail__muted">
+          The engine doesn’t provide <code>{command}</code> yet. Nothing here is simulated.
+        </p>
+      )}
     </div>
   );
 }

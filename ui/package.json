@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "demo": "vite --config vite.demo.config.ts",
     "build": "tsc -b && vite build && node scripts/check-bundle.mjs",
+    "build:demo": "vite build --config vite.demo.config.ts",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",

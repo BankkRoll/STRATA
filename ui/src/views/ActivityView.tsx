@@ -1,5 +1,5 @@
 /**
- * Activity (SPEC §11): opt-in ETW tracking of which processes write where.
+ * Activity: opt-in ETW tracking of which processes write where.
  * Off by default; shows the opt-in explanation first. When on: top writers
  * now / last hour / today, overhead state, and one-click clearing.
  */

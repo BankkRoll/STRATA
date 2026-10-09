@@ -1,5 +1,5 @@
 /**
- * Snapshots, usage series and diffs (SPEC §18), from `strata-store`.
+ * Snapshots, usage series and diffs, from `strata-store`.
  * All times are Unix ms UTC; the UI formats them in local time.
  */
 import { call } from "./backend";

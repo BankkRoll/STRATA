@@ -1,5 +1,5 @@
 /**
- * Rich hover tooltip for the visual views (SPEC §16.1): name, size in both
+ * Rich hover tooltip for the visual views: name, size in both
  * modes, share of the current root, items, category, app, modified and
  * safety. Content re-renders only when the hovered record changes; following
  * the pointer is done imperatively, so mouse moves cost no React work.

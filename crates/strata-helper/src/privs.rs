@@ -1,5 +1,5 @@
-//! Reference-counted privilege scopes (SPEC §4: enable privileges only
-//! while they are needed).
+//! Reference-counted privilege scopes: privileges are enabled only
+//! while they are needed.
 //!
 //! Privileges live on the process token, so they are shared by every
 //! thread. A plain `PrivilegeGuard` per operation is wrong with concurrent

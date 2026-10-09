@@ -1,5 +1,5 @@
 /**
- * Categories (SPEC §12.5, §16.2): totals per category with the fixed palette
+ * Categories: totals per category with the fixed palette
  * and patterns, and drill-through to the map (filtered), Largest files, or a
  * top contributor.
  */

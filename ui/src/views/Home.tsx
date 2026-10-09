@@ -1,8 +1,8 @@
 /**
- * Home screen: the volumes overview (SPEC §16.2). Every volume shows a
+ * Home screen: the volumes overview. Every volume shows a
  * capacity bar (category-colored once scanned), filesystem badge, scan state
- * chip and its scan action, plus the elevation banner (SPEC §4) and the
- * "since last scan" banner (SPEC §18).
+ * chip and its scan action, plus the elevation banner and the
+ * "since last scan" banner.
  */
 import { useEffect, useState } from "react";
 import { BackendUnavailableError, errorMessage } from "../lib/backend";
@@ -39,7 +39,7 @@ export function CapacityBar({ v }: { v: VolumeInfo }) {
       accounted += b;
       segments.push({ label: c.label, bytes: b, color: dark ? c.dark : c.light });
     }
-    // The gap between used space and what the scan found is shown, never hidden (SPEC §5).
+    // The gap between used space and what the scan found is shown, never hidden.
     if (used > accounted) segments.push({ label: "Unaccounted / system reserved", bytes: used - accounted, color: "var(--unaccounted)" });
   } else {
     segments.push({ label: "Used", bytes: used, color: "var(--used)" });

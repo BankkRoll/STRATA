@@ -3,10 +3,10 @@
  *
  * Responsibilities:
  * - Byte sizes in binary units shown as KB/MB/GB (Windows Explorer's
- *   convention, SPEC §16.4) or SI units, with locale-aware separators.
+ *   convention) or SI units, with locale-aware separators.
  * - Counts and percentages.
  * - Timestamps: absolute local time, relative ("3 days ago"), and the
- *   suspicious-timestamp check from SPEC §13.
+ *   suspicious-timestamp check (before 1990 or more than a day ahead).
  *
  * `Intl` formatters are cached per locale/option set because creating them
  * costs far more than formatting, and lists format thousands of cells.
@@ -149,10 +149,10 @@ export function formatPercent(fraction: number, options: FormatOptions = {}): st
 // Time
 // -----------------------------------------------------------------------------
 
-/** 2000-01-01T00:00:00Z in Unix milliseconds: the index's compact time epoch (SPEC §9.1). */
+/** 2000-01-01T00:00:00Z in Unix milliseconds: the index's compact time epoch. */
 export const EPOCH_2000_MS = Date.UTC(2000, 0, 1);
 
-/** Timestamps before this are flagged suspicious (SPEC §13). */
+/** Timestamps before this are flagged suspicious. */
 export const SUSPICIOUS_BEFORE_MS = Date.UTC(1990, 0, 1);
 
 /** Slack for clock skew before a future timestamp counts as suspicious. */
@@ -170,7 +170,7 @@ export function epoch2000ToMs(secs: number): number | null {
 
 /**
  * Whether a timestamp is implausible: before 1990 or more than a day in the
- * future. Such values sort and display but carry a warning (SPEC §13).
+ * future. Such values sort and display but carry a warning.
  *
  * @param ms - Unix milliseconds (UTC).
  * @param now - Current time in Unix milliseconds.
@@ -270,7 +270,7 @@ export interface TimestampDisplay {
   absolute: string;
   /** Relative phrase. */
   relative: string;
-  /** Whether the value is implausible (shown with a warning, SPEC §13). */
+  /** Whether the value is implausible (shown with a warning). */
   suspicious: boolean;
 }
 

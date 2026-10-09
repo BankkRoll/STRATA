@@ -76,69 +76,16 @@
       <!-- Demo -------------------------------------------------------------- -->
       <section id="demo" class="demo" aria-labelledby="demo-title">
         <div class="wrap">
-          <div class="demo__stage" data-demo-stage>
-            <div class="window strata-app" data-demo>
-              <div class="window__titlebar" aria-hidden="true">
-                <svg class="window__icon" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#111827" /><rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" /><rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" /><rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" /></svg>
-                <span class="window__title">Strata</span>
-                <span class="window__caption">
-                  <svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" /></svg>
-                  <svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" /></svg>
-                  <svg viewBox="0 0 10 10"><path d="m0 0 10 10M10 0 0 10" stroke="currentColor" /></svg>
-                </span>
-              </div>
-              <header class="topbar">
-                <nav class="crumbs" aria-label="Breadcrumb">
-                  <ol data-crumbs><li class="crumbs__item"><span class="crumbs__current" aria-current="page">Demo volume</span></li></ol>
-                </nav>
-                <div class="topbar__controls">
-                  <div class="segmented" role="radiogroup" aria-label="View" data-views>
-                    <button type="button" role="radio" aria-checked="true" data-value="treemap">Treemap</button>
-                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="sunburst">Sunburst</button>
-                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="icicle">Icicle</button>
-                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="bubbles">Bubbles</button>
-                  </div>
-                  <div class="segmented" role="radiogroup" aria-label="Color by" data-colors>
-                    <button type="button" role="radio" aria-checked="true" data-value="category">Category</button>
-                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="age">Age</button>
-                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="safety">Safety</button>
-                  </div>
-                </div>
-              </header>
-              <section class="visual" aria-label="Treemap">
-                <div
-                  class="visual__surface"
-                  tabindex="0"
-                  role="application"
-                  aria-roledescription="treemap"
-                  aria-label="Treemap of a synthetic volume. Arrow keys move between items, Enter opens a folder, Backspace goes up."
-                  aria-describedby="demo-hint"
-                  data-surface
-                >
-                  <svg class="visual__fallback" aria-hidden="true" hidden data-fallback></svg>
-                  <canvas class="visual__canvas" aria-hidden="true" data-canvas></canvas>
-                  <canvas class="visual__overlay" aria-hidden="true" data-overlay></canvas>
-                  <div class="visual__marquee" hidden data-marquee></div>
-                  <div class="state state--quiet" role="status" data-state>
-                    <span class="spinner" aria-hidden="true"></span>
-                    <p>Laying out…</p>
-                  </div>
-                </div>
-                <div class="visually-hidden" aria-live="polite" data-live></div>
-                <footer class="visual__footer">
-                  <ul class="legend" aria-label="Color legend" data-legend></ul>
-                  <span class="demo-hint" id="demo-hint" data-hint>Click the outlined folder to drill in.</span>
-                </footer>
-              </section>
-              <div class="detail-strip" data-detail></div>
-            </div>
+          <div class="demo-window" data-demo>
+            <p class="demo-window__status" data-demo-status>The demo needs JavaScript.</p>
           </div>
+          <p class="demo__hint demo__hint--wide">Hover for details, double-click a folder to open it, Ctrl + scroll to zoom. Tab into the window to use the keyboard; Esc returns to the page.</p>
+          <p class="demo__hint demo__hint--narrow">Best viewed on a desktop. On small screens the window is scaled down to fit and doesn’t respond to touch.</p>
           <div class="demo__caption">
-            <h2 id="demo-title" class="demo__title">Not a screenshot. The app’s own renderer.</h2>
-            <p>This is Strata’s WebGL2 view code, drawing the exact layout buffers its Rust layout engine produces for the UI test suite: a synthetic 4,000-entry tree. Hover for details, drill into the outlined folder, switch views and color by age or safety.</p>
+            <h2 id="demo-title" class="demo__title" tabindex="-1">Not a screenshot. The app itself.</h2>
+            <p>This window runs Strata’s own interface, built from the same code as the desktop app, on a generated sample volume of 4,000 entries. The maps are laid out in your browser by a port of the app’s layout engine that produces the same bytes. Scanning, insights, cleanup, history and settings need the desktop app, so they show as unavailable.</p>
           </div>
         </div>
-        <div class="strata-app" data-tip-host></div>
       </section>
 
       <!-- Features ---------------------------------------------------------- -->

@@ -1,5 +1,5 @@
 /**
- * Settings (SPEC §19), rules tooling, data clearing, helper service mode and
+ * Settings, rules tooling, data clearing, helper service mode and
  * About.
  *
  * {@link Settings} is exactly the serde shape of `strata_store::Settings`

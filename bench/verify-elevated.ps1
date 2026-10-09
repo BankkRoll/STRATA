@@ -2,7 +2,8 @@
 <#
 .SYNOPSIS
     Elevated verification and benchmark run for Strata: MFT scan, standard
-    scanner, WizTree head-to-head and a helper smoke test.
+    scanner, WizTree and Windows File Explorer head-to-head and a helper
+    smoke test.
 
 .DESCRIPTION
     Run once from an elevated PowerShell. Measures, per volume:
@@ -11,6 +12,10 @@
       - the standard scanner (strata-walk walkbench example), for reference.
       - WizTree (if installed): wall time and peak working set of a full scan
         with its command-line export.
+      - Windows File Explorer: the Properties dialog on everything Select all
+        picks in the volume root, timed until Size, Size on disk and Contains
+        stop changing (read with UI Automation). Falls back to a timed
+        "dir /s /a" listing, labelled as such, if the dialog can't be read.
     Then writes a results file and prints a docs/BENCHMARKS.md table.
 
     READ-ONLY GUARANTEES
@@ -21,6 +26,8 @@
         build output in the target directory when it builds the binaries).
       - Installs nothing, starts no services, changes no settings, and leaves
         no processes running: a timed-out child it started is stopped.
+      - Every Properties dialog it opens is closed with Cancel semantics, so
+        nothing on it is applied. It never stops or restarts explorer.exe.
       - Results describe hardware generically (core/thread counts, RAM size,
         disk type). No model names, serials, computer name, user name, paths
         or volume GUIDs are written.
@@ -45,6 +52,9 @@
 .PARAMETER SkipWizTree
     Skip the WizTree comparison.
 
+.PARAMETER SkipExplorer
+    Skip the Windows File Explorer comparison.
+
 .PARAMETER NoBuild
     Don't invoke cargo; use existing binaries.
 
@@ -57,6 +67,12 @@
 .PARAMETER DryRun
     Skip elevation, builds and scans. Detects binaries, WizTree and hardware,
     and writes a results-shaped JSON (no measurements) into a temp folder.
+
+.PARAMETER ExplorerSelfTest
+    Internal check of the Explorer measurement, no elevation needed: opens
+    Properties on the given folder, then on everything in it, waits for each
+    size to settle, closes the dialog and prints what it read. Nothing else
+    runs and nothing is written.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File bench\verify-elevated.ps1
@@ -76,10 +92,12 @@ param(
     [ValidateRange(0, 1024)][int]$WalkThreads = 0,
     [switch]$GoldenJson,
     [switch]$SkipWizTree,
+    [switch]$SkipExplorer,
     [switch]$NoBuild,
     [ValidateRange(10, 7200)][int]$TimeoutSec = 900,
     [switch]$Yes,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [string]$ExplorerSelfTest
 )
 
 Set-StrictMode -Version 2.0
@@ -420,6 +438,315 @@ function Invoke-WizTreeScan([object]$Wiz, [string]$Drive, [int]$Run) {
     return $row
 }
 
+# -----------------------------------------------------------------------------
+# Windows File Explorer
+# -----------------------------------------------------------------------------
+
+$ExplorerTool = 'Windows File Explorer'
+$DirListingTool = 'Windows built-in (dir /s)'
+# NOTE: Win32 control IDs of the shell's General property page (shell32). They
+# are the same in every display language, so fields are found by ID, not label.
+$ExplorerFieldIds = [ordered]@{ size = '13064'; sizeOnDisk = '13106'; contains = '13087' }
+$ExplorerSettleSec = 2.0
+$ExplorerPollMs = 100
+
+if (-not ('StrataBench.ShellProps' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace StrataBench {
+    public static class ShellProps {
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern int SHParseDisplayName(string name, IntPtr bindCtx, out IntPtr pidl, uint sfgaoIn, out uint sfgaoOut);
+        [DllImport("shell32.dll")] static extern IntPtr ILFindLastID(IntPtr pidl);
+        [DllImport("shell32.dll")] static extern void ILFree(IntPtr pidl);
+        [DllImport("shell32.dll")]
+        static extern int SHCreateDataObject(IntPtr pidlFolder, uint cidl, IntPtr[] apidl, IntPtr inner, ref Guid riid, out IntPtr dataObject);
+        [DllImport("shell32.dll")] static extern int SHMultiFileProperties(IntPtr dataObject, uint flags);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern bool SHObjectProperties(IntPtr hwnd, uint type, string name, string page);
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct Msg { public IntPtr hwnd; public uint message; public IntPtr wParam; public IntPtr lParam; public uint time; public int x; public int y; }
+        [DllImport("user32.dll")] static extern int GetMessage(out Msg msg, IntPtr hwnd, uint min, uint max);
+        [DllImport("user32.dll")] static extern bool TranslateMessage(ref Msg msg);
+        [DllImport("user32.dll")] static extern IntPtr DispatchMessage(ref Msg msg);
+        [DllImport("user32.dll")] static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+
+        static System.Threading.Thread host;
+        static uint hostId;
+
+        // The shell objects behind the dialog live on the thread that opens it,
+        // and the dialog's size worker calls back into them. That thread must
+        // keep pumping messages while the caller polls with UI Automation, so
+        // the open call runs on a dedicated STA thread with its own loop.
+        // Returns the open call's HRESULT (0 = dialog requested).
+        public static int Open(string parent, string[] children) {
+            Close();
+            int result = unchecked((int)0x80004005);
+            var ready = new System.Threading.ManualResetEvent(false);
+            host = new System.Threading.Thread(() => {
+                hostId = GetCurrentThreadId();
+                try {
+                    result = children == null
+                        ? (SHObjectProperties(IntPtr.Zero, 2 /* SHOP_FILEPATH */, parent, null) ? 0 : unchecked((int)0x80004005))
+                        : OpenSelection(parent, children);
+                } finally { ready.Set(); }
+                Msg m;
+                while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0) { TranslateMessage(ref m); DispatchMessage(ref m); }
+            });
+            host.IsBackground = true;
+            host.SetApartmentState(System.Threading.ApartmentState.STA);
+            host.Start();
+            ready.WaitOne();
+            return result;
+        }
+
+        // Ends the host thread's message loop. Call after the dialog is closed.
+        public static void Close() {
+            if (host == null) return;
+            PostThreadMessage(hostId, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
+            host.Join(5000);
+            host = null;
+        }
+
+        static int OpenSelection(string parent, string[] children) {
+            IntPtr parentPidl; uint unused;
+            int hr = SHParseDisplayName(parent, IntPtr.Zero, out parentPidl, 0, out unused);
+            if (hr != 0) return hr;
+            var abs = new IntPtr[children.Length];
+            var rel = new IntPtr[children.Length];
+            try {
+                for (int i = 0; i < children.Length; i++) {
+                    hr = SHParseDisplayName(children[i], IntPtr.Zero, out abs[i], 0, out unused);
+                    if (hr != 0) return hr;
+                    rel[i] = ILFindLastID(abs[i]);
+                }
+                Guid iidDataObject = new Guid("0000010e-0000-0000-C000-000000000046");
+                IntPtr dataObject;
+                hr = SHCreateDataObject(parentPidl, (uint)children.Length, rel, IntPtr.Zero, ref iidDataObject, out dataObject);
+                if (hr != 0) return hr;
+                try { return SHMultiFileProperties(dataObject, 0); } finally { Marshal.Release(dataObject); }
+            } finally {
+                foreach (var p in abs) if (p != IntPtr.Zero) ILFree(p);
+                ILFree(parentPidl);
+            }
+        }
+    }
+}
+'@
+}
+
+function Get-ExplorerVersion {
+    try { return (Get-Item -LiteralPath (Join-Path $env:windir 'explorer.exe')).VersionInfo.ProductVersion.Trim() } catch { return $null }
+}
+
+<#
+What Select all shows in the user's own Explorer: hidden items only when
+"Show hidden files" is on, protected OS items (hidden + system) only when
+"Hide protected operating system files" is also off. Reads HKCU, changes nothing.
+#>
+function Get-ExplorerSelection([string]$Folder) {
+    $adv = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -ErrorAction SilentlyContinue
+    $showHidden = [bool]($adv -and $adv.PSObject.Properties['Hidden'] -and $adv.Hidden -eq 1)
+    $showSuper = [bool]($showHidden -and $adv.PSObject.Properties['ShowSuperHidden'] -and $adv.ShowSuperHidden -eq 1)
+    $all = @(Get-ChildItem -LiteralPath $Folder -Force -ErrorAction SilentlyContinue)
+    $shown = @($all | Where-Object {
+            $a = $_.Attributes
+            $hidden = [bool]($a -band [IO.FileAttributes]::Hidden)
+            $system = [bool]($a -band [IO.FileAttributes]::System)
+            -not $hidden -or ($showHidden -and (-not $system -or $showSuper))
+        })
+    return [pscustomobject]@{
+        Paths      = [string[]]@($shown | ForEach-Object { $_.FullName })
+        Shown      = $shown.Count
+        Hidden     = $all.Count - $shown.Count
+        ShowHidden = $showHidden
+    }
+}
+
+function Initialize-Uia {
+    if (-not ('System.Windows.Automation.AutomationElement' -as [type])) {
+        Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+    }
+}
+
+function Get-ShellDialog {
+    $cond = New-Object System.Windows.Automation.AndCondition (
+        (New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $PID)),
+        (New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty, '#32770')))
+    return @([System.Windows.Automation.AutomationElement]::RootElement.FindAll('Children', $cond))
+}
+
+function Get-DialogField($Dialog, [string]$AutomationId) {
+    $cond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $AutomationId)
+    $e = $Dialog.FindFirst('Descendants', $cond)
+    if ($null -eq $e) { return $null }
+    # NOTE: an Edit field's Name is usually its label ("Size:"); the shown text
+    # is its Value. A Static field (Contains, on a multi-item page) has only a Name.
+    $text = $null
+    $vp = $null
+    if ($e.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) { $text = $vp.Current.Value }
+    if (-not $text) { $text = $e.Current.Name }
+    return ($text -replace '\p{Cf}', '')
+}
+
+<# "976 KB (1,000,000 bytes)" in any language: the digits inside the last parentheses. #>
+function ConvertFrom-SizeField([string]$Text) {
+    if (-not $Text) { return $null }
+    $m = [regex]::Matches($Text, '\(([^()]*)\)')
+    if ($m.Count -eq 0) { return $null }
+    $digits = $m[$m.Count - 1].Groups[1].Value -replace '\D', ''
+    if ($digits -eq '') { return $null }
+    return [long]$digits
+}
+
+<# "1,000 Files, 5 Folders": two integers, files first, with any group separator. #>
+function ConvertFrom-ContainsField([string]$Text) {
+    if (-not $Text) { return @($null, $null) }
+    $n = @([regex]::Matches($Text, '\d{1,3}(?:[,.''\p{Zs}]\d{3})+(?!\d)|\d+') | ForEach-Object { [long]($_.Value -replace '\D', '') })
+    if ($n.Count -lt 2) { return @($null, $null) }
+    return @($n[0], $n[1])
+}
+
+function Close-ShellDialog($Dialog) {
+    if ($null -eq $Dialog) { return }
+    $handle = 0
+    try { $handle = $Dialog.Current.NativeWindowHandle } catch { return }
+    # NOTE: Close is the same as Cancel: nothing on the property page is applied.
+    try { $Dialog.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() } catch { }
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt 10) {
+        if (-not @(Get-ShellDialog | Where-Object { $_.Current.NativeWindowHandle -eq $handle }).Count) { return }
+        Start-Sleep -Milliseconds 100
+    }
+    try {
+        $cancel = $Dialog.FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::AutomationIdProperty, '2')))
+        if ($cancel) { $cancel.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+    } catch { }
+}
+
+<#
+Opens the shell's Properties dialog and times it until the size settles.
+
+Steps:
+  1. Open Properties: on the folder itself (Mode Folder) or on everything
+     Explorer's Select all would pick in it (Mode Selection, used for a volume
+     root, whose own Properties page shows the free-space chart, not a count).
+  2. Find the new dialog with UI Automation and poll the Size, Size on disk
+     and Contains fields every $ExplorerPollMs ms.
+  3. Settled = no field changed for $ExplorerSettleSec s. Wall time is from
+     the open call to the last observed change, so the settle window is not
+     counted.
+  4. Close the dialog (Cancel semantics) and wait for it to go away.
+
+The dialog runs on a shell thread in this process: the same shell32 code
+Explorer runs, with this session's rights.
+#>
+function Measure-ExplorerSize {
+    param(
+        [Parameter(Mandatory)][string]$Target,
+        [ValidateSet('Folder', 'Selection')][string]$Mode = 'Folder',
+        [int]$Run = 1,
+        [int]$Timeout = $TimeoutSec
+    )
+    $row = [ordered]@{ run = $Run; firstOfSession = ($Run -eq 1); ok = $false; supported = $true; wallSeconds = $null
+        dialogOpenSeconds = $null; sizeBytes = $null; sizeOnDiskBytes = $null; files = $null; folders = $null
+        selectedItems = $null; peakWorkingSetMiB = $null }
+    $selection = $null
+    if ($Mode -eq 'Selection') {
+        $selection = Get-ExplorerSelection $Target
+        $row.selectedItems = $selection.Shown
+        if ($selection.Shown -eq 0) { $row.error = 'nothing to select'; return $row }
+    }
+    try { Initialize-Uia } catch { $row.supported = $false; $row.error = "UI Automation unavailable: $($_.Exception.Message)"; return $row }
+    $before = @(Get-ShellDialog | ForEach-Object { $_.Current.NativeWindowHandle })
+
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $hr = [StrataBench.ShellProps]::Open($Target, $(if ($selection) { $selection.Paths } else { $null }))
+    if ($hr -ne 0) {
+        [StrataBench.ShellProps]::Close()
+        $row.supported = $false
+        $row.error = ('opening Properties failed (0x{0:X8})' -f $hr)
+        return $row
+    }
+
+    $dlg = $null
+    while (-not $dlg -and $sw.Elapsed.TotalSeconds -lt [math]::Min(30, $Timeout)) {
+        $dlg = @(Get-ShellDialog | Where-Object { $before -notcontains $_.Current.NativeWindowHandle })[0]
+        if (-not $dlg) { Start-Sleep -Milliseconds 50 }
+    }
+    if (-not $dlg) {
+        [StrataBench.ShellProps]::Close()
+        $row.supported = $false
+        $row.error = 'the Properties dialog did not open'
+        return $row
+    }
+    $script:ExplorerDialog = $dlg
+    $row.dialogOpenSeconds = ConvertTo-Rounded $sw.Elapsed.TotalSeconds 3
+
+    try {
+        $last = $null; $lastChange = $sw.Elapsed.TotalSeconds; $fields = $null
+        while ($true) {
+            $now = $sw.Elapsed.TotalSeconds
+            $f = [ordered]@{}
+            foreach ($kv in $ExplorerFieldIds.GetEnumerator()) { $f[$kv.Key] = Get-DialogField $dlg $kv.Value }
+            $snap = "$($f.size)|$($f.sizeOnDisk)|$($f.contains)"
+            if ($snap -ne $last) { $last = $snap; $lastChange = $now; $fields = $f }
+            $quiet = $now - $lastChange
+            $bytes = ConvertFrom-SizeField $f.size
+            # NOTE: an empty selection legitimately stays at 0 bytes; give it longer before calling it settled.
+            if ($null -ne $bytes -and $quiet -ge $ExplorerSettleSec -and ($bytes -gt 0 -or $quiet -ge 5 * $ExplorerSettleSec)) { break }
+            if ($now -gt $Timeout) { $row.error = "size still changing after $Timeout s"; break }
+            if ($null -eq $f.size -and $now -gt 15) {
+                $row.supported = $false
+                $row.error = "the Size field (control $($ExplorerFieldIds.size)) was not found on the Properties dialog; this Windows build lays it out differently"
+                break
+            }
+            Start-Sleep -Milliseconds $ExplorerPollMs
+        }
+        if (-not $row.Contains('error')) {
+            $row.ok = $true
+            $row.wallSeconds = ConvertTo-Rounded $lastChange 3
+            $row.sizeBytes = ConvertFrom-SizeField $fields.size
+            $row.sizeOnDiskBytes = ConvertFrom-SizeField $fields.sizeOnDisk
+            $counts = ConvertFrom-ContainsField $fields.contains
+            $row.files = $counts[0]
+            $row.folders = $counts[1]
+        }
+    } finally {
+        Close-ShellDialog $dlg
+        $script:ExplorerDialog = $null
+        [StrataBench.ShellProps]::Close()
+    }
+    return $row
+}
+
+<# Fallback when the Properties dialog can't be automated: a full recursive listing by cmd's dir. #>
+function Invoke-DirListing([string]$Drive, [int]$Run) {
+    $r = Invoke-Measured -FilePath $env:ComSpec -Arguments "/d /c dir /s /a $Drive\ >NUL 2>NUL"
+    $row = [ordered]@{ run = $Run; firstOfSession = ($Run -eq 1); ok = (-not $r.TimedOut) }
+    $row.wallSeconds = ConvertTo-Rounded $r.WallSeconds 3
+    $row.peakWorkingSetMiB = ConvertTo-Rounded ($r.PeakWorkingSet / 1MB) 1
+    if ($r.TimedOut) { $row.error = "timed out after $TimeoutSec s" }
+    return $row
+}
+
+<# Checks the Properties automation end to end on a few files in this run's own temp folder. #>
+function Test-ExplorerAutomation {
+    $probe = Join-Path $script:TempDir 'explorer-probe'
+    [void](New-Item -ItemType Directory -Path $probe)
+    foreach ($i in 1..3) { Write-Utf8 (Join-Path $probe "file$i.txt") ('x' * 1000) }
+    try {
+        $r = Measure-ExplorerSize -Target $script:TempDir -Mode Selection -Timeout 60
+        $okCounts = ($r.ok -and $r.sizeBytes -ge 3000 -and $r.files -ge 3)
+        return [pscustomobject]@{ Ok = $okCounts; Error = $(if ($okCounts) { $null } elseif ($r.Contains('error')) { $r.error } else { 'fields read but values did not match the probe files' }) }
+    } finally {
+        Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-Summary([object[]]$Rows) {
     $ok = @($Rows | Where-Object { $_.ok })
     if ($ok.Count -eq 0) {
@@ -474,18 +801,45 @@ function New-Comparison($Results, [string]$MachineText, [string]$MeasuredOn) {
             $items.Add([ordered]@{ metric = "Peak memory, $where"; detail = "peak working set, $(Format-EntryCount $entries), median of $Runs runs"; unit = 'MiB'; lowerIsBetter = $true
                 values = (& $tools $s.medianPeakWorkingSetMiB $(if ($hasWiz) { $w.summary.medianPeakWorkingSetMiB })) })
         }
+        # NOTE: Explorer gets rows of its own because its scope differs from a
+        # full scan; the detail states both scopes. No memory row: see peakMemoryNote.
+        $x = $v.explorer
+        if ($x -and ($s.okRuns -gt 0 -or $DryRun) -and ($x.summary.okRuns -gt 0 -or $DryRun)) {
+            if ($x.method -eq 'properties') {
+                $okX = @($x.runs | Where-Object { $_.ok })
+                $counted = if ($okX.Count) { "$('{0:N0}' -f $okX[0].files) files and $('{0:N0}' -f $okX[0].folders) folders" } else { 'n/a files and folders' }
+                $hidden = if ($x.hiddenItemsLeftOut -gt 0) { ', hidden items left out as in its default view' } else { '' }
+                $scope = "Strata scans the entire volume ($(Format-EntryCount $entries)); Explorer counts the $($x.selectedItems) top-level items Select all picks in the drive root ($counted$hidden), Properties dialog until the size settles"
+            } else {
+                $scope = "Strata MFT scan vs. dir /s /a listing, both over the entire volume ($(Format-EntryCount $entries))"
+            }
+            $pair = { param($strataVal, $xVal)
+                , @([ordered]@{ tool = 'Strata'; version = $Results.strata.version; value = $strataVal },
+                    [ordered]@{ tool = $x.tool; version = $x.version; value = $xVal })
+            }
+            $items.Add([ordered]@{ metric = "Total size of the drive, $where"; detail = "$scope; median of $Runs runs"; unit = 's'; lowerIsBetter = $true
+                values = (& $pair $s.medianWallSeconds $x.summary.medianWallSeconds) })
+            $items.Add([ordered]@{ metric = "Total size of the drive, first of the session, $where"; detail = "$scope; no cache dropped, run 1 of $Runs"; unit = 's'; lowerIsBetter = $true
+                values = (& $pair $s.firstRunWallSeconds $x.summary.firstRunWallSeconds) })
+        }
     }
+    $methodology = New-Object System.Collections.Generic.List[string]
+    $methodology.Add('Same machine, same volume, elevated session for every tool; tools run alternately, Strata first in each round.')
+    $methodology.Add("Wall-clock time from process start to exit with a complete size total; median of $Runs runs. Run 1 is the first of the session; no cache was dropped and there was no reboot between runs.")
+    $methodology.Add('Strata: strata-cli MFT scan (reads the MFT unbuffered, so the OS file cache does not help it). WizTree: command-line scan with a minimal CSV export (top-level folders only).')
+    $explorerRows = @($Results.volumes | Where-Object { $_.explorer })
+    if ($explorerRows.Count -and $explorerRows[0].explorer.method -eq 'properties') {
+        $methodology.Add("Windows File Explorer: the Properties dialog on everything Select all picks in the drive root (what a user does to see what fills a drive; the root's own Properties page shows only used and free space). Timed from opening the dialog to the last change of its Size, Size on disk and Contains fields, read with UI Automation; a total counts as settled after $ExplorerSettleSec s without change, which is not included. Strata always scans the entire volume, so the scopes differ as each row states.")
+    } elseif ($explorerRows.Count) {
+        $methodology.Add("$DirListingTool`: cmd.exe dir /s /a over the entire volume with output discarded, timed like the other tools. Used because the Explorer Properties dialog could not be automated on the measuring machine; it is not a measurement of Explorer.")
+    }
+    $methodology.Add('Peak memory is the peak working set of the measured process.' + $(if ($explorerRows.Count -and $explorerRows[0].explorer.method -eq 'properties') { ' Not reported for Explorer: its Properties dialog runs inside a shared host process.' } else { '' }))
+    $methodology.Add('Each tool at the version listed, default settings.')
     return [ordered]@{
         release     = $Results.strata.version
         measuredOn  = $MeasuredOn
         machine     = $MachineText
-        methodology = @(
-            'Same machine, same volume, elevated session for every tool; tools run alternately, Strata first in each round.',
-            "Wall-clock time from process start to exit with a complete size total; median of $Runs runs. Run 1 is the first of the session; no cache was dropped and there was no reboot between runs.",
-            'Strata: strata-cli MFT scan (reads the MFT unbuffered, so the OS file cache does not help it). WizTree: command-line scan with a minimal CSV export (top-level folders only).',
-            'Peak memory is the peak working set of the measured process.',
-            'Each tool at the version listed, default settings.'
-        )
+        methodology = $methodology.ToArray()
         results     = $items.ToArray()
     }
 }
@@ -508,12 +862,29 @@ function New-Markdown($Results) {
             $w = $v.wiztree.summary
             $lines.Add("| $vol | WizTree $($v.wiztree.version) | $(& $fmtS $w['medianWallSeconds']) | $(& $fmtS $w['firstRunWallSeconds']) | $(& $fmtM $w['medianPeakWorkingSetMiB']) | n/a |")
         }
+        if ($v.explorer) {
+            $x = $v.explorer
+            $xs = $x.summary
+            $okx = @($x.runs | Where-Object { $_.ok })
+            if ($x.method -eq 'properties') {
+                $xe = if ($okx.Count -and $null -ne $okx[0].files) { '{0:N0}' -f ($okx[0].files + $okx[0].folders) } else { 'n/a' }
+                $lines.Add("| $vol | $($x.tool) (Properties on $($x.selectedItems) top-level items)* | $(& $fmtS $xs['medianWallSeconds']) | $(& $fmtS $xs['firstRunWallSeconds']) | n/a | $xe |")
+            } else {
+                $lines.Add("| $vol | $($x.tool)* | $(& $fmtS $xs['medianWallSeconds']) | $(& $fmtS $xs['firstRunWallSeconds']) | $(& $fmtM $xs['medianPeakWorkingSetMiB']) | n/a |")
+            }
+        }
         if ($v.walker) {
             $wk = $v.walker.summary
             $okw = @($v.walker.runs | Where-Object { $_.ok })
             $we = if ($okw.Count) { '{0:N0}' -f ($okw[0].files + $okw[0].dirs) } else { 'n/a' }
             $lines.Add("| $vol | Strata (standard scanner) | $(& $fmtS $wk['medianWallSeconds']) | n/a | $(& $fmtM $wk['medianPeakWorkingSetMiB']) | $we |")
         }
+    }
+    $xv = @($Results.volumes | Where-Object { $_.explorer })
+    if ($xv.Count) {
+        $lines.Add('')
+        $lines.Add('\* The other rows scan the entire volume.' + $(if ($xv[0].explorer.method -eq 'properties') { ' Explorer has no process of its own, so no peak memory.' } else { '' }))
+        foreach ($v in $xv) { $lines.Add("On $($v.volume.volume), $($v.explorer.tool): $($v.explorer.scope).") }
     }
     foreach ($v in $Results.volumes) {
         $ok = @($v.strata.runs | Where-Object { $_.ok })
@@ -552,6 +923,34 @@ function Write-Utf8([string]$Path, [string]$Text) {
 # Main
 # -----------------------------------------------------------------------------
 
+if ($ExplorerSelfTest) {
+    if (-not (Test-Path -LiteralPath $ExplorerSelfTest -PathType Container)) { Write-Host "Not a folder: $ExplorerSelfTest" -ForegroundColor Red; exit 2 }
+    $target = (Resolve-Path -LiteralPath $ExplorerSelfTest).ProviderPath
+    Write-Host "Explorer self-test (Properties dialog, $Runs run(s) per mode, timeout $TimeoutSec s)" -ForegroundColor Cyan
+    $allOk = $true
+    $script:ExplorerDialog = $null
+    try {
+        foreach ($mode in @('Folder', 'Selection')) {
+            Write-Step $(if ($mode -eq 'Folder') { 'Properties on the folder' } else { 'Properties on Select all inside the folder' })
+            for ($i = 1; $i -le $Runs; $i++) {
+                $r = Measure-ExplorerSize -Target $target -Mode $mode -Run $i
+                if ($r.ok) {
+                    Write-Note ('run {0}: dialog open {1:0.000} s, settled at {2:0.000} s; size {3:N0} B, on disk {4:N0} B, {5:N0} files, {6:N0} folders{7}; dialog closed' -f $i, $r.dialogOpenSeconds, $r.wallSeconds, $r.sizeBytes, $r.sizeOnDiskBytes, $r.files, $r.folders, $(if ($null -ne $r.selectedItems) { ", $($r.selectedItems) items selected" }))
+                } else {
+                    $allOk = $false
+                    Write-Warn "run ${i}: $($r.error)"
+                }
+            }
+        }
+        $left = @(Get-ShellDialog).Count
+        Write-Note "Properties dialogs still open in this process: $left"
+        if ($left) { $allOk = $false }
+    } finally {
+        Close-ShellDialog $script:ExplorerDialog
+    }
+    exit $(if ($allOk) { 0 } else { 1 })
+}
+
 $drives = @($Volume | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { ConvertTo-Drive $_ } | Select-Object -Unique)
 $elevated = Test-Elevated
 
@@ -577,8 +976,13 @@ Write-Host "  2. Scan $($drives -join ', ') with strata-cli (MFT), $Runs timed r
 if ($WalkRuns -gt 0) { Write-Host "  3. Walk the same volume(s) with the standard scanner, $WalkRuns run(s) each" }
 if ($wiz) { Write-Host "  4. Scan the same volume(s) with WizTree $($wiz.Version), $Runs timed run(s) each (free for personal use; measured only, output deleted)" }
 elseif (-not $SkipWizTree) { Write-Host '  4. WizTree not found: comparison skipped' }
-Write-Host '  5. Smoke-test strata-helper (--version, --help, signature). No service is installed.'
-Write-Host '  6. Write bench\results\<date>-<disk>.json and print a Markdown table'
+if (-not $SkipExplorer) {
+    Write-Host "  5. Windows File Explorer, $Runs timed run(s) per volume: open Properties on everything Select all picks in the"
+    Write-Host '     volume root, wait until the size stops changing, close the dialog (Cancel). Falls back to a timed "dir /s /a"'
+    Write-Host '     if the dialog cannot be read. Nothing is changed.'
+}
+Write-Host '  6. Smoke-test strata-helper (--version, --help, signature). No service is installed.'
+Write-Host '  7. Write bench\results\<date>-<disk>.json and print a Markdown table'
 Write-Host ''
 Write-Host 'Read-only: it deletes nothing except files it created in its own temp folder,'
 Write-Host 'and writes only to bench\results\ and that temp folder (plus cargo''s target dir).'
@@ -595,6 +999,7 @@ $script:TempDir = Join-Path ([IO.Path]::GetTempPath()) ('strata-bench-' + [guid]
 if (Test-Path -LiteralPath $script:TempDir) { throw "Temp folder already exists: $script:TempDir" }
 [void](New-Item -ItemType Directory -Path $script:TempDir)
 $script:Running = $null
+$script:ExplorerDialog = $null
 $keepTemp = $false
 $exitCode = 0
 
@@ -629,6 +1034,23 @@ try {
     elseif ($wiz) { Write-Note "Found $($wiz.Name) $($wiz.Version) at $($wiz.Path)" }
     else { Write-Warn 'WizTree not found (registry Uninstall keys, Program Files). Comparison skipped.' }
 
+    Write-Step 'Windows File Explorer'
+    # Method: 'properties' (UI Automation on the Properties dialog), 'dir' (fallback) or $null (skipped).
+    $explorerMethod = $null
+    $explorerVersion = Get-ExplorerVersion
+    if ($SkipExplorer) { Write-Note 'Skipped (-SkipExplorer).' }
+    else {
+        $probe = Test-ExplorerAutomation
+        if ($probe.Ok) {
+            $explorerMethod = 'properties'
+            Write-Note "Properties dialog automation works (checked on files in this run's temp folder). Explorer $explorerVersion."
+        } else {
+            $explorerMethod = 'dir'
+            Write-Warn "Properties dialog can't be read here: $($probe.Error)"
+            Write-Warn "Falling back to a timed 'dir /s /a', reported as '$DirListingTool', not as Explorer."
+        }
+    }
+
     Write-Step 'Machine (generic description only)'
     $hw = Get-Hardware
     $sysDisk = Get-DiskKind ($env:SystemDrive.ToUpperInvariant())
@@ -644,7 +1066,7 @@ try {
         measuredOn = $measuredOn
         strata     = Get-StrataVersion
         machine    = $hw
-        settings   = [ordered]@{ runs = $Runs; walkRuns = $WalkRuns; walkThreads = $WalkThreads; goldenJson = [bool]$GoldenJson; cacheDropped = $false }
+        settings   = [ordered]@{ runs = $Runs; walkRuns = $WalkRuns; walkThreads = $WalkThreads; goldenJson = [bool]$GoldenJson; cacheDropped = $false; explorer = $(if ($explorerMethod) { $explorerMethod } else { 'skipped' }) }
         helper     = $null
         volumes    = @()
     }
@@ -680,12 +1102,15 @@ try {
         Write-Note "$($info.fileSystem), $($info.sizeGiB) GiB, $($info.usedGiB) GiB used, $($info.disk.label)$(if ($info.system) { ', system volume' })"
         if ($info.fileSystem -ne 'NTFS') { Write-Warn "$d is $($info.fileSystem), not NTFS; skipped."; continue }
 
-        $entry = [ordered]@{ volume = $info; strata = $null; golden = $null; walker = $null; wiztree = $null }
+        $entry = [ordered]@{ volume = $info; strata = $null; golden = $null; walker = $null; wiztree = $null; explorer = $null }
         $sRuns = New-Object System.Collections.Generic.List[object]
         $wRuns = New-Object System.Collections.Generic.List[object]
+        $eRuns = New-Object System.Collections.Generic.List[object]
+        $sel = if ($explorerMethod -eq 'properties') { Get-ExplorerSelection "$d\" } else { $null }
         if ($DryRun) {
             $sRuns.Add((Invoke-Command { $r = [ordered]@{ run = 1; firstOfSession = $true; ok = $false; wallSeconds = $null; peakWorkingSetMiB = $null }; foreach ($kv in (ConvertFrom-StrataReport '').GetEnumerator()) { $r[$kv.Key] = $kv.Value }; $r }))
             if ($wiz) { $wRuns.Add([ordered]@{ run = 1; firstOfSession = $true; ok = $false; wallSeconds = $null; peakWorkingSetMiB = $null }) }
+            if ($explorerMethod) { $eRuns.Add([ordered]@{ run = 1; firstOfSession = $true; ok = $false; wallSeconds = $null; peakWorkingSetMiB = $null }) }
             Write-Note 'Dry run: scans skipped.'
         } else {
             for ($i = 1; $i -le $Runs; $i++) {
@@ -699,6 +1124,17 @@ try {
                     if ($w.ok) { Write-Note ('WizTree run {0}: {1,8:0.000} s wall, {2,7:0} MiB peak' -f $i, $w.wallSeconds, $w.peakWorkingSetMiB) }
                     else { Write-Warn "WizTree run ${i}: $($w.error)" }
                 }
+                if ($explorerMethod -eq 'properties') {
+                    $e = Measure-ExplorerSize -Target "$d\" -Mode Selection -Run $i
+                    $eRuns.Add($e)
+                    if ($e.ok) { Write-Note ('Explorer run {0}: {1,7:0.000} s to settle, {2:N0} files, {3:N0} folders, {4:N0} bytes' -f $i, $e.wallSeconds, $e.files, $e.folders, $e.sizeBytes) }
+                    else { Write-Warn "Explorer run ${i}: $($e.error)" }
+                } elseif ($explorerMethod -eq 'dir') {
+                    $e = Invoke-DirListing $d $i
+                    $eRuns.Add($e)
+                    if ($e.ok) { Write-Note ('dir /s run {0}: {1,7:0.000} s wall' -f $i, $e.wallSeconds) }
+                    else { Write-Warn "dir /s run ${i}: $($e.error)" }
+                }
             }
         }
         $entry.strata = [ordered]@{ command = "strata-cli scan $d --top 0"; runs = $sRuns.ToArray(); summary = Get-Summary $sRuns.ToArray() }
@@ -706,6 +1142,20 @@ try {
             $entry.wiztree = [ordered]@{ version = $wiz.Version; executable = $wiz.Name
                 command = "$($wiz.Name) `"$d`" /export=[temp csv] /admin=1 /exportfiles=0 /exportfolders=1 /exportmaxdepth=1"
                 runs = $wRuns.ToArray(); summary = Get-Summary $wRuns.ToArray() }
+        }
+        if ($explorerMethod -eq 'properties') {
+            $eSummary = Get-Summary $eRuns.ToArray()
+            $eSummary.medianPeakWorkingSetMiB = $null
+            $hiddenNote = if ($sel.Hidden -gt 0) { ", leaving out $($sel.Hidden) hidden item(s) the user's Explorer view doesn't show" } else { '' }
+            $entry.explorer = [ordered]@{ tool = $ExplorerTool; version = $explorerVersion; method = 'properties'
+                scope = "Properties dialog on the $($sel.Shown) top-level item(s) Select all picks in the $d root$hiddenNote; timed until Size, Size on disk and Contains stopped changing for $ExplorerSettleSec s (settle window not counted)"
+                selectedItems = $sel.Shown; hiddenItemsLeftOut = $sel.Hidden; settleSeconds = $ExplorerSettleSec; pollMilliseconds = $ExplorerPollMs
+                peakMemoryNote = 'not measured: the dialog is shell code on a thread of a host process (normally explorer.exe, shared with the desktop; here the benchmark''s own PowerShell), so no process peak belongs to the count alone'
+                runs = $eRuns.ToArray(); summary = $eSummary }
+        } elseif ($explorerMethod -eq 'dir') {
+            $entry.explorer = [ordered]@{ tool = $DirListingTool; version = $explorerVersion; method = 'dir'
+                scope = "cmd.exe dir /s /a of the whole $d volume, output discarded"
+                runs = $eRuns.ToArray(); summary = Get-Summary $eRuns.ToArray() }
         }
 
         if ($GoldenJson -and -not $DryRun) {
@@ -770,6 +1220,8 @@ try {
     if ($script:Running -and -not $script:Running.HasExited) {
         try { $script:Running.Kill() } catch { }
     }
+    if ($script:ExplorerDialog) { Close-ShellDialog $script:ExplorerDialog }
+    if ('StrataBench.ShellProps' -as [type]) { [StrataBench.ShellProps]::Close() }
     if (-not $keepTemp -and (Test-Path -LiteralPath $script:TempDir)) {
         # IMPORTANT: only ever removes the folder this run created (fresh GUID name, checked above).
         Remove-Item -LiteralPath $script:TempDir -Recurse -Force

@@ -1,5 +1,6 @@
 /**
- * Page bootstrap: scroll reveals, the architecture captions, and the lazy
+ * Page bootstrap: scroll reveals, the architecture captions, the sortable
+ * benchmark table and its copy buttons, and the lazy
  * demo. The demo module (renderer, fixtures) loads only when its section
  * nears the viewport, so the first paint costs a few kilobytes of script.
  */
@@ -67,6 +68,69 @@ function architecture(): void {
   }
 }
 
+type SortKey = "area" | "metric" | "margin";
+
+/** Sortable results table: column buttons toggle ascending / descending. */
+function resultsTable(): void {
+  const table = document.querySelector<HTMLTableElement>("[data-results]");
+  const body = table?.tBodies[0];
+  if (!table || !body) return;
+  const value = (row: HTMLTableRowElement, key: SortKey): string | number => {
+    const raw = row.dataset[key] ?? "";
+    return key === "metric" ? raw : Number(raw);
+  };
+  for (const th of table.querySelectorAll<HTMLTableCellElement>("th[data-sort]")) {
+    th.querySelector("button")?.addEventListener("click", () => {
+      const key = th.dataset.sort as SortKey;
+      // Margin reads best-first by default; area and metric read A–Z.
+      const first = key === "margin" ? "descending" : "ascending";
+      const current = th.getAttribute("aria-sort");
+      const dir = current === first ? (first === "ascending" ? "descending" : "ascending") : first;
+      for (const other of table.querySelectorAll("th[aria-sort]")) other.removeAttribute("aria-sort");
+      th.setAttribute("aria-sort", dir);
+      const sign = dir === "ascending" ? 1 : -1;
+      const rows = [...body.rows].sort((a, b) => {
+        const x = value(a, key);
+        const y = value(b, key);
+        const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+        // Rows without a margin always sink to the bottom.
+        if (key === "margin" && (x === -1 || y === -1)) return x === -1 ? (y === -1 ? 0 : 1) : -1;
+        return c * sign || Number(a.dataset.area) - Number(b.dataset.area);
+      });
+      body.append(...rows);
+    });
+  }
+}
+
+/** Copy buttons on the reproduction commands. */
+function copyButtons(): void {
+  for (const btn of document.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    btn.addEventListener("click", () => {
+      const text = btn.dataset.copy ?? "";
+      const done = (label: string) => {
+        btn.textContent = label;
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          btn.textContent = "Copy";
+        }, 1600);
+      };
+      if (!navigator.clipboard) {
+        done("Select to copy");
+        return;
+      }
+      navigator.clipboard.writeText(text).then(
+        () => {
+          done("Copied");
+        },
+        () => {
+          done("Select to copy");
+        },
+      );
+    });
+  }
+}
+
 function demo(): void {
   const root = document.querySelector<HTMLElement>("[data-demo]");
   if (!root) return;
@@ -114,4 +178,6 @@ function demo(): void {
 reveals();
 topnav();
 architecture();
+resultsTable();
+copyButtons();
 demo();

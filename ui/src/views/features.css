@@ -1,6 +1,7 @@
 /*
  * Styles for the non-visual views (insights, cleanup, tools, settings).
- * Loaded with their lazy chunks; tokens come from styles.css.
+ * Loaded with their lazy chunks; tokens come from styles.css. Same flat
+ * system: hairlines, neutral surfaces, the overlay shadow only on dialogs.
  * Safety tiers use the Okabe–Ito hues of SAFETY_TIERS plus a distinct shape
  * each, so no tier is identified by color alone.
  */
@@ -29,13 +30,14 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px 16px;
-  padding: 14px 20px 8px;
+  padding: 16px 20px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .fview__title {
   margin: 0;
-  font: 600 20px var(--font-display);
+  font: 600 20px/1.2 var(--font-display);
+  letter-spacing: -0.015em;
 }
 
 .fview__lead {
@@ -67,9 +69,10 @@
 }
 
 .section-title {
-  margin: 20px 0 8px;
+  margin: 24px 0 8px;
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .section-title:focus {
@@ -79,6 +82,7 @@
 .lead-number {
   margin: 4px 0 12px;
   font-size: 15px;
+  font-variant-numeric: tabular-nums;
 }
 
 .unavailable {
@@ -119,7 +123,7 @@
 
 .callout {
   margin: 12px 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
@@ -132,6 +136,7 @@
 }
 
 .callout--warn {
+  border-color: transparent;
   background: var(--warn-bg);
 }
 
@@ -161,9 +166,22 @@ label.btn {
 .input,
 .textarea {
   padding: 4px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
+  transition: border-color 0.15s var(--ease);
+}
+
+.input:hover,
+.textarea:hover {
+  border-color: var(--text-muted);
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  border-color: var(--focus);
+  outline: 1px solid var(--focus);
+  outline-offset: 0;
 }
 
 .input--num {
@@ -176,7 +194,7 @@ label.btn {
 
 .textarea {
   width: min(520px, 100%);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -221,7 +239,10 @@ label.btn {
 .table thead th {
   font-weight: 600;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom-color: var(--border-strong);
 }
 
 .table tbody th {
@@ -263,10 +284,11 @@ label.btn {
 .sbadge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 1px 8px 1px 6px;
+  gap: 6px;
+  padding: 0 6px;
   border: 1px solid currentColor;
-  border-radius: 999px;
+  border-radius: 4px;
+  line-height: 18px;
   font-size: 11px;
   white-space: nowrap;
 }
@@ -325,16 +347,22 @@ label.btn {
 }
 
 .tabs__tab {
-  padding: 6px 12px;
+  margin-bottom: -1px;
+  padding: 8px 12px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;
   cursor: pointer;
   color: var(--text-muted);
+  transition: color 0.15s var(--ease);
+}
+
+.tabs__tab:hover {
+  color: var(--text);
 }
 
 .tabs__tab[aria-selected="true"] {
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text);
   color: var(--text);
   font-weight: 600;
 }
@@ -353,23 +381,24 @@ label.btn {
   width: min(520px, 100%);
   max-height: calc(100vh - 32px);
   overflow: auto;
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 20px 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-overlay);
 }
 
 .modal__title {
   margin: 0 0 8px;
-  font-size: 16px;
+  font: 600 17px/1.3 var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 .modal__actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .command,
@@ -379,7 +408,7 @@ label.btn {
   border-radius: var(--radius);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  font: 12px "Cascadia Mono", Consolas, monospace;
+  font: 12px var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -390,9 +419,9 @@ label.btn {
 }
 
 .progress {
-  height: 8px;
+  height: 4px;
   margin: 8px 0;
-  border-radius: 999px;
+  border-radius: 1px;
   background: var(--hover);
   overflow: hidden;
 }
@@ -416,7 +445,7 @@ label.btn {
 }
 
 .tier-totals__cell {
-  padding: 8px 10px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -424,6 +453,7 @@ label.btn {
 
 .tier-totals dd {
   margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .group {
@@ -527,10 +557,10 @@ label.btn {
 }
 
 .preflight__item {
-  padding: 8px 10px;
-  margin-bottom: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--tier-careful);
+  border-left: 2px solid var(--tier-careful);
   border-radius: var(--radius);
 }
 
@@ -571,11 +601,11 @@ label.btn {
 .card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 
@@ -599,10 +629,10 @@ label.btn {
 }
 
 .rec {
-  margin-bottom: 10px;
-  padding: 12px 14px;
+  margin-bottom: 8px;
+  padding: 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 
@@ -688,10 +718,10 @@ label.btn {
 }
 
 .dupe {
-  margin-bottom: 10px;
-  padding: 10px 12px;
+  margin-bottom: 8px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 
@@ -844,8 +874,8 @@ label.btn {
 
 .explain {
   margin: 8px 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  border-left: 2px solid var(--border-strong);
   background: var(--surface-2);
 }
 
@@ -945,7 +975,7 @@ label.btn {
 .bars__btn {
   display: grid;
   grid-template-columns: minmax(90px, 200px) minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   width: 100%;
   padding: 3px 4px;
@@ -970,14 +1000,14 @@ button.bars__btn:hover {
 }
 
 .bars__track {
-  height: 12px;
+  height: 10px;
 }
 
 .bars__fill {
   display: block;
   height: 100%;
   min-width: 2px;
-  border-radius: 2px;
+  border-radius: 1px;
   background-color: var(--mark-1);
 }
 
@@ -988,32 +1018,31 @@ button.bars__btn:hover {
   font-size: 12px;
 }
 
+/* Color-blind fill patterns, matching the WebGL renderer's pattern ids.
+   Tiled SVG so each pattern is a crisp pixel-aligned texture. */
 .pattern--diagonal {
-  background-image: repeating-linear-gradient(45deg, rgb(255 255 255 / 0.45) 0 2px, transparent 2px 6px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='%23fff' stroke-opacity='.45' stroke-width='1.6'/%3E%3C/svg%3E");
 }
 
 .pattern--antidiagonal {
-  background-image: repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.45) 0 2px, transparent 2px 6px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 5l2 2M0 0l6 6M5-1l2 2' stroke='%23fff' stroke-opacity='.45' stroke-width='1.6'/%3E%3C/svg%3E");
 }
 
 .pattern--horizontal {
-  background-image: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.45) 0 2px, transparent 2px 5px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5'%3E%3Crect width='5' height='2' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E");
 }
 
 .pattern--vertical {
-  background-image: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.45) 0 2px, transparent 2px 5px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5'%3E%3Crect width='2' height='5' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E");
 }
 
 .pattern--dots {
-  background-image: radial-gradient(rgb(255 255 255 / 0.55) 1px, transparent 1.5px);
-  background-size: 5px 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5'%3E%3Ccircle cx='2.5' cy='2.5' r='1' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E");
 }
 
 .pattern--crosshatch,
 .pattern--grid {
-  background-image:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.4) 0 1px, transparent 1px 6px),
-    repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.4) 0 1px, transparent 1px 6px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2M-1 5l2 2M0 0l6 6M5-1l2 2' stroke='%23fff' stroke-opacity='.45' stroke-width='1'/%3E%3C/svg%3E");
 }
 
 @media (forced-colors: active) {

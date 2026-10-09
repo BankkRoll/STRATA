@@ -39,78 +39,118 @@ export type IconName =
   | "largest"
   | "check";
 
+// Drawn on a 20×20 grid as 1.5px strokes; coordinates sit on half pixels so
+// lines stay crisp at 16 and 20 px.
 const PATHS: Record<IconName, ReactElement> = {
-  home: <path d="M3 10 10 4l7 6v6a1 1 0 0 1-1 1h-4v-5H8v5H4a1 1 0 0 1-1-1z" />,
+  home: <path d="M3.75 9 10 3.75 16.25 9v6.5a.75.75 0 0 1-.75.75H12.5v-4.5h-5v4.5H4.5a.75.75 0 0 1-.75-.75z" />,
   treemap: (
     <>
-      <rect x="3" y="3" width="8" height="14" rx="1" />
-      <rect x="12" y="3" width="5" height="7" rx="1" />
-      <rect x="12" y="11" width="5" height="6" rx="1" />
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M10.75 3.25v13.5M10.75 9.75h6" />
     </>
   ),
   sunburst: (
     <>
-      <circle cx="10" cy="10" r="3" />
-      <path d="M10 2a8 8 0 0 1 8 8h-3a5 5 0 0 0-5-5zM18 10a8 8 0 0 1-12.5 6.6l1.7-2.5A5 5 0 0 0 15 10z" />
+      <circle cx="10" cy="10" r="2.75" />
+      <circle cx="10" cy="10" r="6.75" />
+      <path d="M10 3.25v4M16.75 10h-4M5.25 14.75l2.8-2.8" />
     </>
   ),
   icicle: (
     <>
-      <rect x="3" y="3" width="14" height="4" rx="1" />
-      <rect x="3" y="8" width="8" height="4" rx="1" />
-      <rect x="12" y="8" width="5" height="4" rx="1" />
-      <rect x="3" y="13" width="5" height="4" rx="1" />
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M3.25 7.75h13.5M3.25 12.25h7.5M10.75 7.75v9M7.25 12.25v4.5" />
     </>
   ),
   flame: (
     <>
-      <rect x="3" y="13" width="14" height="4" rx="1" />
-      <rect x="3" y="8" width="8" height="4" rx="1" />
-      <rect x="12" y="8" width="5" height="4" rx="1" />
-      <rect x="3" y="3" width="5" height="4" rx="1" />
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M3.25 12.25h13.5M3.25 7.75h7.5M10.75 3.25v9M7.25 3.25v4.5" />
     </>
   ),
   bubbles: (
     <>
-      <circle cx="8" cy="9" r="5" />
-      <circle cx="14.5" cy="13.5" r="3" />
-      <circle cx="15" cy="5" r="2" />
+      <circle cx="8" cy="9" r="4.75" />
+      <circle cx="14.5" cy="14" r="2.5" />
+      <circle cx="15" cy="5" r="1.75" />
     </>
   ),
   mindmap: (
     <>
-      <circle cx="10" cy="10" r="2.5" />
-      <circle cx="4" cy="4" r="1.8" />
-      <circle cx="16" cy="5" r="1.8" />
-      <circle cx="15" cy="16" r="1.8" />
-      <path d="M8.3 8.3 5.3 5.3M11.9 8.9l2.6-2.6M11.6 11.9l2.3 2.6" strokeWidth="1.4" stroke="currentColor" fill="none" />
+      <circle cx="10" cy="10" r="2.25" />
+      <circle cx="4.5" cy="4.5" r="1.5" />
+      <circle cx="15.5" cy="5" r="1.5" />
+      <circle cx="15" cy="15.5" r="1.5" />
+      <path d="M8.4 8.4 5.6 5.6M11.7 8.6l2.7-2.5M11.6 11.7l2.4 2.7" />
     </>
   ),
-  search: <path d="M8.5 3a5.5 5.5 0 0 1 4.4 8.8l3.7 3.7-1.1 1.1-3.7-3.7A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />,
-  list: <path d="M3 4h14v2H3zM3 9h14v2H3zM3 14h14v2H3z" />,
-  detail: <path d="M3 3h14v14H3zm9 1.5v11h3.5v-11z" fillRule="evenodd" />,
-  nav: <path d="M3 3h14v14H3zm1.5 1.5v11H7v-11z" fillRule="evenodd" />,
-  chevron: <path d="m7 4 6 6-6 6-1.1-1.1L10.8 10 5.9 5.1z" />,
-  caret: <path d="m5 7 5 6 5-6z" />,
-  folder: <path d="M2 5a1 1 0 0 1 1-1h5l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />,
-  file: <path d="M5 2h7l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6 1.5V7h3.5z" />,
-  close: <path d="m5.1 4 4.9 4.9L14.9 4 16 5.1 11.1 10l4.9 4.9-1.1 1.1-4.9-4.9L5.1 16 4 14.9 8.9 10 4 5.1z" />,
-  warning: <path d="M10 2 19 18H1zm-.8 5v6h1.6V7zm0 7.5V16h1.6v-1.5z" fillRule="evenodd" />,
-  shield: <path d="M10 2 17 5v5c0 4-3 7-7 8-4-1-7-4-7-8V5z" />,
-  info: <path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM9.2 9h1.6v5H9.2zm0-3h1.6v1.6H9.2z" fillRule="evenodd" />,
-  broom: <path d="M15.6 2.3 17 3.7l-5 5 1.4 1.4-1.1 1.1L9 7.9l1.1-1.1 1.4 1.4zM8 9l3 3-1 6H3l1-5z" />,
-  tools: <path d="M13.5 2a4.5 4.5 0 0 0-4.3 5.8L2.6 14.4a1.5 1.5 0 0 0 2.1 2.1l6.6-6.6A4.5 4.5 0 0 0 17.7 5l-2.6 2.6-2-.6-.6-2L15.1 2.4A4.5 4.5 0 0 0 13.5 2z" />,
-  gear: <path d="m8.6 2h2.8l.4 2.2 1.4.6 1.9-1.3 2 2-1.3 1.9.6 1.4 2.2.4v2.8l-2.2.4-.6 1.4 1.3 1.9-2 2-1.9-1.3-1.4.6-.4 2.2H8.6l-.4-2.2-1.4-.6-1.9 1.3-2-2 1.3-1.9-.6-1.4L1.4 11.4V8.6l2.2-.4.6-1.4-1.3-1.9 2-2 1.9 1.3 1.4-.6zM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fillRule="evenodd" />,
-  bars: <path d="M3 3h10v3H3zM3 8.5h14v3H3zM3 14h6v3H3z" />,
-  history: <path d="M10 2a8 8 0 1 1-7.4 5h1.7A6.5 6.5 0 1 0 6 4.8L7.5 6.3H2.5v-5l2.4 2.4A8 8 0 0 1 10 2zm-.8 4h1.6v3.7l2.7 2.7-1.1 1.1-3.2-3.2z" />,
-  pulse: <path d="M1 10h4l2-5 3 10 2.5-7 1.5 2h5v1.5h-5.8l-.6-.8-2.6 7.3L7 7.7 6 10.8l-.3.7H1z" />,
-  copies: <path d="M7 2h7l3 3v9a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM3 6h1.5v10.5H13V18H4a1 1 0 0 1-1-1z" />,
-  apps: <path d="M3 3h6v6H3zm8 0h6v6h-6zM3 11h6v6H3zm8 0h6v6h-6z" />,
-  tag: <path d="M2 3a1 1 0 0 1 1-1h6l9 9-7 7-9-9zm4 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fillRule="evenodd" />,
-  sparkle: <path d="m10 1 2 7 7 2-7 2-2 7-2-7-7-2 7-2z" />,
-  largest: <path d="M3 3h14v4H3zm0 6h10v4H3zm0 6h6v3H3z" />,
-  check: <path d="m8 13.2 7.6-7.6 1.1 1.1L8 15.4 3.3 10.7l1.1-1.1z" />,
-  lock: <path d="M6 8V6a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm1.5 0h5V6a2.5 2.5 0 0 0-5 0z" fillRule="evenodd" />,
+  search: <path d="M8.75 3.25a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zM12.75 12.75l4 4" />,
+  list: <path d="M3.75 5h12.5M3.75 10h12.5M3.75 15h12.5" />,
+  detail: (
+    <>
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M12.25 3.25v13.5" />
+    </>
+  ),
+  nav: (
+    <>
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M7.75 3.25v13.5" />
+    </>
+  ),
+  chevron: <path d="m7.75 4.75 5.25 5.25-5.25 5.25" />,
+  caret: <path d="m6 8 4 4 4-4" />,
+  folder: <path d="M2.75 5.5a.75.75 0 0 1 .75-.75h4.25l2 2h6.75a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-.75.75h-13a.75.75 0 0 1-.75-.75z" />,
+  file: <path d="M5.5 2.75h6l3.75 3.75v10a.75.75 0 0 1-.75.75h-9a.75.75 0 0 1-.75-.75V3.5a.75.75 0 0 1 .75-.75zM11.25 2.75v4h4" />,
+  close: <path d="m5 5 10 10M15 5 5 15" />,
+  warning: <path d="M10 3.25 17.5 16.5h-15zM10 8v4M10 14.25v.25" />,
+  shield: <path d="M10 2.75 16.25 5.25v4.5c0 3.75-2.75 6.5-6.25 7.5-3.5-1-6.25-3.75-6.25-7.5v-4.5z" />,
+  info: (
+    <>
+      <circle cx="10" cy="10" r="7.25" />
+      <path d="M10 9v5M10 6.25v.25" />
+    </>
+  ),
+  broom: <path d="m16.25 3.75-5.5 5.5M8.25 8.75l3 3-1 5.5h-6.5l1-4.75zM6.5 17.25l.75-3.5M9.5 9.75l2-2 1 1-2 2" />,
+  tools: <path d="M13.25 2.75a4 4 0 0 0-3.8 5.25L3.2 14.25a1.4 1.4 0 0 0 2 2L11.5 10a4 4 0 0 0 5.25-3.8l-2.25 2.25-2.25-.75-.75-2.25z" />,
+  gear: (
+    <>
+      <circle cx="10" cy="10" r="2.5" />
+      <path d="M8.75 2.75h2.5l.4 2 1.35.6 1.7-1.15 1.8 1.8-1.15 1.7.6 1.35 2 .4v2.5l-2 .4-.6 1.35 1.15 1.7-1.8 1.8-1.7-1.15-1.35.6-.4 2h-2.5l-.4-2-1.35-.6-1.7 1.15-1.8-1.8 1.15-1.7-.6-1.35-2-.4v-2.5l2-.4.6-1.35-1.15-1.7 1.8-1.8 1.7 1.15 1.35-.6z" />
+    </>
+  ),
+  bars: <path d="M3.75 4.75h8.5M3.75 10h12.5M3.75 15.25h5" />,
+  history: <path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6M3.25 3.5v3h3M10 6.5V10l2.5 2.5" />,
+  pulse: <path d="M2 10h3.25l2-5 3.5 10 2.25-6 1.25 1h3.75" />,
+  copies: (
+    <>
+      <rect x="6.75" y="2.75" width="9.5" height="11.5" rx="1" />
+      <path d="M4.25 6.25v10.25a.75.75 0 0 0 .75.75h7.75" />
+    </>
+  ),
+  apps: (
+    <>
+      <rect x="3.25" y="3.25" width="5.5" height="5.5" rx="1" />
+      <rect x="11.25" y="3.25" width="5.5" height="5.5" rx="1" />
+      <rect x="3.25" y="11.25" width="5.5" height="5.5" rx="1" />
+      <rect x="11.25" y="11.25" width="5.5" height="5.5" rx="1" />
+    </>
+  ),
+  tag: (
+    <>
+      <path d="M2.75 3.5a.75.75 0 0 1 .75-.75h5.75l8 8-6.5 6.5-8-8z" />
+      <circle cx="6.5" cy="6.5" r="1.25" />
+    </>
+  ),
+  sparkle: <path d="M10 2.75 11.6 8.4l5.65 1.6-5.65 1.6L10 17.25 8.4 11.6 2.75 10 8.4 8.4z" />,
+  largest: <path d="M3.75 4.75h12.5M3.75 10h8.5M3.75 15.25h5" />,
+  check: <path d="m4 10.5 3.75 3.75L16 6" />,
+  lock: (
+    <>
+      <rect x="4.25" y="8.75" width="11.5" height="8.5" rx="1" />
+      <path d="M7 8.75V6.5a3 3 0 0 1 6 0v2.25" />
+    </>
+  ),
 };
 
 /** Props for {@link Icon}. */
@@ -121,7 +161,7 @@ export interface IconProps {
   className?: string;
 }
 
-/** A decorative 20×20 icon in `currentColor`. */
+/** A decorative 20×20 line icon stroked in `currentColor`. */
 export function Icon({ name, size = 16, className }: IconProps) {
   return (
     <svg
@@ -129,7 +169,11 @@ export function Icon({ name, size = 16, className }: IconProps) {
       width={size}
       height={size}
       viewBox="0 0 20 20"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
     >

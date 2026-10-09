@@ -1,0 +1,43 @@
+[package]
+name = "strata-helper"
+description = "Elevated helper for Strata: raw MFT scans, USN journal, validated privileged deletes, served over a secured named pipe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "strata_helper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "strata-helper"
+path = "src/main.rs"
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+strata-win = { path = "../strata-win" }
+strata-ipc = { path = "../strata-ipc" }
+strata-ntfs = { path = "../strata-ntfs" }
+strata-clean = { path = "../strata-clean" }
+crossbeam-channel = { workspace = true }
+thiserror = { workspace = true }
+windows-service = "0.8.1"
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+strata-ntfs = { path = "../strata-ntfs", features = ["test-image"] }
+
+[lints]
+workspace = true

@@ -268,6 +268,8 @@ mod tests {
                 journal_id: 9,
                 from: -1,
                 max_bytes: 65536,
+                bytes_to_wait_for: 1,
+                timeout_ms: 500,
             }),
             Message::Request(Request::PrivilegedDelete(DeleteRequest {
                 volume: "v".into(),
@@ -275,7 +277,37 @@ mod tests {
                 expected_path: vec![0xD800, 0x41],
                 expected_size: 3,
                 expected_mtime: FileTime(9),
+                is_dir: false,
             })),
+            Message::Request(Request::CreateUsnJournal {
+                volume: "v".into(),
+                maximum_size: 1 << 25,
+                allocation_delta: 1 << 22,
+            }),
+            Message::Request(Request::DeleteOnReboot(RebootDeleteRequest {
+                file_ref: FileRef(78),
+                expected_path: vec![0x43, 0x3A],
+                expected_size: 1,
+                expected_mtime: FileTime(2),
+            })),
+            Message::Response(Response::Audit(AuditEntry {
+                seq: 1,
+                time: FileTime(3),
+                client_pid: 42,
+                op: AuditOp::PrivilegedDelete,
+                phase: AuditPhase::Started,
+                volume: "v".into(),
+                file_ref: Some(FileRef(77)),
+                path: Some(vec![0x41]),
+                detail: String::new(),
+            })),
+            Message::Response(Response::Deleted {
+                file_ref: FileRef(77),
+                summary: DeleteSummary {
+                    files: 1,
+                    ..Default::default()
+                },
+            }),
             Message::Response(Response::ScanBatch {
                 records: (0..10).map(record).collect(),
             }),

@@ -84,7 +84,18 @@ pub fn pipe_sddl(user_sid: &str) -> Result<String, WinError> {
     ))
 }
 
-fn is_sid_string(s: &str) -> bool {
+/// Whether `s` is a plain string SID (`S-1-` followed by decimal
+/// sub-authorities), safe to interpolate into SDDL and pipe names.
+///
+/// # Example
+///
+/// ```
+/// use strata_ipc::security::is_sid_string;
+/// assert!(is_sid_string("S-1-5-21-1-2-3-1001"));
+/// assert!(!is_sid_string("S-1-5-18)(A;;GA;;;WD"));
+/// ```
+#[must_use]
+pub fn is_sid_string(s: &str) -> bool {
     s.len() < 200
         && s.starts_with("S-1-")
         && s[2..]
@@ -232,6 +243,14 @@ pub enum TrustError {
     /// The peer process could not be inspected.
     #[error("could not inspect peer: {0}")]
     Inspect(WinError),
+    /// The peer is the right binary but not the process or account this
+    /// server serves (e.g. a different PID than the one that launched the
+    /// helper, or a non-administrator in service mode).
+    #[error("peer is not authorized: {reason}")]
+    Unauthorized {
+        /// Why, for the verifying side's log.
+        reason: String,
+    },
 }
 
 /// Decides whether a connected peer may talk to us.

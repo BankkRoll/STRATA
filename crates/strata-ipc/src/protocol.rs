@@ -15,7 +15,7 @@ use strata_core::{FileRef, FileTime, ScanRecord};
 use strata_win::volume::VolumeInfo;
 
 /// The wire protocol version. Both sides must match exactly.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Request id reserved for the handshake and unsolicited messages.
 pub const HANDSHAKE_ID: u32 = 0;
@@ -118,6 +118,26 @@ pub struct DeleteRequest {
     pub expected_size: u64,
     /// Last-modified time the UI showed.
     pub expected_mtime: FileTime,
+    /// Whether the scan saw a directory (deleted recursively, by handle).
+    pub is_dir: bool,
+}
+
+/// A delete-on-next-restart request (SPEC §15.3), validated like
+/// [`DeleteRequest`]. Windows deletes by path at boot, so the helper only
+/// accepts plain files with a single name.
+///
+/// Sending it is the user's confirmation: the app shows the restart-delete
+/// prompt (`strata_clean::consent::DeleteOnReboot`) before it sends this.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RebootDeleteRequest {
+    /// File reference (record + sequence).
+    pub file_ref: FileRef,
+    /// Path the UI showed the user, as raw UTF-16 (lossless).
+    pub expected_path: Vec<u16>,
+    /// Logical size the UI showed.
+    pub expected_size: u64,
+    /// Last-modified time the UI showed.
+    pub expected_mtime: FileTime,
 }
 
 /// Client → helper requests.
@@ -154,6 +174,13 @@ pub enum Request {
         from: i64,
         /// Maximum bytes of records to return.
         max_bytes: u32,
+        /// Block until at least this many bytes of records exist
+        /// (`BytesToWaitFor`); 0 returns immediately.
+        bytes_to_wait_for: u32,
+        /// Upper bound on the wait, in milliseconds (the helper clamps it).
+        /// When it elapses the reply is an empty `UsnRecords` with
+        /// `next_usn == from`.
+        timeout_ms: u32,
     },
     /// Re-read individual records (after USN changes).
     ReadRecords {
@@ -166,6 +193,19 @@ pub enum Request {
     PrivilegedDelete(DeleteRequest),
     /// Ask the helper to exit.
     Shutdown,
+    /// Create (or resize) the USN journal (`FSCTL_CREATE_USN_JOURNAL`).
+    /// Sent only after the user confirmed enabling live updates (SPEC §10.1).
+    /// Answered with `UsnJournal(Some(..))`.
+    CreateUsnJournal {
+        /// Volume GUID path.
+        volume: String,
+        /// Maximum journal size in bytes (0 lets the helper pick a default).
+        maximum_size: u64,
+        /// Allocation delta in bytes (0 lets the helper pick a default).
+        allocation_delta: u64,
+    },
+    /// Schedule a file for deletion at the next restart (elevated only).
+    DeleteOnReboot(RebootDeleteRequest),
 }
 
 /// Scan progress.
@@ -238,6 +278,77 @@ pub enum ErrorCode {
     Io,
     /// Helper bug or unexpected state.
     Internal,
+    /// `ReadUsn`: the journal was deleted and recreated (its id changed);
+    /// the client must rescan the volume (SPEC §10.3).
+    JournalChanged,
+    /// `ReadUsn`: `from` is older than the journal's first USN, so changes
+    /// were lost; the client must rescan the volume (SPEC §10.3).
+    JournalWrapped,
+}
+
+/// What a privileged action did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AuditOp {
+    /// A raw MFT scan of a volume.
+    ScanVolume,
+    /// A by-id delete ([`Request::PrivilegedDelete`]).
+    PrivilegedDelete,
+    /// A delete scheduled for the next restart.
+    DeleteOnReboot,
+    /// USN journal creation.
+    CreateUsnJournal,
+}
+
+/// Where in its life an audited action is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AuditPhase {
+    /// Sent before the helper touches anything (write-ahead).
+    Started,
+    /// The action completed.
+    Succeeded,
+    /// Validation refused the action; nothing was touched.
+    Refused,
+    /// The action was attempted and failed (possibly partly done).
+    Failed,
+}
+
+/// One helper audit record (SPEC §15.7: every privileged action is logged).
+///
+/// The helper has no database: it sends these as [`Response::Audit`] events
+/// with the request's id, and the app stores them in its undo/audit log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditEntry {
+    /// Per-helper-process sequence number (gaps mean lost entries).
+    pub seq: u64,
+    /// When the entry was written (FILETIME, UTC).
+    pub time: FileTime,
+    /// Verified client process id.
+    pub client_pid: u32,
+    /// The action.
+    pub op: AuditOp,
+    /// Its phase.
+    pub phase: AuditPhase,
+    /// Volume the action targeted, as requested.
+    pub volume: String,
+    /// File reference, for per-file actions.
+    pub file_ref: Option<FileRef>,
+    /// Path the client claimed (UTF-16, lossless), for per-file actions.
+    pub path: Option<Vec<u16>>,
+    /// Outcome detail: counts on success, the reason on refusal or failure.
+    pub detail: String,
+}
+
+/// What a privileged delete removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct DeleteSummary {
+    /// Files removed.
+    pub files: u64,
+    /// Directories removed.
+    pub dirs: u64,
+    /// Links (symlinks, junctions, other reparse points) unlinked.
+    pub links: u64,
+    /// Logical bytes of removed files.
+    pub bytes: u64,
 }
 
 /// A failed request.
@@ -301,11 +412,21 @@ pub enum Response {
     Deleted {
         /// What was deleted.
         file_ref: FileRef,
+        /// What the delete removed.
+        summary: DeleteSummary,
     },
     /// Reply to [`Request::Shutdown`]; the helper exits after sending it.
     ShuttingDown,
     /// The request failed.
     Error(ErrorReply),
+    /// An audit record for a privileged request, sent with that request's
+    /// id before its final response (see [`AuditEntry`]).
+    Audit(AuditEntry),
+    /// Reply to [`Request::DeleteOnReboot`].
+    RebootScheduled {
+        /// The file that Windows deletes at the next restart.
+        file_ref: FileRef,
+    },
 }
 
 /// Any message on the wire.

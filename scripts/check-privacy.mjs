@@ -14,7 +14,7 @@ const ALLOWED_PROFILES = new Set([
   "me", "you", "user", "alice", "bob", "carol", "dave", "someone", "other", "guest",
   "test", "name", "x", "a", "b", ".", "..", "*", "public", "default", "default user",
   "all users", "nobody-strata-test", "<user>", "<name>", "{name}", "%username%",
-  "username", "example",
+  "username", "example", "docs",
 ]);
 
 const SKIP = [

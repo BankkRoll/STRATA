@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
+import { AppShell } from "./components/AppShell";
 import { getAppInfo, type AppInfo } from "./lib/backend";
 import { applyBackdrop, applyTheme } from "./lib/theme";
+import { ServicesContext, type Services } from "./services";
 import { useSettings } from "./store/settings";
-import { Home } from "./views/Home";
 
-/** Root component: wires theme/backdrop to the document and renders the current view. */
-export function App() {
+/** Props for {@link App}. */
+export interface AppProps {
+  /** Backend services (Tauri in the app, fixtures in the dev harness). */
+  services: Services;
+}
+
+/** Root component: wires theme/backdrop to the document and renders the shell. */
+export function App({ services }: AppProps) {
   const theme = useSettings((s) => s.theme);
   const [info, setInfo] = useState<AppInfo | null>(null);
 
@@ -30,5 +37,9 @@ export function App() {
     };
   }, []);
 
-  return <Home info={info} />;
+  return (
+    <ServicesContext value={services}>
+      <AppShell info={info} />
+    </ServicesContext>
+  );
 }

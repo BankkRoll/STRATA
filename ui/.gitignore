@@ -1,0 +1,2 @@
+# Large dev-harness fixtures (~40 MB); regenerate with `pnpm fixtures:large`.
+/src/dev/__fixtures__/large/

@@ -1,0 +1,61 @@
+﻿[package]
+name = "strata-ntfs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Kept out of the main workspace: it needs nightly and libFuzzer.
+[workspace]
+members = ["."]
+
+[lib]
+name = "strata_ntfs_fuzz"
+path = "src/lib.rs"
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+strata-ntfs = { path = ".." }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+
+[[bin]]
+name = "record"
+path = "fuzz_targets/record.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "runlist"
+path = "fuzz_targets/runlist.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "attr_list"
+path = "fuzz_targets/attr_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "usn"
+path = "fuzz_targets/usn.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "image"
+path = "fuzz_targets/image.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

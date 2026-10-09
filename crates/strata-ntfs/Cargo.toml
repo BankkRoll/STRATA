@@ -1,0 +1,31 @@
+[package]
+name = "strata-ntfs"
+description = "NTFS MFT scanner for Strata: boot sector, fixups, attributes, runlists, scan pipeline, USN parsing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Byte-exact synthetic NTFS image builder, used by tests, benches, fuzz seeds and CLI tests.
+test-image = []
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+thiserror = { workspace = true }
+rayon = { workspace = true }
+crossbeam-channel = { workspace = true }
+
+[dev-dependencies]
+# NOTE: self dev-dependency so integration tests and benches see the `test-image` module.
+strata-ntfs = { path = ".", features = ["test-image"] }
+proptest = { workspace = true }
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "parse"
+harness = false
+
+[lints]
+workspace = true

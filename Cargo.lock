@@ -42,6 +42,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1646,6 +1652,8 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
 ]
 
@@ -3648,11 +3656,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "strata-cli"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strata-core",
+ "strata-ntfs",
+ "windows",
+]
+
+[[package]]
 name = "strata-core"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "strata-index"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "hashbrown 0.17.1",
+ "memchr",
+ "proptest",
+ "rayon",
+ "regex",
+ "serde",
+ "strata-core",
+ "thiserror 2.0.21",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -3675,6 +3710,19 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "proptest",
+]
+
+[[package]]
+name = "strata-ntfs"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "crossbeam-channel",
+ "proptest",
+ "rayon",
+ "strata-core",
+ "strata-ntfs",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

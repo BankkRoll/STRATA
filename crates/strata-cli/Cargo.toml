@@ -1,0 +1,32 @@
+[package]
+name = "strata-cli"
+description = "Command-line MFT scanner for Strata: totals, top-N largest files, volume reconciliation, golden JSON"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "strata-cli"
+path = "src/main.rs"
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+strata-ntfs = { path = "../strata-ntfs" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+strata-ntfs = { path = "../strata-ntfs", features = ["test-image"] }
+
+[lints]
+workspace = true

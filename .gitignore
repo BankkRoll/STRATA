@@ -10,3 +10,4 @@ dist/
 !.vscode/extensions.json
 *.tsbuildinfo
 .claude/
+/bench/results/

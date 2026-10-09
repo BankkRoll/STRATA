@@ -11,8 +11,10 @@ import { readFileSync } from "node:fs";
 
 /** Profile names that are generic placeholders or Windows built-ins. */
 const ALLOWED_PROFILES = new Set([
-  "me", "you", "user", "alice", "bob", "a", "b", "public", "default", "all users",
-  "nobody-strata-test", "<user>", "{name}", "%username%", "username", "example", "*",
+  "me", "you", "user", "alice", "bob", "carol", "dave", "someone", "other", "guest",
+  "test", "name", "x", "a", "b", ".", "..", "*", "public", "default", "default user",
+  "all users", "nobody-strata-test", "<user>", "<name>", "{name}", "%username%",
+  "username", "example",
 ]);
 
 const SKIP = [

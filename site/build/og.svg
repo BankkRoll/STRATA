@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Source of public/og.png (1200x630). Re-render with a headless browser screenshot. -->
+  <defs>
+    <radialGradient id="glow" cx="0.25" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.35" />
+      <stop offset="0.6" stop-color="#8b5cf6" stop-opacity="0.08" />
+      <stop offset="1" stop-color="#08090c" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#ffffff" fill-opacity="0.06" />
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#08090c" />
+  <rect width="1200" height="630" fill="url(#glow)" />
+  <rect width="1200" height="630" fill="url(#dots)" />
+  <g transform="translate(96 110) scale(0.19)">
+    <rect width="1024" height="1024" rx="224" fill="#111827" stroke="#ffffff" stroke-opacity="0.12" stroke-width="8" />
+    <rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" />
+    <rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" />
+    <rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" />
+  </g>
+  <g font-family="Segoe UI Variable Display, Segoe UI, system-ui, sans-serif" fill="#eceef3">
+    <text x="96" y="430" font-size="96" font-weight="700" letter-spacing="-3">Strata</text>
+    <text x="96" y="492" font-size="36" fill="#a3abba">See everything on your drives: what it is, who put it there,</text>
+    <text x="96" y="538" font-size="36" fill="#a3abba">and whether it&#8217;s safe to delete.</text>
+  </g>
+  <text x="1104" y="96" text-anchor="end" font-family="Cascadia Code, Consolas, monospace" font-size="22" fill="#6aa8ff" letter-spacing="2">OPEN SOURCE &#183; WINDOWS 10/11 &#183; MIT</text>
+</svg>

@@ -1,0 +1,97 @@
+{
+  "methodologyUrl": "https://github.com/BankkRoll/STRATA/blob/main/docs/BENCHMARKS.md",
+  "machine": "Generic 8-core / 16-thread desktop, 32 GB RAM, NVMe SSD, Windows 11",
+  "metrics": [
+    {
+      "label": "Index memory per entry",
+      "detail": "5M entries, names excluded",
+      "measured": 59.2,
+      "measuredText": "58.7–59.2 B",
+      "target": 64,
+      "targetText": "≤ 64 B",
+      "note": null
+    },
+    {
+      "label": "First search results",
+      "detail": "5M names, any query",
+      "measured": 1.1,
+      "measuredText": "≤ 1.1 ms",
+      "target": 50,
+      "targetText": "≤ 50 ms",
+      "note": null
+    },
+    {
+      "label": "Treemap relayout",
+      "detail": "100k-entry subtree",
+      "measured": 3.2,
+      "measuredText": "3.2 ms",
+      "target": 50,
+      "targetText": "≤ 50 ms",
+      "note": null
+    },
+    {
+      "label": "Hit test (pick)",
+      "detail": "503k-rect layout",
+      "measured": 0.00029,
+      "measuredText": "0.12–0.29 µs",
+      "target": 1,
+      "targetText": "< 1 ms",
+      "note": null
+    },
+    {
+      "label": "MFT parse",
+      "detail": "1M records, parallel, in memory",
+      "measured": 291,
+      "measuredText": "155–291 ms",
+      "target": 3000,
+      "targetText": "≤ 3 s",
+      "note": "Parse only, from memory; the 3 s target covers a full end-to-end scan."
+    },
+    {
+      "label": "Standard scanner",
+      "detail": "per 1M entries, real system volume",
+      "measured": 23,
+      "measuredText": "20–23 s",
+      "target": 30,
+      "targetText": "≤ 30 s",
+      "note": null
+    },
+    {
+      "label": "UI frame time, p95",
+      "detail": "503k WebGL2 instances, hover / zoom / pan",
+      "measured": 10.1,
+      "measuredText": "10.1 ms",
+      "target": 16.7,
+      "targetText": "16.7 ms (60 fps)",
+      "note": "Headless Chromium paces frames at 100 Hz, so 10 ms (100 fps) is the floor of this measurement."
+    }
+  ],
+  "stats": [
+    {
+      "value": "≈1 ms",
+      "label": "to first search results",
+      "detail": "Everything-style name search over 5 million names."
+    },
+    {
+      "value": "59 B",
+      "label": "per indexed entry",
+      "detail": "Struct-of-arrays index, names excluded. Target ≤ 64 B."
+    },
+    {
+      "value": "3.2M/s",
+      "label": "records over the pipe",
+      "detail": "Scan records from the elevated helper, 8,192 per batch."
+    }
+  ],
+  "comparison": {
+    "release": null,
+    "measuredOn": null,
+    "machine": null,
+    "methodology": [
+      "Same machine, same volume, cold cache (reboot between runs), elevated session for every tool.",
+      "Wall-clock time from launch to a complete size total; median of five runs.",
+      "Each tool at its latest public release, default settings."
+    ],
+    "results": []
+  }
+}

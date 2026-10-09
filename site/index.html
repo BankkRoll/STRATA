@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Strata · Disk space, explained, for Windows</title>
+    <meta name="description" content="Strata is a free, open-source Windows disk-space app. It reads the NTFS Master File Table directly, stays live, and tells you what each file is, who put it there and whether it is safe to delete." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="../src-tauri/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="../src-tauri/icons/128x128@2x.png" />
+    <link rel="canonical" href="https://bankkroll.github.io/STRATA/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Strata" />
+    <meta property="og:title" content="Strata · Disk space, explained, for Windows" />
+    <meta property="og:description" content="See everything on your drives: what it is, who put it there, and whether it's safe to delete. Free and open source." />
+    <meta property="og:url" content="https://bankkroll.github.io/STRATA/" />
+    <meta property="og:image" content="https://bankkroll.github.io/STRATA/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Strata logo with the tagline: see everything on your drives." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Strata · Disk space, explained, for Windows" />
+    <meta name="twitter:description" content="See everything on your drives: what it is, who put it there, and whether it's safe to delete." />
+    <meta name="twitter:image" content="https://bankkroll.github.io/STRATA/og.png" />
+    <meta name="twitter:image:alt" content="Strata logo with the tagline: see everything on your drives." />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <script type="module" src="./src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="topnav" data-topnav>
+      <div class="wrap topnav__inner">
+        <a class="brand" href="./" aria-label="Strata home">
+          <svg class="brand__mark" viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111827" /><rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" /><rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" /><rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" /></svg>
+          <span>Strata</span>
+        </a>
+        <nav class="topnav__links" aria-label="Sections">
+          <a href="#demo">Demo</a>
+          <a href="#features">Features</a>
+          <a href="#benchmarks">Benchmarks</a>
+          <a href="#architecture">Architecture</a>
+        </nav>
+        <a class="btn btn--ghost btn--sm" href="https://github.com/BankkRoll/STRATA">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" /></svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero -------------------------------------------------------------- -->
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero__glow" aria-hidden="true"></div>
+        <div class="wrap hero__inner">
+          <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Open source disk-space app for Windows</p>
+          <h1 id="hero-title" class="hero__title">See everything on your drives.</h1>
+          <p class="hero__lede">What it is, who put it there, and whether it’s safe to delete. Strata reads the NTFS Master File Table directly and keeps every view live as files change.</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="https://github.com/BankkRoll/STRATA/releases/latest">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              Download for Windows
+            </a>
+            <a class="btn btn--ghost btn--lg" href="https://github.com/BankkRoll/STRATA">View on GitHub</a>
+          </div>
+          <p class="hero__meta mono">Windows 10/11 · x64 &amp; ARM64 · MIT</p>
+        </div>
+      </section>
+
+      <!-- Demo -------------------------------------------------------------- -->
+      <section id="demo" class="demo" aria-labelledby="demo-title">
+        <div class="wrap">
+          <div class="demo__stage" data-demo-stage>
+            <div class="window strata-app" data-demo>
+              <div class="window__titlebar" aria-hidden="true">
+                <svg class="window__icon" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#111827" /><rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" /><rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" /><rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" /></svg>
+                <span class="window__title">Strata</span>
+                <span class="window__caption">
+                  <svg viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" /></svg>
+                  <svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" /></svg>
+                  <svg viewBox="0 0 10 10"><path d="m0 0 10 10M10 0 0 10" stroke="currentColor" /></svg>
+                </span>
+              </div>
+              <header class="topbar">
+                <nav class="crumbs" aria-label="Breadcrumb">
+                  <ol data-crumbs><li class="crumbs__item"><span class="crumbs__current" aria-current="page">Demo volume</span></li></ol>
+                </nav>
+                <div class="topbar__controls">
+                  <div class="segmented" role="radiogroup" aria-label="View" data-views>
+                    <button type="button" role="radio" aria-checked="true" data-value="treemap">Treemap</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="sunburst">Sunburst</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="icicle">Icicle</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="bubbles">Bubbles</button>
+                  </div>
+                  <div class="segmented" role="radiogroup" aria-label="Color by" data-colors>
+                    <button type="button" role="radio" aria-checked="true" data-value="category">Category</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="age">Age</button>
+                    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-value="safety">Safety</button>
+                  </div>
+                </div>
+              </header>
+              <section class="visual" aria-label="Treemap">
+                <div
+                  class="visual__surface"
+                  tabindex="0"
+                  role="application"
+                  aria-roledescription="treemap"
+                  aria-label="Treemap of a synthetic volume. Arrow keys move between items, Enter opens a folder, Backspace goes up."
+                  aria-describedby="demo-hint"
+                  data-surface
+                >
+                  <svg class="visual__fallback" aria-hidden="true" hidden data-fallback></svg>
+                  <canvas class="visual__canvas" aria-hidden="true" data-canvas></canvas>
+                  <canvas class="visual__overlay" aria-hidden="true" data-overlay></canvas>
+                  <div class="visual__marquee" hidden data-marquee></div>
+                  <div class="state state--quiet" role="status" data-state>
+                    <span class="spinner" aria-hidden="true"></span>
+                    <p>Laying out…</p>
+                  </div>
+                </div>
+                <div class="visually-hidden" aria-live="polite" data-live></div>
+                <footer class="visual__footer">
+                  <ul class="legend" aria-label="Color legend" data-legend></ul>
+                  <span class="demo-hint" id="demo-hint" data-hint>Click the outlined folder to drill in.</span>
+                </footer>
+              </section>
+              <div class="detail-strip" data-detail></div>
+            </div>
+          </div>
+          <div class="demo__caption">
+            <h2 id="demo-title" class="demo__title">Not a screenshot. The app’s own renderer.</h2>
+            <p>This is Strata’s WebGL2 view code, drawing the exact layout buffers its Rust layout engine produces for the UI test suite: a synthetic 4,000-entry tree. Hover for details, drill into the outlined folder, switch views and color by age or safety.</p>
+          </div>
+        </div>
+        <div class="strata-app" data-tip-host></div>
+      </section>
+
+      <!-- Features ---------------------------------------------------------- -->
+      <section id="features" class="section" aria-labelledby="features-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="eyebrow">What it does</p>
+            <h2 id="features-title" class="section__title">Answers, not just bars.</h2>
+            <p class="section__lede">A disk map tells you something is big. Strata tells you what it is, which app made it, and whether removing it is safe.</p>
+          </header>
+          <ul class="features">
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><path d="M3.5 9h17M3.5 14h17M9 9v11" /></svg>
+              <h3>MFT scanning</h3>
+              <p>Reads <code>$MFT</code> directly instead of walking folders, with exact sizes for hardlinks, streams, compression and cloud files.</p>
+            </li>
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 5 12 2.5-6h4" /></svg>
+              <h3>Live updates</h3>
+              <p>Tails the USN change journal and patches the index in place, so every view stays current without a rescan.</p>
+            </li>
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5V5a1 1 0 0 1 1-1h7.5L20 11.5 12.5 19z" /><circle cx="8.5" cy="8.5" r="1.5" /></svg>
+              <h3>Explains every file</h3>
+              <p>Rule packs name the category, owning app and safety tier for each path, and show exactly which rule matched.</p>
+            </li>
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 3 7.8 7 9.5 4-1.7 7-5.3 7-9.5V6z" /><path d="m9 12 2.2 2.2L15.5 10" /></svg>
+              <h3>Safe cleanup</h3>
+              <p>A hard-coded never-delete list, re-verification right before every delete, Recycle Bin by default and one-click restore.</p>
+            </li>
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="m15 15 5 5" /></svg>
+              <h3>Instant search</h3>
+              <p>Name search with filters like <code>*.gguf size:&gt;1gb</code>. First results in about a millisecond over 5 million names.</p>
+            </li>
+            <li class="feature reveal">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v3.5h3.5M12 8v4l2.5 2" /></svg>
+              <h3>History &amp; duplicates</h3>
+              <p>Snapshots show what grew since the last scan. The duplicate finder skips hardlinks and never downloads cloud-only files.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Benchmarks -------------------------------------------------------- -->
+      <section id="benchmarks" class="section" aria-labelledby="bench-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="eyebrow">Benchmarks</p>
+            <h2 id="bench-title" class="section__title">Measured, not promised.</h2>
+            <p class="section__lede">Every number comes from the repository’s own benchmark suite. Each bar shows how much of its target budget the slowest run used. Shorter is better.</p>
+          </header>
+          <div class="card bench reveal" data-bench>
+            <div class="card__head">
+              <h3 class="card__title">Measured vs. target</h3>
+              <ul class="key" aria-label="Chart key">
+                <li><span class="key__swatch key__swatch--measured" aria-hidden="true"></span>Measured (slowest run)</li>
+                <li><span class="key__swatch key__swatch--target" aria-hidden="true"></span>Target budget</li>
+              </ul>
+            </div>
+            <!--bench:chart-->
+            <div class="bench__foot">
+              <ol class="bench__notes"><!--bench:notes--></ol>
+              <p>Release builds. Synthetic data with fixed seeds unless noted; the standard scanner is timed on a real system volume. Reference machine: <!--bench:machine-->. Runs were taken on a busy machine, so treat results as upper bounds (±20–30% run to run).</p>
+              <p><a class="link" href="<!--bench:link-->">Methodology and reproduction commands<span aria-hidden="true"> →</span></a></p>
+            </div>
+          </div>
+          <ul class="stats"><!--bench:stats--></ul>
+          <div data-versus><!--bench:versus--></div>
+        </div>
+      </section>
+
+      <!-- Architecture ------------------------------------------------------ -->
+      <section id="architecture" class="section" aria-labelledby="arch-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="eyebrow">Architecture</p>
+            <h2 id="arch-title" class="section__title">The UI never runs elevated.</h2>
+            <p class="section__lede">Privileged work happens in a small helper behind a locked-down named pipe. Without it, a standard scanner feeds the same index.</p>
+          </header>
+          <div class="card arch reveal" data-arch>
+            <div class="arch__grid">
+              <div class="arch__group arch__group--app">
+                <span class="arch__tag">Strata app · unelevated</span>
+                <div class="arch-node" tabindex="0" data-explain="React + WebGL2 inside WebView2. Draws layout buffers from Rust straight on the GPU; pointer moves cost no React work." style="--n:0">
+                  <span class="arch-node__kicker">WebView2</span>
+                  <strong>UI</strong>
+                  <span class="arch-node__sub">React + WebGL2</span>
+                </div>
+                <div class="arch-link arch-link--v" aria-hidden="true"><span class="arch-link__line"></span><span class="arch-link__label">commands · binary channels</span></div>
+                <div class="arch-node arch-node--core" tabindex="0" data-explain="The Tauri v2 backend owns the in-memory index and every engine crate, and streams layouts to the UI as binary buffers." style="--n:1">
+                  <span class="arch-node__kicker">Tauri v2</span>
+                  <strong>Rust backend</strong>
+                  <span class="chips"><span>index</span><span>layout</span><span>classify</span><span>search</span><span>store</span><span>clean</span></span>
+                </div>
+                <div class="arch-link arch-link--v arch-link--dashed arch-link--down" aria-hidden="true"><span class="arch-link__line"></span><span class="arch-link__label">no elevation</span></div>
+                <div class="arch-node arch-node--muted" tabindex="0" data-explain="Without elevation, a parallel directory walker emits the same scan records, so the index never knows which scanner ran." style="--n:2">
+                  <span class="arch-node__kicker">strata-walk</span>
+                  <strong>Standard scanner</strong>
+                  <span class="arch-node__sub">ReFS · FAT · network · unelevated</span>
+                </div>
+              </div>
+              <div class="arch-link arch-link--h" aria-hidden="true"><span class="arch-link__line"></span></div>
+              <div class="arch-node arch-node--pipe" tabindex="0" data-explain="Only the current user and SYSTEM can open the pipe. Both ends verify each other’s signature and protocol version; requests are rate limited." style="--n:3">
+                <span class="arch-node__kicker">Secured named pipe</span>
+                <ul class="arch-node__list mono">
+                  <li>DACL: user + SYSTEM</li>
+                  <li>versioned handshake</li>
+                  <li>signature checks</li>
+                </ul>
+              </div>
+              <div class="arch-link arch-link--h" aria-hidden="true"><span class="arch-link__line"></span></div>
+              <div class="arch__group arch__group--helper">
+                <span class="arch__tag arch__tag--warn">strata-helper · elevated</span>
+                <div class="arch-node" tabindex="0" data-explain="The elevated helper reads the MFT raw, tails the USN journal, traces file activity with ETW and performs deletes only after validating them." style="--n:4">
+                  <span class="arch-node__kicker">Elevated helper</span>
+                  <strong>Privileged I/O</strong>
+                  <span class="chips"><span>MFT read</span><span>USN tail</span><span>ETW</span><span>validated deletes</span></span>
+                </div>
+              </div>
+            </div>
+            <p class="arch__caption" aria-live="polite" data-arch-caption>Hover or focus a layer to see what it does.</p>
+          </div>
+
+          <div class="safety reveal" aria-labelledby="safety-title">
+            <h3 id="safety-title" class="safety__title">How a delete happens</h3>
+            <ol class="safety__steps">
+              <li><span class="safety__n mono">01</span><strong>Never-list</strong><span>Hard-coded system paths are refused, whatever the rules say.</span></li>
+              <li><span class="safety__n mono">02</span><strong>Re-verify by file id</strong><span>Right before acting, the volume serial and 128-bit file id must still match.</span></li>
+              <li><span class="safety__n mono">03</span><strong>Recycle Bin</strong><span>Deletes go to the Recycle Bin by default, with the undo log written first.</span></li>
+              <li><span class="safety__n mono">04</span><strong>Restore</strong><span>One click puts it back, and a restore never overwrites.</span></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- Privacy + CTA ----------------------------------------------------- -->
+      <section class="closing" aria-labelledby="cta-title">
+        <div class="wrap">
+          <p class="privacy reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" /></svg>
+            <span><strong>No telemetry. Everything stays on your machine.</strong> Scans, history, settings and the undo log stay local, and file names never leave it. The only network request is the update check.</span>
+          </p>
+          <div class="cta reveal">
+            <h2 id="cta-title" class="cta__title">Find out where your space went.</h2>
+            <p class="cta__lede">Free, open source, and native to Windows.</p>
+            <div class="hero__actions">
+              <a class="btn btn--primary btn--lg" href="https://github.com/BankkRoll/STRATA/releases/latest">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                Download for Windows
+              </a>
+              <a class="btn btn--ghost btn--lg" href="https://github.com/BankkRoll/STRATA">View source</a>
+            </div>
+            <p class="hero__meta mono">Windows 10/11 · x64 &amp; ARM64 · MIT</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer__inner">
+        <div class="footer__brand">
+          <svg class="brand__mark" viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111827" /><rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" /><rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" /><rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" /></svg>
+          <span>Strata</span>
+        </div>
+        <nav class="footer__links" aria-label="Project">
+          <a href="https://github.com/BankkRoll/STRATA">GitHub</a>
+          <a href="https://github.com/BankkRoll/STRATA#readme">README</a>
+          <a href="https://github.com/BankkRoll/STRATA/blob/main/docs/RULES.md">Rule packs</a>
+          <a href="https://github.com/BankkRoll/STRATA/blob/main/SECURITY.md">Security</a>
+          <a href="https://github.com/BankkRoll/STRATA/blob/main/LICENSE">License</a>
+        </nav>
+        <p class="footer__legal">MIT licensed. Provided as-is, without warranty.</p>
+      </div>
+    </footer>
+  </body>
+</html>

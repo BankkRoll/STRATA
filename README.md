@@ -6,6 +6,7 @@ what is using your disk, who put it there, when, and whether it is safe to delet
 ## Download
 
 Get the latest installer from [Releases](https://github.com/BankkRoll/STRATA/releases/latest).
+See it running in your browser on the [website](https://bankkroll.github.io/STRATA/).
 
 - Windows 10 22H2+ or Windows 11, x64 or ARM64.
 - `Strata_<version>_x64-setup.exe` for x64 PCs, `Strata_<version>_arm64-setup.exe` for ARM64.

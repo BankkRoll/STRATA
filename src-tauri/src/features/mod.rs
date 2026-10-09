@@ -24,6 +24,7 @@ pub mod consent;
 pub mod error;
 pub mod helper;
 pub mod history;
+pub mod links;
 pub mod locks;
 pub mod settings;
 pub mod startup;
@@ -198,6 +199,8 @@ const ALWAYS_COMMANDS: &[&str] = &[
     "tools_cancel",
     "recycle_bin_info",
     "startup_status",
+    "open_url",
+    "report_issue",
 ];
 
 /// Which shell commands work right now: store-backed ones need an open
@@ -291,6 +294,8 @@ macro_rules! invoke_handler {
             crate::features::helper::helper_service_install,
             crate::features::helper::helper_service_uninstall,
             crate::features::helper::helper_service_status,
+            crate::features::links::open_url,
+            crate::features::links::report_issue,
             $($cmd)*
         ]
     };

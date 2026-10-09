@@ -6,6 +6,7 @@
  * Every action is gated on `app_capabilities`; a command missing from this
  * build shows a disabled control with the reason instead of pretending.
  */
+import { isTauri } from "@tauri-apps/api/core";
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { ConfirmDialog, LoadState, SafetyBadge, useCapability, useLoad } from "../components/feature";
 import { Icon, type IconName } from "../components/icons";
@@ -634,7 +635,21 @@ function CopyLink({ href, label }: { href: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <li className="links__item">
-      <a href={href} target="_blank" rel="noreferrer noopener" className="links__a">
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="links__a"
+        onClick={(e) => {
+          // NOTE: the WebView cannot open new windows; inside the app the
+          // backend opens allow-listed pages in the default browser.
+          if (!isTauri()) return;
+          e.preventDefault();
+          void call<null>("open_url", { url: href }).catch((err: unknown) => {
+            console.error("open_url failed", err);
+          });
+        }}
+      >
         <Icon name="external" size={14} />
         {label}
       </a>

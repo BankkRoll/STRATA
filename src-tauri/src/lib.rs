@@ -1,13 +1,14 @@
 //! Strata desktop app: the unelevated UI process.
 //!
 //! Responsibilities:
-//! - Owns the main window (backdrop, single-instance enforcement).
-//! - Exposes Tauri commands to the WebView frontend.
-//! - Later milestones wire in the index, layout, classifier, store and the
-//!   pipe client for the elevated helper.
+//! - Owns the main window: backdrop, custom title bar with Snap Layouts,
+//!   single-instance enforcement.
+//! - Exposes the Tauri commands the WebView frontend calls.
 
 mod backdrop;
 pub mod features;
+#[cfg(windows)]
+mod snap;
 pub mod updater;
 
 use serde::Serialize;
@@ -61,6 +62,12 @@ pub fn run() {
                 .get_webview_window("main")
                 .ok_or("main window missing from tauri.conf.json")?;
             let applied = backdrop::apply(&window);
+            // NOTE: a failed overlay only loses the Snap Layouts flyout; the
+            // custom title bar keeps working, so it never blocks startup.
+            #[cfg(windows)]
+            if !window.is_decorated().unwrap_or(true) {
+                let _ = snap::install(&window);
+            }
             app.manage(WindowState { backdrop: applied });
             let launch = features::setup(app);
             // The window starts hidden so users never see a transparent frame

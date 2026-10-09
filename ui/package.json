@@ -1,6 +1,7 @@
 {
   "name": "@strata/ui",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

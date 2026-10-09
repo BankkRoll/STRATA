@@ -1,6 +1,7 @@
 {
   "name": "strata",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "tauri": "tauri",

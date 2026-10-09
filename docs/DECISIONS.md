@@ -22,3 +22,10 @@ Format: date — decision — why.
   transparent frame is never visible.
 - 2026-10-09 — **Release profile keeps unwinding** (no `panic = "abort"`) so a panic in a Tauri
   command cannot take down the UI process.
+- 2026-10-09 — **MIT license; open source, shared as-is.** The repo is public and not actively
+  maintained, so a permissive license lets anyone use, fork and learn from it without asking.
+  Replaces `LicenseRef-Proprietary`.
+- 2026-10-09 — **Paid licensing (SPEC §20) dropped.** An MIT app has nothing to sell a key for:
+  license keys, activation, the `strata://activate` handler and feature gating are out of scope.
+  The installer, auto-updater and code signing stay; the helper's signature check depends on
+  signing. The license storage already merged in `strata-store` has no consumer left.

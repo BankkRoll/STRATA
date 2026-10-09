@@ -67,12 +67,15 @@ fn is_refusal(e: &CleanError) -> bool {
 #[test]
 fn permanent_route_refuses() {
     for p in protected_paths() {
+        // NOTE: not every machine has every path (CI runners keep the page file
+        // on D:), so only paths present beforehand must survive.
+        let existed = p.exists();
         for dir in [true, false] {
             let e = delete_permanently(guard(), &p, &any_expected(dir), &CancelToken::new())
                 .unwrap_err();
             assert!(is_refusal(&e), "{}: {e:?}", p.display());
         }
-        assert!(p.exists() || !p.is_absolute(), "{} vanished", p.display());
+        assert!(!existed || p.exists(), "{} vanished", p.display());
     }
 }
 

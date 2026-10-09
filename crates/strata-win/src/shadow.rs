@@ -1,4 +1,4 @@
-//! Volume Shadow Copy storage per volume (SPEC §7.5), via WMI
+//! Volume Shadow Copy storage per volume, via WMI
 //! `Win32_ShadowStorage`.
 //!
 //! The UI shows this as the "System Restore / Shadow copies" block of a

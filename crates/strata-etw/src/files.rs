@@ -12,7 +12,7 @@
 //! the old name.
 //!
 //! **Renames.** `RenamePath` carries one path. If it differs from the name
-//! currently mapped for the file, it is taken as the new name and both
+//! mapped for the file, it is taken as the new name and both
 //! pointers move to it; if it equals the current name it is the old name, and
 //! the follow-up `NameCreate` supplies the new one. Either convention of the
 //! provider therefore ends with the new name mapped.

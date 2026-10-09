@@ -244,7 +244,7 @@ impl Monitor {
         self.lock().set_devices(devices);
     }
 
-    /// Forgets all activity held in memory, including data not yet flushed.
+    /// Forgets all activity held in memory, including unflushed data.
     /// Pair with `Store::clear_activity` for "Clear activity data".
     pub fn clear(&self) {
         self.lock().clear();

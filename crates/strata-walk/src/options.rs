@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-/// How each directory is listed. See `docs/tracks/walk.md` for the benchmark
-/// that picked the default.
+/// How each directory is listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ListingMethod {
     /// `GetFileInformationByHandleEx(FileIdExtdDirectoryInfo)` on a directory

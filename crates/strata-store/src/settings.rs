@@ -1,4 +1,4 @@
-//! Typed application settings (SPEC §19), persisted as versioned key-value
+//! Typed application settings, persisted as versioned key-value
 //! rows in `state.db`.
 //!
 //! Every leaf field is its own row, keyed `section.field` (for example

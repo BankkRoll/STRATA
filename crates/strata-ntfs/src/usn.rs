@@ -1,9 +1,9 @@
-//! USN change journal record parsing (SPEC §10.1).
+//! USN change journal record parsing.
 //!
 //! Pure decoding of the buffer returned by `FSCTL_READ_USN_JOURNAL` (and
 //! `FSCTL_ENUM_USN_DATA`): an 8-byte next USN followed by packed
-//! `USN_RECORD_V2`, `USN_RECORD_V3` and `USN_RECORD_V4` records. Live tailing
-//! is built on top of this in the helper (M5).
+//! `USN_RECORD_V2`, `USN_RECORD_V3` and `USN_RECORD_V4` records. Live journal
+//! tailing is built on top of this.
 
 use strata_core::{FileRef, FileTime, WideName};
 

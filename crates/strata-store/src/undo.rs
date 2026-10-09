@@ -1,4 +1,4 @@
-//! Write-ahead undo and audit log for deletes (SPEC §15.2 step 7, §15.7, §21).
+//! Write-ahead undo and audit log for deletes.
 //!
 //! Protocol, in order:
 //!
@@ -547,7 +547,7 @@ impl Store {
         })
     }
 
-    /// Recycled items not yet restored, newest first.
+    /// Recycled items that have not been restored, newest first.
     ///
     /// # Errors
     ///

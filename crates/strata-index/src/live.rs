@@ -1,4 +1,4 @@
-//! Incremental live updates (SPEC §10.2, for the M5 USN tailer).
+//! Incremental live updates, driven by the USN journal tailer.
 //!
 //! [`Index::upsert`] creates or updates a record (sizes, attributes, times,
 //! renames, moves, hardlink changes); [`Index::remove`] deletes one. Each

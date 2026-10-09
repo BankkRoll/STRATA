@@ -1,13 +1,13 @@
-//! In-memory index of one volume (SPEC §9), its live updates (§10.2), queries
-//! (§9.2), name search (§17) and cache file (§9.1).
+//! In-memory index of one volume, its live updates, queries, name search and
+//! cache file.
 //!
 //! Responsibilities:
 //! - [`Index`]: struct-of-arrays storage with `u32` [`EntryId`]s, under 64
 //!   bytes per entry excluding names (layout in [`index`](crate::Index)).
 //! - [`IndexBuilder`]: builds from [`strata_core::ScanRecord`]s arriving in any
-//!   order, resolving parents, stale references, hardlinks (§7.2), reparse
-//!   points (§7.3), orphans, cycles and NTFS metadata grouping (§6.2), then
-//!   aggregates bottom-up in parallel (§7.1).
+//!   order, resolving parents, stale references, hardlinks, reparse points,
+//!   orphans, cycles and NTFS metadata grouping, then aggregates bottom-up in
+//!   parallel.
 //! - Live updates: [`Index::upsert`], [`Index::remove`], [`Index::apply`]
 //!   return a [`ChangeSet`] after O(depth) aggregate maintenance.
 //! - Queries: sorted child pages, paths, top-N, filters and breakdowns

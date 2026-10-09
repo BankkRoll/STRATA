@@ -1,4 +1,4 @@
-# Generic patterns that apply anywhere (SPEC §12.2 "Generic"). They are
+# Generic patterns that apply anywhere. They are
 # extension/name/property rules, the lowest precedence classes, so any
 # location rule (a cache folder, the Windows folder) takes priority. Users can
 # change the thresholds by overriding these rules by id.

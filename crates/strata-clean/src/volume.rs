@@ -3,7 +3,7 @@
 //! Removable and network drives normally have no Recycle Bin, and a volume
 //! can be set to "Don't move files to the Recycle Bin" (`NukeOnDelete`).
 //! Either way a "recycle" would really be a permanent delete, so the plan
-//! reports it before anything runs (SPEC §15.2 step 4, §21).
+//! reports it before anything runs.
 
 use std::io;
 
@@ -135,7 +135,7 @@ pub enum RecycleBinSupport {
         /// Maximum size from the per-volume `MaxCapacity` setting, in bytes;
         /// `None` when Windows has not written the setting yet.
         capacity: Option<u64>,
-        /// Bytes currently in this drive's Recycle Bin.
+        /// Bytes in this drive's Recycle Bin.
         used: u64,
     },
     /// Items would be permanently deleted.

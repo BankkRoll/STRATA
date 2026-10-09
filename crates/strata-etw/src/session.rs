@@ -166,7 +166,7 @@ impl<C: TraceControl> SessionGuard<C> {
         &self.name
     }
 
-    /// Whether the session is still owned (not yet stopped).
+    /// Whether the session is still owned (not stopped).
     #[must_use]
     pub const fn is_live(&self) -> bool {
         self.live

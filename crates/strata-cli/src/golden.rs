@@ -2,7 +2,7 @@
 //!
 //! One entry per *path*: a file with N hardlinks yields N entries sharing a
 //! `record`, distinguished by `link_index` (0 = the link that carries the
-//! bytes under the first-discovered policy, SPEC §7.2). Entries are sorted
+//! bytes: hardlinked data is counted once, at the first link discovered). Entries are sorted
 //! by path, then link index, so files diff cleanly. The format is documented
 //! in `tests/fixtures/README.md`.
 

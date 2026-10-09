@@ -8,8 +8,8 @@
 
 /// Identifier of one entry, as handed out by the [`LayoutSource`].
 ///
-/// Ids are `u32` because the index addresses entries with `u32` (SPEC §9.1)
-/// and because they are written verbatim into the binary output buffers.
+/// Ids are `u32` because the index addresses entries with `u32` and because
+/// they are written verbatim into the binary output buffers.
 pub type NodeId = u32;
 
 /// Read-only view of a sized tree that layouts consume.

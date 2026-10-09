@@ -1,4 +1,4 @@
-//! Circle packing ("bubbles", SPEC §16.2).
+//! Circle packing ("bubbles").
 //!
 //! # Sibling packing (front chain)
 //!
@@ -35,7 +35,7 @@
 //! Each directory packs its children with radii `√(size / largest)`, then
 //! scales the pack to fit its own circle minus padding. Working top-down
 //! (rather than d3's bottom-up radii) lets LOD and the depth limit skip
-//! everything too small to see, so the cost tracks what is on screen.
+//! everything too small to see, so the cost scales with what is on screen.
 //! Children whose circle could not reach `min_px` in diameter even at the
 //! densest possible scale are folded into an aggregate circle before
 //! packing; the scale bound is `R / √Σr²`, because a pack's enclosing radius

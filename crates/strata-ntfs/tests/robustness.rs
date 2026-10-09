@@ -1,4 +1,4 @@
-//! Stable "never panics" property tests (SPEC §6.2, §22).
+//! Stable "never panics" property tests.
 //!
 //! These mirror the cargo-fuzz targets in `fuzz/` so the guarantee is
 //! checked on every `cargo test`, without a nightly toolchain: arbitrary

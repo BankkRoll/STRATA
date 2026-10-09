@@ -362,7 +362,7 @@ node_record! {
     ///
     /// Angles are radians in `[0, 2Ï€]`, measured clockwise from 12 o'clock in
     /// screen space: a point at angle `a`, radius `r` sits at
-    /// `(cx + rÂ·sin a, cy âˆ’ rÂ·cos a)`. Radii are device pixels from the
+    /// `(cx + r·sin a, cy − r·cos a)`. Radii are device pixels from the
     /// layout center. The root is the full disc `a0 = 0, a1 = 2Ï€, r0 = 0`.
     ArcRecord {
         /// Start angle.
@@ -479,13 +479,13 @@ impl Record for LabelRecord {
 }
 
 /// Cushion surface coefficients for one rect (16 bytes), parallel to the
-/// rect buffer (record `i` â†” cushion `i`). See [`crate::cushion`] for the
+/// rect buffer (record `i` ↔ cushion `i`). See [`crate::cushion`] for the
 /// shading formula.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CushionRecord {
-    /// Coefficient of `xÂ²`.
+    /// Coefficient of `x²`.
     pub kx2: f32,
-    /// Coefficient of `yÂ²`.
+    /// Coefficient of `y²`.
     pub ky2: f32,
     /// Coefficient of `x`.
     pub kx1: f32,

@@ -1,4 +1,4 @@
-//! Known-folder resolution (SPEC §12.1, §21), populating
+//! Known-folder resolution, populating
 //! [`strata_core::known::KnownFolders`].
 //!
 //! - The current user's folders come from `SHGetKnownFolderPath`, so

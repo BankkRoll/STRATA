@@ -1,4 +1,4 @@
-//! Per-volume index cache file (SPEC §9.1, §10.3).
+//! Per-volume index cache file.
 //!
 //! On launch the app loads the cache and catches up from the USN journal
 //! instead of rescanning. Any problem (bad magic, other version, checksum

@@ -1,4 +1,4 @@
-//! ETW activity rollups and "last writer" per path (SPEC §11, M12).
+//! ETW activity rollups and "last writer" per path.
 //!
 //! The tracer aggregates file events in memory and periodically flushes
 //! [`ActivitySample`]s; samples for the same (hour, process image, directory)

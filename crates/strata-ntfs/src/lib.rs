@@ -1,8 +1,8 @@
-//! NTFS MFT scanner for Strata (SPEC §6).
+//! NTFS MFT scanner for Strata.
 //!
 //! Reads the Master File Table directly and emits one merged
 //! [`strata_core::ScanRecord`] per file, with exact size accounting
-//! (SPEC §7). Parsing is pure, safe Rust that never panics on malformed
+//! (see [`strata_core::Sizes`]). Parsing is pure, safe Rust that never panics on malformed
 //! input; the only I/O is positioned reads through [`ReadAt`].
 //!
 //! Responsibilities:

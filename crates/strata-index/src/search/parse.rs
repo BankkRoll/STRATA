@@ -1,4 +1,4 @@
-//! Query language (SPEC §17).
+//! Query language.
 //!
 //! A query is whitespace-separated tokens; all of them must hold (AND).
 //! Double quotes group a phrase (`"my file"`). Matching is case-insensitive

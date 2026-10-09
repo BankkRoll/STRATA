@@ -416,7 +416,7 @@ impl Aggregator {
             .collect()
     }
 
-    /// Forgets everything, including data not yet drained.
+    /// Forgets everything, including undrained data.
     pub fn clear(&mut self) {
         self.minutes.buckets.clear();
         self.hours.buckets.clear();

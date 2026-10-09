@@ -1,5 +1,5 @@
-//! Layout and picking benchmarks (SPEC §2: drill-down relayout of a 100k
-//! subtree ≤ 50 ms; picking < 1 ms; 60 fps with 1M+ entries).
+//! Layout and picking benchmarks. Targets: drill-down relayout of a 100k
+//! subtree ≤ 50 ms; picking < 1 ms; 60 fps with 1M+ entries.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;

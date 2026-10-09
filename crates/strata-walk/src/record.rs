@@ -62,7 +62,7 @@ impl BuildCtx {
     ///
     /// NTFS reports a resident stream's allocation as its size rounded up to
     /// 8 bytes, but resident data lives inside the MFT record and occupies no
-    /// clusters of its own (SPEC §6.2), so it counts as 0. Non-resident
+    /// clusters of its own, so it counts as 0. Non-resident
     /// allocations are always whole clusters, so anything else is resident.
     pub(crate) fn on_disk(self, reported: u64) -> u64 {
         if self.ntfs && self.cluster > 0 && !reported.is_multiple_of(self.cluster) {
@@ -129,7 +129,7 @@ pub(crate) fn build(e: RawEntry, id: FileRef, parent: FileRef, cx: BuildCtx) -> 
 }
 
 /// Records named streams on `rec`, folding `WofCompressedData` into the
-/// unnamed stream's allocation for WOF files (SPEC Â§6.2: it is the file's
+/// unnamed stream's allocation for WOF files (it is the file's
 /// real on-disk size and is not an ADS).
 pub(crate) fn apply_streams(rec: &mut ScanRecord, streams: Vec<StreamEntry>, cx: BuildCtx) {
     let wof = rec.flags.reparse() == ReparseKind::Wof;

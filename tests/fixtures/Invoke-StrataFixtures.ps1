@@ -13,8 +13,8 @@
          Compare-StrataGolden.ps1 checks it against the Win32 view and
          golden\<config>.json.
       5. The VHDX is detached and deleted (unless -Keep).
-    exFAT and ReFS volumes are populated and exported for the fallback walker
-    track (M2); the MFT scanner rejects them by design.
+    exFAT and ReFS volumes are populated and exported for the fallback
+    walker; the MFT scanner rejects them by design.
 
     Must run elevated. See README.md.
 

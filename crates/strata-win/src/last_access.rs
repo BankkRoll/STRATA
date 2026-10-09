@@ -1,4 +1,4 @@
-//! Whether NTFS updates last-access times (SPEC §13).
+//! Whether NTFS updates last-access times.
 //!
 //! Read from `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\
 //! NtfsDisableLastAccessUpdate`, the value `fsutil behavior query

@@ -1,4 +1,4 @@
-# Developer tooling (SPEC §12.2 "Developer tooling"). Build output and
+# Developer tooling. Build output and
 # dependency folders are only matched next to the project file that proves
 # what they are (node_modules + package.json, target + Cargo.toml, ...), so a
 # folder that merely happens to be called `dist` or `build` is left alone.

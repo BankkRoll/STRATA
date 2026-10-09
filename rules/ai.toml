@@ -1,4 +1,4 @@
-# AI / ML tools and model weights (SPEC §12.2 "AI / ML"). Model weights are
+# AI / ML tools and model weights. Model weights are
 # re-downloadable but large and slow to fetch again, so they are `careful`.
 # Claude has its own pack (claude.toml).
 

@@ -4,7 +4,7 @@
 //!
 //! - The cache stores the index together with the journal id and the last
 //!   *applied* USN: the position at which every journal record before it had
-//!   been fetched and applied. Records that were read but not yet applied are
+//!   been fetched and applied. Records that were read but not applied are
 //!   never covered by the saved position, so a crash replays them.
 //! - Replay is idempotent. Every refresh re-reads the file's current state,
 //!   and a delete names an exact reference whose sequence number is never

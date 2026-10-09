@@ -3,9 +3,9 @@
 //! The UI decodes the exact bytes this crate produces, so its tests run
 //! against real layouts of `VecTree::synthetic` trees rather than
 //! hand-written buffers. Each layout is written as one *layout frame*: the
-//! container the backend will send over the `layout://frame` Tauri Channel
-//! (format in `docs/tracks/ui.md`, "Layout frame"). [`write_frame`] is the
-//! reference encoder for that container.
+//! container the backend sends over the `layout://frame` Tauri Channel.
+//! [`write_frame`] is the reference encoder for that container; the UI
+//! decoder is `ui/src/lib/layout/frame.ts`.
 //!
 //! Alongside every frame goes a JSON file with the Rust picking results for
 //! a grid of sample points plus the `subtree_end` table, so the TypeScript
@@ -105,7 +105,7 @@ fn write_frame(meta: &FrameMeta, sections: [&[u8]; 5]) -> Vec<u8> {
 }
 
 /// Fixture-only color keys in the packed encoding the UI expects (see
-/// `docs/tracks/ui.md`, "color_key encoding"): the synthetic category plus
+/// `ui/src/lib/palette.ts`): the synthetic category plus
 /// deterministic pseudo-random safety, age, type and app slots, so every
 /// color mode has something to show.
 struct PackedKeys<'a>(&'a VecTree);

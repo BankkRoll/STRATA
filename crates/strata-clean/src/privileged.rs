@@ -1,4 +1,4 @@
-//! Requests the elevated helper accepts (SPEC §15.7).
+//! Requests the elevated helper accepts.
 //!
 //! The helper never trusts a path from the client. A
 //! [`PrivilegedDeleteRequest`] names the file by `(volume, file reference)`;

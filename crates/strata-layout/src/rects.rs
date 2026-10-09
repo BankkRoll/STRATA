@@ -11,8 +11,8 @@
 //! Scanning siblings is linear, which matters only for very wide
 //! directories (a folder with a million files at 1 px each). Those get a
 //! per-directory uniform grid over their children, built once at layout
-//! time, so a query costs O(depth Ã— entries per cell) whatever the fan-out.
-//! Measured numbers are in `docs/tracks/layout.md`.
+//! time, so a query costs O(depth × entries per cell) whatever the fan-out.
+//! Measured numbers are in `docs/BENCHMARKS.md`.
 //!
 //! [`HitGrid`] is a whole-layout grid kept as a benchmarked alternative.
 

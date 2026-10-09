@@ -1,4 +1,4 @@
-//! Volume hot-plug notifications (SPEC §5, §21).
+//! Volume hot-plug notifications.
 //!
 //! [`VolumeWatcher`] owns a thread with a message-only window. On every
 //! device change it re-enumerates volumes and diffs against the previous
@@ -53,7 +53,7 @@ pub enum VolumeEvent {
         volume: Box<VolumeInfo>,
     },
     /// A volume disappeared (yanked, ejected, dismounted). The index for it
-    /// becomes stale (SPEC §5).
+    /// becomes stale.
     Removed {
         /// The last information seen before removal.
         volume: Box<VolumeInfo>,

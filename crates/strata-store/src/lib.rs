@@ -1,4 +1,4 @@
-//! SQLite persistence for Strata (SPEC §18-§21).
+//! SQLite persistence for Strata.
 //!
 //! Responsibilities:
 //! - Volume snapshots of directory aggregates, diffs, usage and per-directory

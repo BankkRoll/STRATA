@@ -1,4 +1,4 @@
-# Downloads folder intelligence (SPEC §12.2). Everything here applies only
+# Downloads folder intelligence. Everything here applies only
 # inside the user's Downloads known folder (redirected or localized ones
 # included). Duplicates of files elsewhere are found by the duplicates view.
 

@@ -1,4 +1,4 @@
-//! The cleanup flow the app calls (SPEC §15.2):
+//! The cleanup flow the app calls:
 //!
 //! 1. [`plan`]: dedupe the queue, drop never-list hits, total by tier,
 //!    report Recycle Bin availability and running-app warnings. Cheap.

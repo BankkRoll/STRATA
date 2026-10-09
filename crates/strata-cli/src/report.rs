@@ -133,7 +133,8 @@ impl Collector {
     }
 }
 
-/// Used-space reconciliation (SPEC §5, §7.5).
+/// Used-space reconciliation: how the scanned total compares with the bytes
+/// the volume reports as used, and why they may differ.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reconciliation {
     /// Bytes the volume reports as used, if known.

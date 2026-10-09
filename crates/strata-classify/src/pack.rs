@@ -1,6 +1,6 @@
 //! Loading built-in and user rule packs into one [`RuleSet`].
 //!
-//! Override semantics (see `docs/RULES.md` § Overrides):
+//! Override semantics (see "Overrides and safety policy" in `docs/RULES.md`):
 //! - A user rule with the id of a built-in rule replaces it.
 //! - A user pack may `disable` built-in rules by id.
 //! - A built-in `never` rule can be neither relaxed (overridden with a lower

@@ -1,4 +1,4 @@
-//! The hard-coded never-delete list (SPEC Â§15.1). Pure: no file-system access.
+//! The hard-coded never-delete list. Pure: no file-system access.
 //!
 //! This list is independent of the classifier's rule packs: even if a rule
 //! wrongly marks `C:\Windows` as "safe", these checks refuse it. They run in
@@ -329,7 +329,7 @@ pub struct NeverListEntry {
     pub exceptions: Vec<String>,
 }
 
-/// Paths under `{WINDIR}` that cleanup rules may delete (SPEC Â§12.2). Each
+/// Paths under `{WINDIR}` that cleanup rules may delete. Each
 /// entry is `(relative path, contents_only)`; the folders themselves stay
 /// protected.
 const WINDIR_ALLOW: &[(&str, bool)] = &[
@@ -638,7 +638,8 @@ impl NeverList {
     }
 
     /// Refuses a top-level item that carries both the system and hidden
-    /// attributes (SPEC Â§15.1).
+    /// attributes, the pair Windows uses to mark protected operating-system
+    /// files at a volume root (e.g. `pagefile.sys`).
     ///
     /// # Errors
     ///

@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn heuristics_and_vendor_folders() {
         let c = catalog();
-        // Roaming obs-studio folder: name equal to the app â†’ high.
+        // Roaming obs-studio folder: name equal to the app → high.
         let a = c
             .attribute(r"C:\Users\me\AppData\Roaming\obs-studio\basic", None)
             .unwrap();

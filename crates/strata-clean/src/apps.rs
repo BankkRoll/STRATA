@@ -1,4 +1,4 @@
-//! Running-app awareness (SPEC §15.5): "Close Chrome first".
+//! Running-app awareness: "Close Chrome first".
 //!
 //! Browser and Electron caches are written continuously while their app
 //! runs; deleting them underneath it fails or corrupts state. A path is

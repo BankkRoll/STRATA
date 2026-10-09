@@ -1,4 +1,4 @@
-//! Live updates: targeted cases plus the SPEC §22 property test (random
+//! Live updates: targeted cases plus a property test (random
 //! operation sequences applied live must equal a fresh build of the final
 //! record set).
 

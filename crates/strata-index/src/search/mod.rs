@@ -1,4 +1,4 @@
-//! Everything-style name search (SPEC §17).
+//! Everything-style name search.
 //!
 //! [`Query::parse`] turns the search box text into name terms and filters
 //! (syntax in [`parse`]); [`Index::search`] scans the name buffer in parallel
@@ -9,7 +9,7 @@
 //! The scan is a sequential pass over the WTF-8 name buffer per chunk (names
 //! of base entries are stored in id order), with column filters checked
 //! before any name work. No auxiliary index is needed to meet the latency
-//! target; see `docs/tracks/index.md` for numbers.
+//! target; see `docs/BENCHMARKS.md` for numbers.
 //!
 //! # Example
 //!

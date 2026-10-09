@@ -1,4 +1,4 @@
-//! Recycle Bin deletes and restore (SPEC §15.4, §15.2 step 7).
+//! Recycle Bin deletes and restore.
 //!
 //! **Delete.** Each item is opened and fully guard-checked, then verified
 //! against the scan. Its ancestors are held open without `FILE_SHARE_DELETE`

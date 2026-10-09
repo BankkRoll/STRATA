@@ -1,4 +1,4 @@
-//! The full-MFT scan pipeline (SPEC §6.1 step 5, §6.4).
+//! The full-MFT scan pipeline.
 //!
 //! An I/O thread reads the MFT in large chunks (fragment by fragment, in
 //! VCN order) and hands them over a bounded channel to the calling thread,

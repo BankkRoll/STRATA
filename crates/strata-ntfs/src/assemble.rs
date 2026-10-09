@@ -1,6 +1,6 @@
 //! Merging a base record and its extension records into a [`ScanRecord`].
 //!
-//! This is where SPEC §6.2 and §7 size rules are applied: VCN-0 sizes,
+//! This is where the size-accounting rules are applied: VCN-0 sizes,
 //! resident data, compressed/sparse total-allocated, WOF, cloud state,
 //! directory index overhead, hardlinks and metadata flags.
 

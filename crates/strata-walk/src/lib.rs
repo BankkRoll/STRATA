@@ -2,7 +2,7 @@
 //! emits the same [`strata_core::ScanRecord`]s as the MFT scanner.
 //!
 //! Used for everything the MFT scanner cannot read: NTFS without elevation,
-//! ReFS and Dev Drive, FAT/exFAT, and network shares (SPEC §5, §8).
+//! ReFS and Dev Drive, FAT/exFAT, and network shares.
 //!
 //! Responsibilities:
 //! - Work-stealing traversal ([`Walker`]) with per-directory listing through

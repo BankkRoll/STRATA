@@ -13,8 +13,7 @@ use crate::settings::SettingsIssue;
 /// Which database file an error or health report refers to.
 ///
 /// History and state live in separate files so resetting a corrupt history
-/// never touches settings, the undo log or the license. See
-/// `docs/tracks/store.md` for the split.
+/// never touches settings, the undo log or the license.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DbKind {
     /// `history.db`: snapshots, activity rollups, the duplicate-hash cache.

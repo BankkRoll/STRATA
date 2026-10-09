@@ -6,20 +6,20 @@
 //! owned by an RAII type.
 //!
 //! Responsibilities:
-//! - [`volume`]: volume discovery (SPEC §5): mount points, folder mounts,
+//! - [`volume`]: volume discovery: mount points, folder mounts,
 //!   filesystem, sizes, BitLocker, Dev Drive, network drives, and the
 //!   scanner choice.
 //! - [`watcher`]: volume hot-plug notifications.
 //! - [`known`]: known folders for the current user and every other profile,
-//!   populating [`strata_core::known::KnownFolders`] (SPEC §12.1).
+//!   populating [`strata_core::known::KnownFolders`].
 //! - [`process`]: elevation, privileges, launching the helper through UAC,
-//!   and process identity (SPEC §4).
+//!   and process identity.
 //! - [`signature`]: Authenticode verification and signer comparison for the
 //!   helper/app mutual check.
 //! - [`path`]: verbatim paths, final paths, NT device → DOS paths, volume
 //!   GUID paths ↔ mount points.
-//! - [`last_access`]: the NTFS last-access update policy (SPEC §13).
-//! - [`shadow`]: Volume Shadow Copy storage per volume (SPEC §7.5).
+//! - [`last_access`]: the NTFS last-access update policy.
+//! - [`shadow`]: Volume Shadow Copy storage per volume.
 //! - [`sid`]: SID parsing and account lookup.
 
 #![cfg(windows)]

@@ -1,4 +1,4 @@
-//! Processes and elevation (SPEC §4).
+//! Processes and elevation.
 //!
 //! - Elevation queries and privilege management (re-exported from the token
 //!   module): [`is_elevated`], [`elevation_type`], [`enable_privilege`],
@@ -44,7 +44,7 @@ const STILL_ACTIVE: u32 = 0x103;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LaunchError {
     /// The user clicked "No" on the UAC prompt (`ERROR_CANCELLED`). The app
-    /// falls back to the unelevated walker (SPEC §4).
+    /// falls back to the unelevated walker.
     #[error("the user declined the elevation prompt")]
     Declined,
     /// Any other failure (missing file, policy blocks elevation, ...).

@@ -1,4 +1,4 @@
-//! Storage for the activated license (SPEC §20).
+//! Storage for the activated license.
 //!
 //! Only persistence lives here: the payload and signature are stored exactly
 //! as received and verified elsewhere on every launch. Keeping the license in

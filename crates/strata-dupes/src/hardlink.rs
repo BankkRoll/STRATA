@@ -2,7 +2,7 @@
 //! other copy's path a hardlink to it.
 //!
 //! Same volume only, user-confirmed through a
-//! [`Consent`](strata_clean::consent::Consent), with [`HardlinkWarning`]s
+//! [`Consent`], with [`HardlinkWarning`]s
 //! for the UI. For each replaced copy:
 //!
 //! 1. The keeper is opened **denying writers** (held until the end) and

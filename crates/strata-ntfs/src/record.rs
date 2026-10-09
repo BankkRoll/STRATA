@@ -110,7 +110,7 @@ pub struct DataPiece {
     /// Initialized size (equals `logical` for resident data). Meaningful only
     /// when `start_vcn == 0`.
     pub initialized: u64,
-    /// Bytes on disk per SPEC §7: 0 for resident data, total-allocated for
+    /// Bytes on disk: 0 for resident data, total-allocated for
     /// compressed or sparse, else allocated. Meaningful only when `start_vcn == 0`.
     pub allocated: u64,
     /// Decoded runs, when the caller asked for them ([`ParseOptions::decode_runs`]).

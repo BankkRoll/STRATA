@@ -1,4 +1,4 @@
-//! Volume discovery (SPEC §5).
+//! Volume discovery.
 //!
 //! Enumerates every local volume, including volumes with no drive letter
 //! (folder mounts, recovery and EFI partitions) and, on request, mapped
@@ -166,7 +166,7 @@ pub enum DevDriveState {
 /// A folder mount: this volume appears as a folder inside another volume.
 ///
 /// The index treats the folder as a boundary: the inner volume's bytes are not
-/// counted in the outer volume's totals (SPEC §5, §21).
+/// counted in the outer volume's totals.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NestedMount {
     /// The folder path, e.g. `D:\mnt\data\`.
@@ -280,7 +280,7 @@ pub enum ScannerKind {
     None,
 }
 
-/// Picks the scanner per SPEC §5: NTFS on a local, readable volume with an
+/// Picks the scanner: NTFS on a local, readable volume with an
 /// elevated helper → MFT; locked or unready → none; everything else
 /// (ReFS, Dev Drive, FAT, exFAT, network, unelevated NTFS) → walker.
 ///
@@ -310,7 +310,7 @@ pub fn scanner_choice(volume: &VolumeInfo, elevated: bool) -> ScannerKind {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DiscoveryOptions {
     /// Include mapped network drives. Off by default: querying a dead share
-    /// can block for the SMB timeout (SPEC §5: network is opt-in).
+    /// can block for the SMB timeout.
     pub include_network: bool,
     /// Query the BitLocker shell property (initializes COM on the calling
     /// thread). Off means BitLocker is only inferred from query failures.

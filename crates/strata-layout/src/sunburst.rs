@@ -1,14 +1,14 @@
-//! Sunburst: the hierarchy as concentric rings of sectors (SPEC Â§16.2).
+//! Sunburst: the hierarchy as concentric rings of sectors.
 //!
 //! The root is the central disc; depth `d` occupies the ring
-//! `[dÂ·ring, (d+1)Â·ring]`, where `ring = radius / (max_depth + 1)`. Each
+//! `[d·ring, (d+1)·ring]`, where `ring = radius / (max_depth + 1)`. Each
 //! directory's angular span is sliced among its children in proportion to
 //! size (see `partition`), and children whose arc length at their outer
 //! radius is below `min_px` are folded into one aggregate sector.
 //!
 //! Picking converts the point to polar coordinates, picks the ring from the
 //! radius, then descends from the root choosing the child whose angular
-//! range contains the angle: O(depth Ã— siblings scanned).
+//! range contains the angle: O(depth × siblings scanned).
 
 use crate::buffer::{AggregateRecord, ArcRecord, NO_INDEX, NodeFlags, RecordBuf, rd_f32};
 use crate::geom::{R64, Rect, sane_len};
@@ -40,7 +40,7 @@ pub struct SunburstConfig {
 }
 
 impl SunburstConfig {
-    /// DPI-aware defaults for a `width`Ã—`height` device-pixel canvas.
+    /// DPI-aware defaults for a `width`×`height` device-pixel canvas.
     #[must_use]
     pub fn new(width: f32, height: f32, dpi_scale: f32) -> Self {
         let s = if dpi_scale.is_finite() && dpi_scale > 0.0 {
@@ -294,9 +294,9 @@ mod tests {
         };
         let l = layout_sunburst(&t, VecTree::ROOT, &cfg);
         assert_eq!(l.ring_width(), 50.0);
-        // Center â†’ root.
+        // Center → root.
         assert_eq!(l.pick(200.0, 200.0).unwrap().id, VecTree::ROOT);
-        // `a` spans the first half (12 â†’ 6 o'clock, clockwise = right side).
+        // `a` spans the first half (12 → 6 o'clock, clockwise = right side).
         assert_eq!(l.pick(275.0, 200.0).unwrap().id, a);
         assert_eq!(l.pick(125.0, 200.0).unwrap().id, b);
         let deep = l.pick(325.0, 200.0).unwrap();

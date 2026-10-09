@@ -1,4 +1,4 @@
-//! Index benchmarks (SPEC §2, §22).
+//! Index benchmarks.
 //!
 //! Running `cargo bench -p strata-index` first prints a one-shot report of
 //! the numbers that are not plain timings (bytes per entry, first-batch

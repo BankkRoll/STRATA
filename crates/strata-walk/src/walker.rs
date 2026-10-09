@@ -314,7 +314,7 @@ struct Ctx {
     real_ids: bool,
     network: bool,
     build: BuildCtx,
-    /// Directory information class currently in use (a `DirInfoClass`
+    /// Directory information class in use (a `DirInfoClass`
     /// discriminant); downgraded once if the filesystem rejects it.
     dir_class: AtomicU8,
     dir_fallback: AtomicBool,

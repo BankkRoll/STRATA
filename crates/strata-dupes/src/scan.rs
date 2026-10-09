@@ -51,7 +51,7 @@ pub const DEFAULT_MIN_SIZE: u64 = 1024 * 1024;
 pub struct ScanConfig {
     /// Files smaller than this are ignored. Zero-byte files always are.
     pub min_size: u64,
-    /// Hashing threads. 1â€“2 suits spinning disks; SSDs benefit from more.
+    /// Hashing threads. 1–2 suits spinning disks; SSDs benefit from more.
     pub concurrency: usize,
     /// Combined read limit in bytes per second (`None` = unlimited).
     pub max_bytes_per_sec: Option<u64>,

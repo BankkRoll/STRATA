@@ -1,10 +1,10 @@
-//! Safe deletion for Strata (SPEC §15).
+//! Safe deletion for Strata.
 //!
 //! Wrong deletes are unacceptable, so every layer here assumes the layer
 //! above it made a mistake:
 //!
 //! - [`canon`]: lexical canonicalization of every Win32 path spelling.
-//! - [`never`]: the hard-coded never-delete list, independent of rule packs.
+//! - [`never`](mod@never): the hard-coded never-delete list, independent of rule packs.
 //! - [`guard`]: the never-list applied to literal, 8.3-expanded and
 //!   handle-resolved forms (junctions, symlinks, mount points, volume GUIDs).
 //! - [`preflight`]: TOCTOU re-verification, locks, Recycle Bin capacity.

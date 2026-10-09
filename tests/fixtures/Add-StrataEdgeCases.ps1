@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Populates a volume (or any empty folder) with the SPEC section 21 edge cases.
+    Populates a volume (or any empty folder) with filesystem edge cases.
 
 .DESCRIPTION
     Creates hardlinks (including one file with 1023 extra links), junctions,

@@ -1,14 +1,14 @@
-# Claude Code and the Claude desktop app (SPEC §12.2 "Claude").
+# Claude Code and the Claude desktop app.
 #
-# Locations verified on the dev machine (2026-10-09):
+# Claude Code locations, verified against a real install:
 #   ~\.claude\{projects,file-history,sessions,session-env,cache,paste-cache,
 #     shell-snapshots,debug,downloads,backups,plugins,skills,ide,state},
 #   ~\.claude.json, ~\.local\bin\claude.exe, ~\.local\share\claude\versions,
 #   ~\.local\state\claude, %LOCALAPPDATA%\claude-cli-nodejs\Cache,
 #   %APPDATA%\npm\node_modules\@anthropic-ai, ~\.vscode\extensions\anthropic.claude-code-*.
-# The desktop app is not installed on the dev machine; its rules follow the
-# Squirrel/Electron layout (%LOCALAPPDATA%\AnthropicClaude, %APPDATA%\Claude)
-# and the MSIX layout, and are listed as unverified in docs/tracks/classify.md.
+# The desktop app rules follow the Squirrel/Electron layout
+# (%LOCALAPPDATA%\AnthropicClaude, %APPDATA%\Claude) and the MSIX layout; they
+# have not been verified against an installed copy.
 #
 # Session and project data is `careful`, never `safe`.
 

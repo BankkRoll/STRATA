@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Which size every view aggregates and displays. See SPEC §7.
+/// Which size every view aggregates and displays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SizeMode {
@@ -11,7 +11,7 @@ pub enum SizeMode {
     Logical,
 }
 
-/// Cleanup safety tier, from least to most protected. See SPEC §15.1.
+/// Cleanup safety tier, from least to most protected.
 ///
 /// The derived ordering is by strictness, so `max()` picks the stricter tier
 /// when rules tie.
@@ -49,7 +49,7 @@ impl Safety {
     }
 }
 
-/// Top-level category, color-coded in every view. See SPEC §12.5.
+/// Top-level category, color-coded in every view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)]

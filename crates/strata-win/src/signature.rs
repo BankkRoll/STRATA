@@ -1,4 +1,4 @@
-//! Authenticode verification (SPEC §4, §15.7).
+//! Authenticode verification.
 //!
 //! The helper and the app verify each other before trusting the pipe: both
 //! binaries must carry a valid signature from the same publisher.

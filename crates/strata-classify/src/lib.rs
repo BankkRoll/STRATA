@@ -12,7 +12,7 @@
 //! - [`catalog`]: the installed-apps catalog and app attribution.
 //! - [`discover`]: runtime roots for rules (Steam libraries, OBS recordings,
 //!   Firefox profiles, WSL distros, Epic manifests, Ollama models).
-//! - [`sniff`]: content-type detection from file headers.
+//! - [`sniff`](mod@sniff): content-type detection from file headers.
 //! - [`fold`]: Windows-correct case folding and path normalization.
 //!
 //! The rule engine never calls Win32: it takes a resolved

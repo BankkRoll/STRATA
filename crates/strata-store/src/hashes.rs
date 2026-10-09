@@ -1,4 +1,4 @@
-//! Duplicate-finder hash cache (SPEC §14).
+//! Duplicate-finder hash cache.
 //!
 //! One row per (volume, file reference) holding the size and mtime the hashes
 //! were computed for, the partial xxh3 and, once computed, the full BLAKE3.

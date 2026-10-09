@@ -1,4 +1,4 @@
-//! Treemap invariants on random trees (SPEC Ã‚Â§22): area proportional to size
+//! Treemap invariants on random trees: area proportional to size
 //! within the parent's content box, siblings never overlap, children stay
 //! inside their parent, output is deterministic, LOD accounts for every
 //! excluded byte, nothing is NaN, and picking returns the deepest rect.

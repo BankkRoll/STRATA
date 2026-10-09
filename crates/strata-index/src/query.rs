@@ -1,4 +1,4 @@
-//! Read queries (SPEC §9.2): sorted child pages, paths, top-N, filters,
+//! Read queries: sorted child pages, paths, top-N, filters,
 //! extension and category breakdowns.
 //!
 //! Whole-volume scans (`scope` = root) run over the columns in parallel; scans

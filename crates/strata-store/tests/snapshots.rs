@@ -477,7 +477,7 @@ fn fifty_thousand_dirs_round_trip() {
     let id = w.commit().unwrap();
     let elapsed = start.elapsed();
     // Generous bound so unoptimized CI builds pass; the release benchmark
-    // in tests/bench.rs tracks the real number.
+    // in tests/bench.rs measures the real number.
     assert!(elapsed.as_secs() < 10, "{elapsed:?}");
     assert_eq!(store.snapshot(id).unwrap().stored_dirs, 50_000);
     for d in dirs.iter().step_by(997) {

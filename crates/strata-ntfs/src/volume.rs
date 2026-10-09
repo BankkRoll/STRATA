@@ -3,7 +3,7 @@
 //!
 //! Responsibilities:
 //! - Locate every `$MFT` fragment from record 0, following its attribute
-//!   list when `$DATA` spills into extension records (SPEC §6.1 step 3).
+//!   list when `$DATA` spills into extension records.
 //! - Map MFT record numbers to disk offsets ([`MftLayout`]).
 //! - [`NtfsVolume::read_record`]: one fully merged record, following the
 //!   attribute list to its holding records (used for USN refreshes).

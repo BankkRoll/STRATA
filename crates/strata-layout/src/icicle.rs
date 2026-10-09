@@ -1,5 +1,4 @@
-//! Icicle and flame layouts: the hierarchy as stacked horizontal bars
-//! (SPEC §16.2).
+//! Icicle and flame layouts: the hierarchy as stacked horizontal bars.
 //!
 //! Depth `d` is row `d`; each directory's x-range is sliced among its
 //! children in proportion to size (see `partition`), with sub-`min_px`

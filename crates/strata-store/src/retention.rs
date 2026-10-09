@@ -1,6 +1,6 @@
 //! Snapshot retention: age limit plus weekly thinning.
 //!
-//! Policy (defaults from SPEC §18): snapshots older than `keep_days` (90) are
+//! Policy (default values in parentheses): snapshots older than `keep_days` (90) are
 //! deleted; snapshots older than `thin_after_days` (30) are thinned so only
 //! the last snapshot of each ISO week (Monday-Sunday, UTC) survives. "Last of
 //! the week" is judged over all of the volume's snapshots, so in a week that

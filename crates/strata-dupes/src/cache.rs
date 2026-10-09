@@ -77,8 +77,8 @@ pub trait HashCache: Send + Sync {
     fn invalidate(&self, volume: &VolumeKey, refs: &[FileRef]) -> Result<u64, CacheError>;
 }
 
-/// In-process [`HashCache`] with the store's semantics. Useful before the
-/// store is wired up, and for one-shot scans that need no persistence.
+/// In-process [`HashCache`] with the store's semantics, for tests and for
+/// one-shot scans that need no persistence.
 #[derive(Debug, Clone, Default)]
 pub struct MemoryHashCache {
     rows: Arc<Mutex<HashMap<RowKey, CachedHash>>>,

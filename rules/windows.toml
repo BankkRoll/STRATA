@@ -1,4 +1,4 @@
-# Windows system locations (SPEC §12.2 "Windows system") and the built-in
+# Windows system locations and the built-in
 # defaults: everything under {WINDIR} and Program Files that no rule carves
 # out is `never`.
 

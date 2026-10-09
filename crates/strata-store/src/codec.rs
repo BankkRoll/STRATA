@@ -2,8 +2,7 @@
 //!
 //! A snapshot stores its rows as a single blob instead of one SQL row per
 //! directory; the benchmark in `tests/bench.rs` measured 12 bytes per
-//! directory against 29 for the best `WITHOUT ROWID` table layout (see
-//! `docs/tracks/store.md`).
+//! directory against 29 for the best `WITHOUT ROWID` table layout.
 //!
 //! Format (codec 1), all integers unsigned LEB128:
 //!

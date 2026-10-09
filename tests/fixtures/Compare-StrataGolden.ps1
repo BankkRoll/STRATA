@@ -5,8 +5,8 @@
     (strata-expected/1) and with a stored golden file.
 
 .DESCRIPTION
-    Every difference must be explained by a rule (SPEC section 22); anything else
-    fails the comparison.
+    Every difference must be explained by one of the rules below; anything
+    else fails the comparison.
 
     Rules, per path reported by the Win32 walk:
     - The path exists in the scan, with the same kind.

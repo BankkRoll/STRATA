@@ -1,4 +1,4 @@
-//! Layout engines for Strata's visual views (SPEC Â§16).
+//! Layout engines for Strata's visual views.
 //!
 //! Every layout reads a sized tree through [`LayoutSource`], computes
 //! geometry in device pixels, and writes compact little-endian records
@@ -24,7 +24,7 @@
 //! Output is deterministic: the same input and config give bit-identical
 //! bytes, independent of the order the source lists children in.
 //!
-//! Byte formats are documented in [`buffer`] and in `docs/tracks/layout.md`.
+//! Byte formats are documented in [`buffer`].
 
 #![forbid(unsafe_code)]
 

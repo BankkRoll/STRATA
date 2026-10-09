@@ -1,4 +1,4 @@
-//! Permanent delete by handle, including TOCTOU race tests (SPEC §22).
+//! Permanent delete by handle, including TOCTOU race tests.
 
 mod common;
 

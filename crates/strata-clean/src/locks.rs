@@ -1,4 +1,4 @@
-//! "Why can't I delete this?" (SPEC §15.3): Restart Manager lock detection
+//! "Why can't I delete this?": Restart Manager lock detection
 //! and polite close.
 //!
 //! Closing is always polite: `WM_CLOSE` to the app's top-level windows, or a

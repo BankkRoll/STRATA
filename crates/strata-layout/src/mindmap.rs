@@ -1,4 +1,4 @@
-//! Mind map: a depth-limited radial node-link tree (SPEC §16.2).
+//! Mind map: a depth-limited radial node-link tree.
 //!
 //! # Algorithm
 //!

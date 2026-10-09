@@ -1,5 +1,5 @@
-//! Fixture tests for every built-in rule (SPEC §23 M6: "every built-in rule
-//! has a fixture test").
+//! Fixture tests for every built-in rule: each one must have at least one
+//! case here.
 //!
 //! Each case in `tests/fixtures/rules.toml` builds a small synthetic tree,
 //! walks it top-down through the real classifier API (`root` →

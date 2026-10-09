@@ -1,4 +1,4 @@
-# Electron, chat and productivity apps (SPEC §12.2). Each app's data folder
+# Electron, chat and productivity apps. Each app's data folder
 # is `never` (logins, messages, settings); the Chromium cache folders inside
 # are carved out as `safe`. A generic rule covers other Electron apps.
 

@@ -157,7 +157,7 @@ impl PathMapper {
         self.dirs.retain(|_, w| w.strong_count() > 0);
     }
 
-    /// Interned directory count (live and not yet swept).
+    /// Interned directory count (live and unswept).
     #[must_use]
     pub fn interned_dirs(&self) -> usize {
         self.dirs.len()

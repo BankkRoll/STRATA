@@ -66,7 +66,7 @@ const INDEX_OWNED: u32 = EntryFlags::ORPHAN.0
     | EntryFlags::SUSPICIOUS_TIME.0;
 
 // -----------------------------------------------------------------------------
-// Record â†’ entry helpers (shared with the live path)
+// Record → entry helpers (shared with the live path)
 // -----------------------------------------------------------------------------
 
 /// Entry flags for a record: scanner flags, minus index-owned bits, plus
@@ -240,8 +240,9 @@ impl IndexBuilder {
         self.partial = partial;
     }
 
-    /// Adds a virtual leaf block under the root, e.g. "Unaccounted / system
-    /// reserved" or "System Restore / Shadow copies" (SPEC Â§5, Â§7.5).
+    /// Adds a virtual leaf block under the root for used space no file
+    /// accounts for, e.g. "Unaccounted / system reserved" or "System Restore /
+    /// Shadow copies".
     pub fn add_virtual_block(&mut self, name: &str, logical: u64, allocated: u64) {
         self.blocks.push((name.to_owned(), logical, allocated));
     }
@@ -697,7 +698,7 @@ mod tests {
 
     #[test]
     fn cycles_are_found_and_tails_are_not() {
-        // 0 â†’ 1 â†’ 2 â†’ 0 is a loop; 3 â†’ 0 leads into it; 4 â†’ NONE.
+        // 0 → 1 → 2 → 0 is a loop; 3 → 0 leads into it; 4 → NONE.
         let resolved = vec![1, 2, 0, 0, NONE];
         let c = find_cycles(&resolved, |_| false);
         assert_eq!(c, vec![true, true, true, false, false]);

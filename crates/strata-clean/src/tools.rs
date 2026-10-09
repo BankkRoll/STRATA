@@ -1,4 +1,4 @@
-//! Built-in Windows tool actions (SPEC §15.6).
+//! Built-in Windows tool actions.
 //!
 //! Every action is first turned into a [`CommandSpec`]: the exact program,
 //! arguments and a plain-language description the UI shows before the user

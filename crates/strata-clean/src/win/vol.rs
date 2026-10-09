@@ -128,7 +128,7 @@ pub(crate) fn volume_total_bytes(root: &str) -> io::Result<u64> {
     Ok(total)
 }
 
-/// `SHQueryRecycleBinW`: bytes and item count currently in the bin for the
+/// `SHQueryRecycleBinW`: bytes and item count in the bin for the
 /// drive holding `root`. Fails when the volume has no Recycle Bin.
 pub(crate) fn query_recycle_bin(root: &str) -> io::Result<(u64, u64)> {
     let r = wide(root);

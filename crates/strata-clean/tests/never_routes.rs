@@ -1,4 +1,4 @@
-//! SPEC §22 safety tests: never-list paths are refused by every route, even
+//! Safety tests: never-list paths are refused by every route, even
 //! when the classifier wrongly calls them safe and every confirmation is
 //! given.
 

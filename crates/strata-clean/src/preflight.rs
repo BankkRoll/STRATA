@@ -1,4 +1,4 @@
-//! Pre-flight (SPEC §15.2 step 5): right before acting, re-verify each item
+//! Pre-flight: right before acting, re-verify each item
 //! still exists and is the file the scan saw, look for locks, and check the
 //! Recycle Bin can take it.
 

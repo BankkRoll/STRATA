@@ -1,4 +1,4 @@
-//! Access tokens: elevation, the current user's SID, and privileges (SPEC §4).
+//! Access tokens: elevation, the current user's SID, and privileges.
 //!
 //! The helper enables `SeBackupPrivilege` / `SeManageVolumePrivilege` (and
 //! `SeRestorePrivilege` only for deletes) for exactly as long as it needs them
@@ -51,7 +51,7 @@ pub enum ElevationType {
 pub struct PrivilegeState {
     /// Privilege name, e.g. `SeBackupPrivilege`.
     pub name: String,
-    /// Currently enabled.
+    /// Whether the privilege is enabled in the token.
     pub enabled: bool,
     /// Enabled by default when the token is created.
     pub enabled_by_default: bool,
@@ -445,7 +445,7 @@ impl Drop for PrivilegeGuard {
 }
 
 /// Permanently removes every privilege of the current process except
-/// `except` (SPEC §4: the helper drops anything it does not use). Returns the
+/// `except`, so the helper holds only the privileges it uses. Returns the
 /// removed names.
 ///
 /// The helper calls this once at startup with

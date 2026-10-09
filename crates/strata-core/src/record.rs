@@ -24,7 +24,7 @@ pub struct Times {
     pub changed: FileTime,
 }
 
-/// Size accounting for one file record. See SPEC §7.
+/// Size accounting for one file record.
 ///
 /// The record's contribution to "allocated" totals is
 /// `allocated + ads_allocated + dir_overhead + attr_overhead`; to "logical"

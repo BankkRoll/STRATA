@@ -155,7 +155,7 @@ impl AlignedBuf {
 }
 
 /// How a raw volume handle is opened. Both are offered so they can be
-/// benchmarked against each other on real hardware (SPEC §6.1).
+/// benchmarked against each other on real hardware.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IoMode {
     /// `FILE_FLAG_NO_BUFFERING`: bypasses the cache; every read must be

@@ -1,4 +1,4 @@
-//! The undo/audit log contract (SPEC §15.2 step 7, §15.7, §21).
+//! The undo/audit log contract.
 //!
 //! Write-ahead: [`crate::flow::execute`] calls
 //! [`AuditLog::begin_action`] once, then [`AuditLog::item_started`] for an
@@ -12,7 +12,7 @@
 //!
 //! The SQLite store (`strata-store`) implements this trait through an
 //! adapter in the app. [`MemoryAuditLog`] is an in-memory implementation
-//! for tests and for running before the store is wired up.
+//! for tests and for callers without a store.
 
 use serde::{Deserialize, Serialize};
 use strata_core::{FileRef, FileTime, Safety};

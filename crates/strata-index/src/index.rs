@@ -1,7 +1,7 @@
 //! The [`Index`]: struct-of-arrays entry columns, the directory table, the
 //! child lists and the `FileRef` lookup.
 //!
-//! # Layout (SPEC §9.1)
+//! # Layout
 //!
 //! Every entry is a `u32` [`EntryId`] into parallel columns. The layout is
 //! tuned to stay under 64 bytes per entry (names excluded):
@@ -123,13 +123,13 @@ pub struct VolumeInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexOptions {
     /// Split hardlinked files' bytes evenly across all their paths instead of
-    /// attributing them to the primary path (SPEC §7.2). Off by default.
+    /// attributing them to the primary path. Off by default.
     pub split_hardlinks: bool,
-    /// Lite index (SPEC §9.1 low memory): per-entry timestamps are not kept.
+    /// Lite index for low-memory systems: per-entry timestamps are not kept.
     /// Directory aggregates (including newest/oldest mtime) are still
     /// computed at build time; afterwards they only move monotonically.
     pub lite: bool,
-    /// Reference "now" for suspicious-timestamp detection (SPEC §13).
+    /// Reference "now" for suspicious-timestamp detection.
     pub now: FileTime,
     /// Volume identity.
     pub volume: VolumeInfo,
@@ -153,13 +153,13 @@ pub struct EntryTimes {
     pub created: EpochSecs,
     /// Last content modification.
     pub modified: EpochSecs,
-    /// Last access (unreliable on Windows, see SPEC §13).
+    /// Last access (unreliable: Windows may disable or coarsen updates).
     pub accessed: EpochSecs,
     /// Last MFT record change (0 when unknown).
     pub changed: EpochSecs,
 }
 
-/// Subtree totals of one directory (SPEC §7.1).
+/// Subtree totals of one directory.
 ///
 /// Sizes include the directory's own bytes (index overhead, ADS). Counts
 /// exclude the directory itself and virtual nodes. Times exclude virtual
@@ -686,8 +686,8 @@ impl MemoryReport {
         self.columns + self.tree + self.maps + self.name_index
     }
 
-    /// Average bytes per live entry, excluding raw name bytes (the SPEC §2
-    /// budget is 64).
+    /// Average bytes per live entry, excluding raw name bytes (the budget
+    /// is 64).
     #[must_use]
     pub fn bytes_per_entry(&self) -> f64 {
         if self.live == 0 {
@@ -814,7 +814,7 @@ impl Index {
         (r != NO_REF).then_some(FileRef(r))
     }
 
-    /// Name as raw WTF-8 bytes (lossless; see [`crate::wtf8`]).
+    /// Name as raw WTF-8 bytes: lossless, so unpaired UTF-16 surrogates survive.
     #[must_use]
     pub fn name_wtf8(&self, id: EntryId) -> &[u8] {
         self.names.get(id.0)
@@ -1131,7 +1131,7 @@ impl Index {
 
     /// The entry a child link with parent reference `p` attaches to, if `p`
     /// names a live, non-virtual directory with a matching sequence number
-    /// that may be descended into (reparse points are leaves, SPEC §7.3).
+    /// that may be descended into (reparse points are leaves).
     pub(crate) fn valid_parent(&self, p: u64) -> Option<u32> {
         if p == NO_REF {
             return None;

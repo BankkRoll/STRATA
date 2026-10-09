@@ -1,4 +1,4 @@
-# Media and creator tools (SPEC §12.2 "Media / creator"). Render and media
+# Media and creator tools. Render and media
 # caches are `safe`/`probably`; recordings and projects are user content and
 # `careful`. OBS recording folders come from OBS's config ({OBS_RECORDINGS}).
 

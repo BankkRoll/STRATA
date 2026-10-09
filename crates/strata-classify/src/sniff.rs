@@ -1,6 +1,6 @@
 //! Content sniffing: detect a file's real type from its first bytes.
 //!
-//! Used for files with no or misleading extensions (SPEC §12.4), only when
+//! Used for files with no or misleading extensions, only when
 //! the user opens the detail panel or in a background pass over large files.
 //! Every check is bounds-checked; malformed or truncated input returns `None`
 //! rather than panicking.

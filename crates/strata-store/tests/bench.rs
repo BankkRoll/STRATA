@@ -4,7 +4,7 @@
 //! cargo test -p strata-store --release --test bench -- --ignored --nocapture
 //! ```
 //!
-//! Results are recorded in `docs/tracks/store.md`.
+//! Results are recorded in `docs/BENCHMARKS.md`.
 
 mod common;
 

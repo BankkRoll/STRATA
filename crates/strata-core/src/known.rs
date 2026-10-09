@@ -128,7 +128,7 @@ impl KnownFolder {
     }
 
     /// Whether the folder's root is protected from deletion (its contents
-    /// may still be deleted individually). See SPEC §15.1.
+    /// may still be deleted individually).
     #[must_use]
     pub const fn root_is_protected(self) -> bool {
         !matches!(self, Self::Temp)

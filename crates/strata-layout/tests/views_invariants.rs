@@ -1,5 +1,5 @@
-//! Invariants for the M9 views on random trees: sunburst, icicle, circle
-//! packing and mind map. Sizes are proportional, siblings never overlap,
+//! Invariants for the non-treemap views on random trees: sunburst, icicle,
+//! circle packing and mind map. Sizes are proportional, siblings never overlap,
 //! children stay within their parent, LOD accounts for every byte, output
 //! is deterministic and order-independent, and picking finds the records.
 
@@ -155,7 +155,7 @@ fn check_pack(t: &VecTree, c: &PackConfig) {
                 );
             }
         }
-        // Radii (before the sibling gap) scale with Ã¢Ë†Å¡size.
+        // Radii (before the sibling gap) scale with √size.
         let real: Vec<_> = kids_idx
             .iter()
             .map(|&k| &recs[k])
@@ -165,7 +165,7 @@ fn check_pack(t: &VecTree, c: &PackConfig) {
             let k0 = f64::from(first.r + c.sibling_gap / 2.0) / (t.size(first.id) as f64).sqrt();
             for ch in &real {
                 let k = f64::from(ch.r + c.sibling_gap / 2.0) / (t.size(ch.id) as f64).sqrt();
-                assert!((k - k0).abs() <= 1e-3 * k0, "radius not Ã¢Ë†Â Ã¢Ë†Å¡size");
+                assert!((k - k0).abs() <= 1e-3 * k0, "radius not ∝ √size");
             }
         }
     }

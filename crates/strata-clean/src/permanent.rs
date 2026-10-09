@@ -1,4 +1,4 @@
-//! Permanent delete by handle (SPEC §15.2 step 4, §15.7).
+//! Permanent delete by handle.
 //!
 //! 1. Open the item itself with `DELETE` and `FILE_FLAG_OPEN_REPARSE_POINT`
 //!    (a link is deleted, never its target) and run every guard check on

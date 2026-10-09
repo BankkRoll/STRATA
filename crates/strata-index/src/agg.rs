@@ -1,4 +1,4 @@
-//! Directory aggregates (SPEC §7.1): the bottom-up build pass and the
+//! Directory aggregates: the bottom-up build pass and the
 //! incremental O(depth) propagation used by live updates.
 //!
 //! # Incremental strategy

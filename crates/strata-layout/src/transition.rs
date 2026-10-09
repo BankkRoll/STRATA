@@ -1,5 +1,5 @@
 //! Matching two layouts so the frontend can tween between them: animated
-//! drill-down / drill-up zooms and live size changes (SPEC §16.1).
+//! drill-down / drill-up zooms and live size changes.
 //!
 //! Records are matched by [`NodeKey`] (entry id + aggregate bit). Entries in
 //! both layouts move from their old to their new geometry. For entries

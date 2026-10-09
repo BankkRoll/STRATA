@@ -1,4 +1,4 @@
-# Web browsers, every profile (SPEC §12.2 "Browsers").
+# Web browsers, every profile.
 #
 # Profile data (history, cookies, passwords, bookmarks, extensions) is
 # `never`: it is not junk. Caches inside are carved out by more specific path

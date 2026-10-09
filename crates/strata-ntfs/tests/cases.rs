@@ -1,4 +1,4 @@
-//! One test per SPEC §6.2 / §21 edge case, each asserting the exact
+//! One test per NTFS edge case, each asserting the exact
 //! `ScanRecord`s the scanner emits for a synthetic image.
 
 mod common;

@@ -56,7 +56,7 @@ impl Hash for Proc {
 
 /// Looks up a running process that has no start event.
 pub trait ProcessSource: Send + std::fmt::Debug {
-    /// Image path and creation time of the process currently using `pid`.
+    /// Image path and creation time of the process now using `pid`.
     fn lookup(&mut self, pid: u32) -> Option<(String, FileTime)>;
 }
 

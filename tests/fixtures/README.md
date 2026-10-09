@@ -1,7 +1,7 @@
 # Fixture volumes
 
-Real-volume tests for the MFT scanner (SPEC §22): create VHDX volumes, fill them with every
-§21 edge case that can be created, scan them with `strata-cli`, and compare the result with the
+Real-volume tests for the MFT scanner: create VHDX volumes, fill them with every filesystem
+edge case that can be created, scan them with `strata-cli`, and compare the result with the
 filesystem's own view and with stored goldens. Synthetic-image tests in
 `crates/strata-ntfs/tests` cover the parser byte by byte; these scripts cover what only a real
 NTFS driver produces (allocation decisions, compression, WOF, `$Extend`, real fragmentation).
@@ -43,8 +43,8 @@ This runs, for each configuration (`ntfs-512`, `ntfs-4k`, `ntfs-64k`, `ntfs-2m`,
    `golden\<config>.json`.
 5. The VHDX is detached and deleted (`-Keep` leaves it mounted).
 
-exFAT and ReFS are populated and exported for the fallback walker track; the MFT scanner rejects
-non-NTFS volumes by design.
+exFAT and ReFS are populated and exported for testing the standard scanner (`strata-walk`); the
+MFT scanner rejects non-NTFS volumes by design.
 
 Useful switches:
 
@@ -132,7 +132,7 @@ non-metadata entries; a later run must reproduce them exactly.
 ```
 
 One entry per path: a file with N hardlinks has N entries with the same `record`;
-`link_index` 0 is the link that carries the bytes (first-discovered policy, SPEC §7.2). Paths
+`link_index` 0 is the link that carries the bytes (first-discovered policy). Paths
 are volume-relative with `\` separators; unpaired surrogates are written as U+FFFD; a record
 whose parent chain is broken is written as `<orphan>\name`. Entries are sorted by path, then
 link index.
@@ -141,18 +141,8 @@ link index.
 `allocation_size`, `compressed_size`, `attributes`, `reparse_tag`, `link_count`, `streams`
 (`name`, `logical`), `error`.
 
-## Status
+## Goldens
 
-These scripts have not been run end to end: the development session is not elevated, so it can
-neither mount VHDX files nor open `\\.\X:`. What was verified:
-
-- All scripts parse (`[System.Management.Automation.Language.Parser]::ParseFile`) and pass
-  PSScriptAnalyzer except two false positives (parameters used inside script blocks).
-- `Add-StrataEdgeCases.ps1` and `Export-StrataExpected.ps1` ran unelevated on a plain NTFS
-  folder: every step except `symlinks` (needs elevation), `efs` (not on Windows Home) and
-  `case-sensitive` (needs WSL) succeeded, and the export saw all 2,431 paths with the expected
-  sizes (e.g. sparse 100 GiB → 1 MiB on disk, compressed 1,040,000 → 126,976).
-- `Compare-StrataGolden.ps1` passed on a consistent synthetic scan, failed on injected size
-  differences, and round-tripped its golden file.
-
-The `golden\` directory is empty until the first elevated run with `-UpdateGolden`.
+`golden\` holds one normalized golden file per NTFS configuration, written by an elevated run
+with `-UpdateGolden`. Review the diff before committing new goldens: a changed golden means the
+scanner's output changed.

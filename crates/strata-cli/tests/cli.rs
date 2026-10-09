@@ -165,10 +165,7 @@ fn writes_golden_json() {
         let mut sorted = doc.entries.clone();
         sorted.sort_by(|x, y| (&x.path, x.link_index).cmp(&(&y.path, y.link_index)));
         assert_eq!(sorted, doc.entries);
-        assert_eq!(
-            doc.volume.used_bytes,
-            Some(doc.totals.sum_allocated() + doc.volume.other_attr_allocated)
-        );
+        assert_eq!(doc.volume.used_bytes, Some(doc.totals.sum_allocated()));
     }
 }
 

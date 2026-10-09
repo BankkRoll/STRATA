@@ -168,7 +168,7 @@ pub struct ParsedRecord {
     pub bitmap: Option<ValueLoc>,
     /// On-disk bytes of other non-resident attributes (`$ATTRIBUTE_LIST`,
     /// `$BITMAP`, `$EA`, `$LOGGED_UTILITY_STREAM`, ...) from their VCN-0
-    /// instances. Not part of [`strata_core::Sizes`]; reported in scan stats.
+    /// instances. Becomes [`strata_core::Sizes::attr_overhead`] on assembly.
     pub other_allocated: u64,
 }
 

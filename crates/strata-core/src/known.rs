@@ -19,6 +19,10 @@ pub enum KnownFolder {
     UserProfile,
     /// `FOLDERID_LocalAppData` (per user).
     LocalAppData,
+    /// `FOLDERID_LocalAppDataLow` (per user; low-integrity app data).
+    LocalAppDataLow,
+    /// `FOLDERID_SavedGames` (per user).
+    SavedGames,
     /// `FOLDERID_RoamingAppData` (per user).
     AppData,
     /// The user's temp directory (`%TEMP%`, per user).
@@ -51,9 +55,11 @@ pub enum KnownFolder {
 
 impl KnownFolder {
     /// Every known folder.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 18] = [
         Self::UserProfile,
         Self::LocalAppData,
+        Self::LocalAppDataLow,
+        Self::SavedGames,
         Self::AppData,
         Self::Temp,
         Self::Downloads,
@@ -77,6 +83,8 @@ impl KnownFolder {
             self,
             Self::UserProfile
                 | Self::LocalAppData
+                | Self::LocalAppDataLow
+                | Self::SavedGames
                 | Self::AppData
                 | Self::Temp
                 | Self::Downloads
@@ -94,6 +102,8 @@ impl KnownFolder {
         match self {
             Self::UserProfile => "{USERPROFILE}",
             Self::LocalAppData => "{LOCALAPPDATA}",
+            Self::LocalAppDataLow => "{LOCALAPPDATALOW}",
+            Self::SavedGames => "{SAVEDGAMES}",
             Self::AppData => "{APPDATA}",
             Self::Temp => "{TEMP}",
             Self::Downloads => "{DOWNLOADS}",
@@ -125,6 +135,23 @@ impl KnownFolder {
     }
 }
 
+/// Where a resolved per-user folder path came from.
+///
+/// Consumers use this to label derived locations (e.g. another user's
+/// profile read without their registry hive) as less certain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FolderSource {
+    /// `SHGetKnownFolderPath` / `GetTempPath2W` (authoritative).
+    Api,
+    /// The user's `User Shell Folders` registry value.
+    Hive,
+    /// `ProfileList\<SID>\ProfileImagePath`.
+    ProfileList,
+    /// Derived from the profile path; may be wrong if the folder is redirected.
+    Derived,
+}
+
 /// Known folders of one user profile.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct UserFolders {
@@ -136,6 +163,20 @@ pub struct UserFolders {
     pub is_current: bool,
     /// Resolved per-user folders.
     pub folders: HashMap<KnownFolder, PathBuf>,
+    /// Provenance of each entry in `folders`; a missing entry means [`FolderSource::Api`].
+    #[serde(default)]
+    pub sources: HashMap<KnownFolder, FolderSource>,
+}
+
+impl UserFolders {
+    /// Provenance of `folder`, defaulting to [`FolderSource::Api`].
+    #[must_use]
+    pub fn source(&self, folder: KnownFolder) -> FolderSource {
+        self.sources
+            .get(&folder)
+            .copied()
+            .unwrap_or(FolderSource::Api)
+    }
 }
 
 /// All known folders on the machine: machine-wide plus one entry per profile.

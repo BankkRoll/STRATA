@@ -41,10 +41,16 @@ fn user(name: &str, sid: &str, current: bool, overrides: &[(KnownFolder, &str)])
         account: Some(name.to_string()),
         is_current: current,
         folders: Default::default(),
+        sources: Default::default(),
     };
     let defaults = [
         (KnownFolder::UserProfile, home.clone()),
         (KnownFolder::LocalAppData, format!(r"{home}\AppData\Local")),
+        (
+            KnownFolder::LocalAppDataLow,
+            format!(r"{home}\AppData\LocalLow"),
+        ),
+        (KnownFolder::SavedGames, format!(r"{home}\Saved Games")),
         (KnownFolder::AppData, format!(r"{home}\AppData\Roaming")),
         (KnownFolder::Temp, format!(r"{home}\AppData\Local\Temp")),
         (KnownFolder::Downloads, format!(r"{home}\Downloads")),

@@ -57,7 +57,9 @@ pub fn assemble(
     let mut index = std::mem::take(&mut base.index_allocations);
     let mut std_info = base.std_info;
     let mut reparse_loc = base.reparse.take();
+    let mut attr_overhead = base.other_allocated;
     for mut e in extensions {
+        attr_overhead = attr_overhead.saturating_add(e.other_allocated);
         links.append(&mut e.links);
         fn_created = fn_created.or(e.fn_created);
         data.append(&mut e.data);
@@ -127,6 +129,7 @@ pub fn assemble(
         .iter()
         .filter(|p| p.start_vcn == 0)
         .fold(0u64, |acc, p| acc.saturating_add(p.allocated));
+    sizes.attr_overhead = attr_overhead;
 
     let mut flags = EntryFlags::from_win32_attributes(attributes).with_reparse(kind);
     flags.set(EntryFlags::DIR, base.is_dir);

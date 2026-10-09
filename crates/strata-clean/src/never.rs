@@ -88,6 +88,8 @@ fn known_folder_label(f: KnownFolder) -> &'static str {
     match f {
         KnownFolder::UserProfile => "user profile",
         KnownFolder::LocalAppData => "AppData\\Local",
+        KnownFolder::LocalAppDataLow => "AppData\\LocalLow",
+        KnownFolder::SavedGames => "Saved Games",
         KnownFolder::AppData => "AppData\\Roaming",
         KnownFolder::Temp => "Temp",
         KnownFolder::Downloads => "Downloads",

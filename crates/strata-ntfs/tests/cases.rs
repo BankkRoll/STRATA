@@ -254,6 +254,7 @@ fn wof_stream_becomes_allocated_and_is_not_an_ads() {
             ads_logical: 26,
             ads_allocated: 0,
             dir_overhead: 0,
+            attr_overhead: 0,
         },
     );
     want.flags = want.flags.with_reparse(ReparseKind::Wof) | EntryFlags::HAS_ADS;
@@ -289,7 +290,8 @@ fn wof_stream_becomes_allocated_and_is_not_an_ads() {
             allocated: 0,
             ads_logical: 19_000,
             ads_allocated: 5 * CS,
-            dir_overhead: 0
+            dir_overhead: 0,
+            attr_overhead: 0,
         }
     );
     assert!(recs[&101].flags.contains(EntryFlags::HAS_ADS));
@@ -473,6 +475,7 @@ fn many_ads_and_a_huge_sparse_ads() {
             ads_logical: (0..40).sum::<u64>() + huge_len,
             ads_allocated: CS,
             dir_overhead: 0,
+            attr_overhead: 0,
         },
     );
     want.flags |= EntryFlags::HAS_ADS;
@@ -563,6 +566,8 @@ fn split_record_image(list_nonresident: bool) -> (Vec<u8>, ScanRecord) {
             ads_logical: 10,
             ads_allocated: 0,
             dir_overhead: 0,
+            // A non-resident attribute list occupies its one cluster on disk.
+            attr_overhead: if list_nonresident { CS } else { 0 },
         },
     );
     want.flags |= EntryFlags::HAS_ADS;

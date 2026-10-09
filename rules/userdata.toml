@@ -78,7 +78,7 @@ category = "games"
 safety = "careful"
 inherit = "weak"
 explain = "Game saves and settings. Some games keep their only copy of your progress here."
-match.path = '{USERPROFILE}\Saved Games'
+match.path = '{SAVEDGAMES}'
 
 [[rule]]
 id = "userdata.onedrive_root"

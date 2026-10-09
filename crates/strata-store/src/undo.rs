@@ -124,25 +124,6 @@ string_enum! {
     }
 }
 
-fn safety_str(s: Safety) -> &'static str {
-    match s {
-        Safety::Safe => "safe",
-        Safety::Probably => "probably",
-        Safety::Careful => "careful",
-        Safety::Never => "never",
-    }
-}
-
-fn parse_safety(s: &str) -> Option<Safety> {
-    match s {
-        "safe" => Some(Safety::Safe),
-        "probably" => Some(Safety::Probably),
-        "careful" => Some(Safety::Careful),
-        "never" => Some(Safety::Never),
-        _ => None,
-    }
-}
-
 /// One item the cleaner is about to remove.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlannedItem {
@@ -338,7 +319,7 @@ fn item_from_row(r: &Row<'_>) -> rusqlite::Result<ItemRecord> {
             size: i2u(r.get(7)?),
             mtime: FileTime(i2u(r.get(8)?)),
             method: DeleteMethod::parse(&method).ok_or_else(|| bad(9, "delete method"))?,
-            tier: parse_safety(&tier).ok_or_else(|| bad(10, "safety tier"))?,
+            tier: Safety::from_key(&tier).ok_or_else(|| bad(10, "safety tier"))?,
             rule_id: r.get(11)?,
         },
         result: ItemResult::parse(&result).ok_or_else(|| bad(12, "item result"))?,
@@ -446,7 +427,7 @@ impl Store {
                     u2i(it.size),
                     u2i(it.mtime.0),
                     it.method.as_str(),
-                    safety_str(it.tier),
+                    it.tier.as_str(),
                     it.rule_id,
                 ])?;
             }

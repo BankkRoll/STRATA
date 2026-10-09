@@ -125,7 +125,7 @@ fn scan(args: &ScanArgs, out: &mut dyn Write) -> Result<(), String> {
         used,
         used_source,
         files_allocated: collector.totals.sum_allocated(),
-        other_attr_allocated: stats.other_attr_allocated,
+        attr_overhead: collector.totals.attr_overhead,
         live_volume: live,
     };
     let text = report::render(&stats, &mut collector, &recon, &path_prefix);

@@ -179,8 +179,7 @@ fn every_geometry_scans_identically_and_reconciles_exactly() {
         let found: u64 = recs
             .values()
             .map(|r| r.sizes.total_allocated())
-            .sum::<u64>()
-            + stats.other_attr_allocated;
+            .sum::<u64>();
         assert_eq!(used, found, "volume used vs. sum allocated, {g:?}");
     }
 }

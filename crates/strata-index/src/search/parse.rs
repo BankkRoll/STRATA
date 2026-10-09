@@ -411,24 +411,7 @@ fn split_list(v: &str) -> impl Iterator<Item = &str> {
 }
 
 fn category_matches(c: Category, v: &str) -> bool {
-    let serde_name = match c {
-        Category::Unknown => "unknown",
-        Category::System => "system",
-        Category::Apps => "apps",
-        Category::Games => "games",
-        Category::AiModels => "ai_models",
-        Category::DevBuild => "dev_build",
-        Category::Caches => "caches",
-        Category::Temp => "temp",
-        Category::Downloads => "downloads",
-        Category::Documents => "documents",
-        Category::Media => "media",
-        Category::Archives => "archives",
-        Category::Cloud => "cloud",
-        Category::RecycleBin => "recycle_bin",
-        Category::NtfsMetadata => "ntfs_metadata",
-    };
-    serde_name.starts_with(v) || c.label().to_lowercase().starts_with(v)
+    c.key().starts_with(v) || c.label().to_lowercase().starts_with(v)
 }
 
 fn intersect(cur: Option<(u64, u64)>, new: (u64, u64)) -> (u64, u64) {

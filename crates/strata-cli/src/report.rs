@@ -26,6 +26,8 @@ pub struct Totals {
     pub ads_allocated: u64,
     /// Σ directory index allocations.
     pub dir_overhead: u64,
+    /// Σ other non-resident attribute allocations (attribute lists, bitmaps, EAs).
+    pub attr_overhead: u64,
     /// Σ total allocated of NTFS metadata records (already included above).
     pub ntfs_metadata_allocated: u64,
     /// Files with more than one link.
@@ -35,12 +37,13 @@ pub struct Totals {
 }
 
 impl Totals {
-    /// Σ allocated + ADS allocated + directory overhead.
+    /// Σ allocated + ADS allocated + directory and attribute overhead.
     #[must_use]
     pub fn sum_allocated(&self) -> u64 {
         self.allocated
             .saturating_add(self.ads_allocated)
             .saturating_add(self.dir_overhead)
+            .saturating_add(self.attr_overhead)
     }
 
     fn add(&mut self, r: &ScanRecord) {
@@ -55,6 +58,7 @@ impl Totals {
         self.ads_logical = self.ads_logical.saturating_add(s.ads_logical);
         self.ads_allocated = self.ads_allocated.saturating_add(s.ads_allocated);
         self.dir_overhead = self.dir_overhead.saturating_add(s.dir_overhead);
+        self.attr_overhead = self.attr_overhead.saturating_add(s.attr_overhead);
         if r.flags.contains(EntryFlags::NTFS_METADATA) {
             self.ntfs_metadata_allocated = self
                 .ntfs_metadata_allocated
@@ -136,10 +140,10 @@ pub struct Reconciliation {
     pub used: Option<u64>,
     /// Where `used` came from.
     pub used_source: String,
-    /// Σ allocated over all records.
+    /// Σ allocated over all records, including attribute overhead.
     pub files_allocated: u64,
-    /// Non-resident attribute bytes outside file sizes.
-    pub other_attr_allocated: u64,
+    /// Of `files_allocated`, bytes in non-content attributes.
+    pub attr_overhead: u64,
     /// Whether the target is a live volume (enables live-only explanations).
     pub live_volume: bool,
 }
@@ -149,7 +153,6 @@ impl Reconciliation {
     #[must_use]
     pub fn accounted(&self) -> u64 {
         self.files_allocated
-            .saturating_add(self.other_attr_allocated)
     }
 
     /// `used - accounted`, signed.
@@ -274,7 +277,7 @@ pub fn render(
         }
     }
     row(&mut o, "sum allocated (records)", recon.files_allocated);
-    row(&mut o, "other attributes", recon.other_attr_allocated);
+    row(&mut o, "  of which attribute overhead", recon.attr_overhead);
     if let Some(gap) = recon.unaccounted() {
         let sign = if gap < 0 { "-" } else { "" };
         let mag = u64::try_from(gap.unsigned_abs()).unwrap_or(u64::MAX);

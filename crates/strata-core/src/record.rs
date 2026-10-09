@@ -27,8 +27,8 @@ pub struct Times {
 /// Size accounting for one file record. See SPEC §7.
 ///
 /// The record's contribution to "allocated" totals is
-/// `allocated + ads_allocated + dir_overhead`; to "logical" totals it is
-/// `logical + ads_logical`.
+/// `allocated + ads_allocated + dir_overhead + attr_overhead`; to "logical"
+/// totals it is `logical + ads_logical`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Sizes {
     /// Logical size of the unnamed data stream (Explorer's "Size").
@@ -43,6 +43,12 @@ pub struct Sizes {
     pub ads_allocated: u64,
     /// Directory B-tree (`$INDEX_ALLOCATION`) bytes; 0 for files.
     pub dir_overhead: u64,
+    /// On-disk bytes of non-resident attributes that are neither content nor
+    /// directory indexes: `$ATTRIBUTE_LIST`, `$BITMAP`, `$EA`,
+    /// `$LOGGED_UTILITY_STREAM`, non-resident `$REPARSE_POINT`. The walker
+    /// cannot see these and reports 0.
+    #[serde(default)]
+    pub attr_overhead: u64,
 }
 
 impl Sizes {
@@ -52,6 +58,7 @@ impl Sizes {
         self.allocated
             .saturating_add(self.ads_allocated)
             .saturating_add(self.dir_overhead)
+            .saturating_add(self.attr_overhead)
     }
 
     /// Total logical size of this record (all streams).
@@ -132,8 +139,9 @@ mod tests {
             ads_logical: 5,
             ads_allocated: 0,
             dir_overhead: 8192,
+            attr_overhead: 1024,
         };
-        assert_eq!(s.total_allocated(), 4096 + 8192);
+        assert_eq!(s.total_allocated(), 4096 + 8192 + 1024);
         assert_eq!(s.total_logical(), 15);
     }
 
@@ -145,6 +153,7 @@ mod tests {
             ads_logical: 1,
             ads_allocated: 1,
             dir_overhead: 1,
+            attr_overhead: 1,
         };
         assert_eq!(s.total_allocated(), u64::MAX);
         assert_eq!(s.total_logical(), u64::MAX);

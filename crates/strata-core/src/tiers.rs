@@ -28,6 +28,27 @@ pub enum Safety {
     Never,
 }
 
+impl Safety {
+    /// Stable lowercase key (the serde name), e.g. `probably`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Safe => "safe",
+            Self::Probably => "probably",
+            Self::Careful => "careful",
+            Self::Never => "never",
+        }
+    }
+
+    /// Parses [`Safety::as_str`] output.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        [Self::Safe, Self::Probably, Self::Careful, Self::Never]
+            .into_iter()
+            .find(|s| s.as_str() == key)
+    }
+}
+
 /// Top-level category, color-coded in every view. See SPEC §12.5.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -95,6 +116,34 @@ impl Category {
             .unwrap_or(Self::Unknown)
     }
 
+    /// Stable lowercase key (the serde name), e.g. `ai_models`.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::System => "system",
+            Self::Apps => "apps",
+            Self::Games => "games",
+            Self::AiModels => "ai_models",
+            Self::DevBuild => "dev_build",
+            Self::Caches => "caches",
+            Self::Temp => "temp",
+            Self::Downloads => "downloads",
+            Self::Documents => "documents",
+            Self::Media => "media",
+            Self::Archives => "archives",
+            Self::Cloud => "cloud",
+            Self::RecycleBin => "recycle_bin",
+            Self::NtfsMetadata => "ntfs_metadata",
+        }
+    }
+
+    /// Parses [`Category::key`] output.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.key() == key)
+    }
+
     /// Human-readable label.
     #[must_use]
     pub const fn label(self) -> &'static str {
@@ -134,6 +183,29 @@ mod tests {
             assert_eq!(Category::from_u16(c as u16), c);
         }
         assert_eq!(Category::from_u16(999), Category::Unknown);
+    }
+
+    #[test]
+    fn keys_match_serde_names() {
+        for c in Category::ALL {
+            assert_eq!(
+                serde_json::to_string(&c).unwrap(),
+                format!("\"{}\"", c.key())
+            );
+            assert_eq!(Category::from_key(c.key()), Some(c));
+        }
+        for s in [
+            Safety::Safe,
+            Safety::Probably,
+            Safety::Careful,
+            Safety::Never,
+        ] {
+            assert_eq!(
+                serde_json::to_string(&s).unwrap(),
+                format!("\"{}\"", s.as_str())
+            );
+            assert_eq!(Safety::from_key(s.as_str()), Some(s));
+        }
     }
 
     #[test]

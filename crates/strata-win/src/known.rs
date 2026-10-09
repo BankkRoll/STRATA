@@ -23,10 +23,10 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, HKEY_USERS};
 use windows::Win32::UI::Shell::{
     FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_LocalAppData,
-    FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Profile, FOLDERID_ProgramData,
-    FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_Public, FOLDERID_RoamingAppData,
-    FOLDERID_UserProfiles, FOLDERID_Videos, FOLDERID_Windows, KF_FLAG_DONT_VERIFY,
-    SHGetKnownFolderPath,
+    FOLDERID_LocalAppDataLow, FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Profile,
+    FOLDERID_ProgramData, FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_Public,
+    FOLDERID_RoamingAppData, FOLDERID_SavedGames, FOLDERID_UserProfiles, FOLDERID_Videos,
+    FOLDERID_Windows, KF_FLAG_DONT_VERIFY, SHGetKnownFolderPath,
 };
 use windows::core::{GUID, PCWSTR, s};
 
@@ -38,22 +38,7 @@ const PROFILE_LIST: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Profil
 const USER_SHELL_FOLDERS: &str =
     r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
 
-/// Where a resolved folder path came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum FolderSource {
-    /// `SHGetKnownFolderPath` / `GetTempPath2W` (authoritative).
-    Api,
-    /// The user's `User Shell Folders` registry value (authoritative for
-    /// redirection, expanded against that user's profile).
-    Hive,
-    /// The profile list's `ProfileImagePath` (authoritative for the profile
-    /// root).
-    ProfileList,
-    /// Derived from the profile path and the default layout; the user may
-    /// have redirected it.
-    Derived,
-}
+pub use strata_core::known::FolderSource;
 
 /// Whether another user's registry hive could be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -69,7 +54,7 @@ pub enum HiveAccess {
     NotNeeded,
 }
 
-/// One profile's folders, plus provenance that `UserFolders` cannot carry.
+/// One profile's folders plus where the profile itself came from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileFolders {
     /// The core view (SID, account, current flag, folders).
@@ -78,8 +63,6 @@ pub struct ProfileFolders {
     pub profile_path: Option<PathBuf>,
     /// Whether the profile root exists on disk (stale entries are common).
     pub profile_exists: bool,
-    /// Source of each folder in `user.folders`.
-    pub sources: HashMap<KnownFolder, FolderSource>,
     /// Hive access for this profile.
     pub hive: HiveAccess,
 }
@@ -142,6 +125,8 @@ fn folder_id(f: KnownFolder) -> Option<GUID> {
     Some(match f {
         KnownFolder::UserProfile => FOLDERID_Profile,
         KnownFolder::LocalAppData => FOLDERID_LocalAppData,
+        KnownFolder::LocalAppDataLow => FOLDERID_LocalAppDataLow,
+        KnownFolder::SavedGames => FOLDERID_SavedGames,
         KnownFolder::AppData => FOLDERID_RoamingAppData,
         KnownFolder::Temp => return None,
         KnownFolder::Downloads => FOLDERID_Downloads,
@@ -256,8 +241,8 @@ fn current_user_folders() -> Result<ProfileFolders> {
             account: account.account,
             is_current: true,
             folders,
+            sources,
         },
-        sources,
         hive: HiveAccess::NotNeeded,
     })
 }
@@ -370,6 +355,8 @@ fn shell_folder_value(f: KnownFolder) -> Option<&'static str> {
         KnownFolder::Downloads => "{374DE290-123F-4565-9164-39C4925E467B}",
         KnownFolder::AppData => "AppData",
         KnownFolder::LocalAppData => "Local AppData",
+        KnownFolder::LocalAppDataLow => "{A520A1A4-1780-4FF6-BD18-167343C5AF16}",
+        KnownFolder::SavedGames => "{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}",
         _ => return None,
     })
 }
@@ -388,6 +375,8 @@ fn default_relative(f: KnownFolder) -> Option<&'static str> {
         KnownFolder::Downloads => "Downloads",
         KnownFolder::AppData => r"AppData\Roaming",
         KnownFolder::LocalAppData => r"AppData\Local",
+        KnownFolder::LocalAppDataLow => r"AppData\LocalLow",
+        KnownFolder::SavedGames => "Saved Games",
         _ => return None,
     })
 }
@@ -456,10 +445,10 @@ fn other_user_folders(entry: &ProfileEntry) -> ProfileFolders {
             account: crate::sid::account_name(&entry.sid),
             is_current: false,
             folders,
+            sources,
         },
         profile_path: Some(entry.path.clone()),
         profile_exists: entry.path.is_dir(),
-        sources,
         hive,
     }
 }
@@ -524,9 +513,9 @@ mod tests {
             p.user.folders[&KnownFolder::Temp],
             Path::new(r"C:\Users\nobody-strata-test\AppData\Local\Temp")
         );
-        assert_eq!(p.sources[&KnownFolder::Temp], FolderSource::Derived);
+        assert_eq!(p.user.sources[&KnownFolder::Temp], FolderSource::Derived);
         assert_eq!(
-            p.sources[&KnownFolder::UserProfile],
+            p.user.sources[&KnownFolder::UserProfile],
             FolderSource::ProfileList
         );
         for f in KnownFolder::ALL.into_iter().filter(|f| f.is_per_user()) {
@@ -548,7 +537,7 @@ mod tests {
         assert!(me.user.sid.as_deref().unwrap().starts_with("S-1-"));
         for f in KnownFolder::ALL.into_iter().filter(|f| f.is_per_user()) {
             assert!(me.user.folders.contains_key(&f), "{f:?}");
-            assert_eq!(me.sources[&f], FolderSource::Api);
+            assert_eq!(me.user.sources[&f], FolderSource::Api);
         }
         let temp = &me.user.folders[&KnownFolder::Temp];
         assert!(!temp.to_string_lossy().ends_with('\\'));

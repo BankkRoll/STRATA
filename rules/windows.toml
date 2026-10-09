@@ -248,7 +248,7 @@ category = "caches"
 safety = "safe"
 regenerable = true
 explain = "Shader caches kept by the NVIDIA, AMD and Intel graphics drivers. Rebuilt automatically."
-match.path = ['{LOCALAPPDATA}\NVIDIA\DXCache', '{LOCALAPPDATA}\NVIDIA\GLCache', '{LOCALAPPDATA}\NVIDIA\OptixCache', '{LOCALAPPDATA}\NVIDIA Corporation\NV_Cache', '{PROGRAMDATA}\NVIDIA Corporation\NV_Cache', '{APPDATA}\NVIDIA\ComputeCache', '{LOCALAPPDATA}\AMD\DxCache', '{LOCALAPPDATA}\AMD\DxcCache', '{LOCALAPPDATA}\AMD\Dx9Cache', '{LOCALAPPDATA}\AMD\GLCache', '{LOCALAPPDATA}\AMD\VkCache', '{USERPROFILE}\AppData\LocalLow\Intel\ShaderCache']
+match.path = ['{LOCALAPPDATA}\NVIDIA\DXCache', '{LOCALAPPDATA}\NVIDIA\GLCache', '{LOCALAPPDATA}\NVIDIA\OptixCache', '{LOCALAPPDATA}\NVIDIA Corporation\NV_Cache', '{PROGRAMDATA}\NVIDIA Corporation\NV_Cache', '{APPDATA}\NVIDIA\ComputeCache', '{LOCALAPPDATA}\AMD\DxCache', '{LOCALAPPDATA}\AMD\DxcCache', '{LOCALAPPDATA}\AMD\Dx9Cache', '{LOCALAPPDATA}\AMD\GLCache', '{LOCALAPPDATA}\AMD\VkCache', '{LOCALAPPDATALOW}\Intel\ShaderCache']
 
 [[rule]]
 id = "windows.gpu_installer_leftovers"

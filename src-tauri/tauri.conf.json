@@ -48,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_YOUR_UPDATER_PUBLIC_KEY (see docs/RELEASING.md)",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEODU2N0RCMUI0REY2MDAKUldRQTlrMGIyMmVGamRadG5wZkY1WEQrWm5EMzNkSm45bE9wZ21rV2ZsQmJ3YS9YMUxCK2lWOWMK",
       "endpoints": ["https://github.com/BankkRoll/STRATA/releases/latest/download/latest.json"],
       "requireSignedVersion": true,
       "windows": { "installMode": "passive" }

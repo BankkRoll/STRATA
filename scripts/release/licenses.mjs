@@ -73,8 +73,12 @@ function npmLicenseText(dir) {
     .join("\n\n");
 }
 
+// COMPAT: on Windows pnpm is a .cmd shim, which Node can only start through a
+// shell. The arguments are fixed literals, so the shell sees nothing untrusted.
 const npmReport = JSON.parse(
-  capture("pnpm", ["--filter", "@strata/ui", "licenses", "list", "--prod", "--json"]),
+  capture("pnpm", ["--filter", "@strata/ui", "licenses", "list", "--prod", "--json"], {
+    shell: process.platform === "win32",
+  }),
 );
 /** @type {{id: string, license: string, homepage?: string, text: string}[]} */
 const npmPackages = [];

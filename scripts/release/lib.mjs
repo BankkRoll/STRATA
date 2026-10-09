@@ -48,11 +48,17 @@ export function run(cmd, args, options = {}) {
  * Runs a command and returns its stdout as a string.
  *
  * @param {string} cmd - Executable name or path.
- * @param {string[]} args - Arguments, passed without a shell.
+ * @param {string[]} args - Arguments, passed without a shell unless `options.shell` is set.
+ * @param {import("node:child_process").ExecFileSyncOptions} [options] - Extra spawn options.
  * @returns {string}
  */
-export function capture(cmd, args) {
-  return execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+export function capture(cmd, args, options = {}) {
+  return execFileSync(cmd, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    ...options,
+  });
 }
 
 /**

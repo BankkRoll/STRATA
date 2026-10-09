@@ -48,7 +48,7 @@ const PANEL_TERMS: Partial<Record<CategoryId, string>> = {
   rules: "rule packs built-in read-only reload open folder why is this classified test path explain precedence",
   helper: "status elevation fast scan standard scan service install uninstall administrator uac",
   updates: "check for updates version",
-  privacy: "clear history activity caches data report an issue bug github telemetry privacy crash",
+  privacy: "clear history activity caches data report an issue bug github telemetry privacy",
   about: "version licenses third-party github documentation links mit",
 };
 

@@ -49,7 +49,6 @@ export interface Settings {
   startup: { launch_at_login: boolean; start_minimized_to_tray: boolean };
   tray: { enabled: boolean; low_space_notification: boolean; low_space_threshold_bytes: number };
   updates: { channel: "stable" | "beta"; auto_download: boolean };
-  privacy: { crash_reports_opt_in: boolean };
 }
 
 /** One validation failure (`strata_store::SettingsIssue`). */

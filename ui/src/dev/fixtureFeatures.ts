@@ -45,7 +45,6 @@ function defaults(): Settings {
     startup: { launch_at_login: false, start_minimized_to_tray: false },
     tray: { enabled: false, low_space_notification: true, low_space_threshold_bytes: 10 * 1024 ** 3 },
     updates: { channel: "stable", auto_download: true },
-    privacy: { crash_reports_opt_in: false },
   };
 }
 

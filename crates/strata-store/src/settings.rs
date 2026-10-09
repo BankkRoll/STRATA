@@ -78,8 +78,6 @@ pub struct Settings {
     pub tray: TraySettings,
     /// Auto-update.
     pub updates: UpdateSettings,
-    /// Telemetry consent.
-    pub privacy: PrivacySettings,
 }
 
 /// Scan settings.
@@ -410,14 +408,6 @@ impl Default for UpdateSettings {
             auto_download: true,
         }
     }
-}
-
-/// Privacy settings. Telemetry is off unless the user opts in.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PrivacySettings {
-    /// Send crash reports (never paths, names or scan data).
-    pub crash_reports_opt_in: bool,
 }
 
 // -----------------------------------------------------------------------------
@@ -914,7 +904,6 @@ mod tests {
         assert!(s.validate().is_empty());
         assert!(!s.activity.enabled);
         assert_eq!(s.activity.retention_days, 30);
-        assert!(!s.privacy.crash_reports_opt_in);
         assert!(!s.startup.launch_at_login);
         assert!(s.live.usn_enabled);
         assert_eq!(s.cleanup.default_method, CleanupMethod::RecycleBin);

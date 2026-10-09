@@ -25,7 +25,6 @@ fn customized() -> Settings {
     s.startup.launch_at_login = true;
     s.tray.enabled = true;
     s.updates.channel = UpdateChannel::Beta;
-    s.privacy.crash_reports_opt_in = true;
     s
 }
 

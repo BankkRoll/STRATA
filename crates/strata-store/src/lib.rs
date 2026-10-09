@@ -88,9 +88,9 @@ pub use path::{normalize_path, parent_hash, path_hash};
 pub use retention::{RetentionPolicy, RetentionReport};
 pub use settings::{
     ActivitySettings, AppearanceSettings, CleanupMethod, CleanupSettings, ColorMode, HelperMode,
-    HelperSettings, HistorySettings, LiveSettings, PrivacySettings, RulesSettings, ScanSettings,
-    Settings, SettingsIssue, SizeUnits, StartupSettings, Theme, TraySettings, TreemapStyle,
-    UpdateChannel, UpdateSettings,
+    HelperSettings, HistorySettings, LiveSettings, RulesSettings, ScanSettings, Settings,
+    SettingsIssue, SizeUnits, StartupSettings, Theme, TraySettings, TreemapStyle, UpdateChannel,
+    UpdateSettings,
 };
 pub use snapshot::{
     DirAggregate, DirPoint, DirSizes, ScannerKind, SnapshotId, SnapshotInfo, SnapshotOptions,

@@ -1,0 +1,27 @@
+[package]
+name = "strata-live"
+description = "Live index updates for Strata: USN journal tailing, coalescing, cache catch-up and subtree rescans"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+strata-index = { path = "../strata-index" }
+strata-ntfs = { path = "../strata-ntfs" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# NOTE: the `test-image` feature exposes `strata_ntfs::usn::encode`, which the
+# tests use to synthesize byte-exact journal buffers.
+strata-ntfs = { path = "../strata-ntfs", features = ["test-image"] }
+proptest = { workspace = true }
+
+[[bench]]
+name = "live"
+harness = false
+
+[lints]
+workspace = true

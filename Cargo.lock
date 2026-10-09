@@ -4227,6 +4227,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "strata-live"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "strata-core",
+ "strata-index",
+ "strata-ntfs",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "strata-ntfs"
 version = "0.1.0"
 dependencies = [

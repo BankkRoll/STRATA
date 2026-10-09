@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc e119e51b68a86ad23526d6569cf21fa2728ec8fe464ebe9c0f6e6b375c0c90cb # shrinks to c = Case { versions: V2, ranges: false, setup: [Create { dir: 0, is_dir: true, size: 0, open: false }, Create { dir: 0, is_dir: false, size: 0, open: false }, Create { dir: 5245, is_dir: false, size: 0, open: false }], replay_setup: false, ops: [Create { dir: 0, is_dir: false, size: 0, open: false }, Delete { pick: 24863 }, Delete { pick: 28891 }, LinkAdd { pick: 0, dir: 10987 }, Burst { dir: 0, n: 1, delete_some: true }], cfg_small: false }

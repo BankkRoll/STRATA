@@ -17,11 +17,24 @@ thiserror = { workspace = true }
 rayon = { workspace = true }
 crossbeam-channel = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 # NOTE: self dev-dependency so integration tests and benches see the `test-image` module.
 strata-ntfs = { path = ".", features = ["test-image"] }
 proptest = { workspace = true }
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[example]]
+name = "perf_image"
+required-features = ["test-image"]
 
 [[bench]]
 name = "parse"

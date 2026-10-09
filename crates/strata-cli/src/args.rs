@@ -15,10 +15,12 @@ reconciliation of used space against the sum of allocations.
 Options:
   --json <out.json>   Also write golden-format JSON (per-path sizes and flags)
   --top <N>           Number of largest files to list (default 50)
-  --chunk-mib <N>     MFT read size in MiB (default 8)
+  --chunk-mib <N>     MFT read size in MiB (default 4)
+  --io-depth <N>      MFT reads kept in flight at once (default 8; 1 = one at a time)
   --no-buffering      Open with FILE_FLAG_NO_BUFFERING (default for drives)
   --sequential        Open with FILE_FLAG_SEQUENTIAL_SCAN (default for images)
-  --mft-bitmap        Skip records that $MFT:$BITMAP marks unused
+  --mft-bitmap        Skip records that $MFT:$BITMAP marks unused (default)
+  --no-mft-bitmap     Read and parse every MFT record
   -h, --help          Show this help";
 
 /// What to scan.
@@ -41,6 +43,8 @@ pub struct ScanArgs {
     pub top: usize,
     /// Read size in MiB.
     pub chunk_mib: usize,
+    /// Reads kept in flight.
+    pub io_depth: usize,
     /// Explicit I/O mode, if given.
     pub mode: Option<IoMode>,
     /// Use `$MFT:$BITMAP` to skip unused records.
@@ -82,9 +86,10 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command, Str
         target: Target::Drive('C'),
         json: None,
         top: 50,
-        chunk_mib: 8,
+        chunk_mib: strata_ntfs::DEFAULT_CHUNK_BYTES / (1024 * 1024),
+        io_depth: strata_ntfs::DEFAULT_IO_DEPTH,
         mode: None,
-        mft_bitmap: false,
+        mft_bitmap: true,
     };
     while let Some(a) = it.next() {
         let mut value = |name: &str| it.next().ok_or_else(|| format!("{name} needs a value"));
@@ -95,7 +100,9 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command, Str
             "--chunk-mib" => out.chunk_mib = parse_num(&value("--chunk-mib")?, "--chunk-mib", 1)?,
             "--no-buffering" => set_mode(&mut out.mode, IoMode::NoBuffering)?,
             "--sequential" => set_mode(&mut out.mode, IoMode::Sequential)?,
+            "--io-depth" => out.io_depth = parse_num(&value("--io-depth")?, "--io-depth", 1)?,
             "--mft-bitmap" => out.mft_bitmap = true,
+            "--no-mft-bitmap" => out.mft_bitmap = false,
             flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`")),
             positional => {
                 if target.is_some() {
@@ -157,7 +164,9 @@ mod tests {
             "--chunk-mib",
             "4",
             "--sequential",
-            "--mft-bitmap",
+            "--no-mft-bitmap",
+            "--io-depth",
+            "3",
         ])
         .unwrap() else {
             panic!("not a scan")
@@ -165,9 +174,14 @@ mod tests {
         assert_eq!(a.target, Target::Image(PathBuf::from(r"img\vol.img")));
         assert_eq!(a.json, Some(PathBuf::from("o.json")));
         assert_eq!(
-            (a.top, a.chunk_mib, a.mode, a.mft_bitmap),
-            (7, 4, Some(IoMode::Sequential), true)
+            (a.top, a.chunk_mib, a.io_depth, a.mode, a.mft_bitmap),
+            (7, 4, 3, Some(IoMode::Sequential), false)
         );
+        let Command::Scan(d) = parse(&["scan", "C:"]).unwrap() else {
+            panic!("not a scan")
+        };
+        assert!(d.mft_bitmap);
+        assert_eq!(d.io_depth, strata_ntfs::DEFAULT_IO_DEPTH);
     }
 
     #[test]
@@ -193,6 +207,7 @@ mod tests {
         assert!(parse(&["scan", "C:", "D:"]).is_err());
         assert!(parse(&["scan", "C:", "--top"]).is_err());
         assert!(parse(&["scan", "C:", "--chunk-mib", "0"]).is_err());
+        assert!(parse(&["scan", "C:", "--io-depth", "0"]).is_err());
         assert!(parse(&["scan", "C:", "--top", "-1"]).is_err());
         assert!(parse(&["scan", "C:", "--no-buffering", "--sequential"]).is_err());
         assert!(parse(&["scan", "C:", "--bogus"]).is_err());

@@ -5,13 +5,19 @@
 //! - Implementations for in-memory images (`[u8]`, `Vec<u8>`), image files
 //!   ([`std::fs::File`]) and raw Windows volumes ([`RawVolume`]).
 //! - [`AlignedBuf`]: sector-aligned buffers for `FILE_FLAG_NO_BUFFERING`.
+//! - [`QueuedReader`]: a second, overlapped handle that keeps several reads
+//!   in flight, used by the scan when the source offers one
+//!   ([`ReadAt::queued`]).
 //!
 //! Everything here is safe Rust: Windows open flags go through
-//! `OpenOptionsExt` and reads through `FileExt::seek_read`.
+//! `OpenOptionsExt` and reads through `FileExt::seek_read`. Overlapped reads
+//! live in their own module, the only one that uses `unsafe`.
 
 use std::fs::File;
 use std::io;
 use std::path::Path;
+
+use crate::overlapped::{Batch, OverlappedFile, Part};
 
 /// Positioned, shared-reference reads. Implementations must be safe to call
 /// from several threads at once when they are `Sync`.
@@ -29,6 +35,13 @@ pub trait ReadAt {
     fn alignment(&self) -> usize {
         1
     }
+
+    /// An overlapped handle on the same source that keeps several reads in
+    /// flight. `None` (the default) makes the scan issue one read at a time.
+    /// Wrappers should forward this to the reader they wrap.
+    fn queued(&self) -> Option<&QueuedReader> {
+        None
+    }
 }
 
 impl<T: ReadAt + ?Sized> ReadAt for &T {
@@ -38,6 +51,24 @@ impl<T: ReadAt + ?Sized> ReadAt for &T {
 
     fn alignment(&self) -> usize {
         (**self).alignment()
+    }
+
+    fn queued(&self) -> Option<&QueuedReader> {
+        (**self).queued()
+    }
+}
+
+impl<T: ReadAt + ?Sized> ReadAt for Box<T> {
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
+        (**self).read_at(offset, buf)
+    }
+
+    fn alignment(&self) -> usize {
+        (**self).alignment()
+    }
+
+    fn queued(&self) -> Option<&QueuedReader> {
+        (**self).queued()
     }
 }
 
@@ -179,12 +210,15 @@ pub const RAW_ALIGNMENT: usize = 4096;
 
 /// A raw NTFS volume (`\\.\X:`) or any file opened with volume-style flags.
 ///
-/// Opening a volume requires administrator rights.
+/// Opening a volume requires administrator rights. [`RawVolume::open`] also
+/// opens an overlapped [`QueuedReader`] on the same path (Windows only) so
+/// scans can keep several reads in flight.
 #[derive(Debug)]
 pub struct RawVolume {
     file: File,
     mode: IoMode,
     align: usize,
+    queued: Option<QueuedReader>,
 }
 
 impl RawVolume {
@@ -205,35 +239,47 @@ impl RawVolume {
     }
 
     /// Opens a device or file path with read access, read/write sharing and
-    /// the flags for `mode`.
+    /// the flags for `mode`, plus an overlapped handle for queued reads when
+    /// the platform and device allow one.
     ///
     /// # Errors
     ///
     /// The open fails.
     pub fn open(path: impl AsRef<Path>, mode: IoMode) -> io::Result<Self> {
+        let path = path.as_ref();
         let mut opts = std::fs::OpenOptions::new();
         opts.read(true);
         #[cfg(windows)]
         {
             use std::os::windows::fs::OpenOptionsExt;
             opts.share_mode(SHARE_READ_WRITE);
-            opts.custom_flags(match mode {
-                IoMode::NoBuffering => FILE_FLAG_NO_BUFFERING,
-                IoMode::Sequential => FILE_FLAG_SEQUENTIAL_SCAN,
-            });
+            opts.custom_flags(mode_flags(mode));
         }
-        Ok(Self::from_file(opts.open(path)?, mode, RAW_ALIGNMENT))
+        let file = opts.open(path)?;
+        // NOTE: a device that refuses a second handle still scans, one read
+        // at a time.
+        let queued = QueuedReader::open(path, mode).ok();
+        Ok(Self::from_file(file, mode, RAW_ALIGNMENT).with_queue(queued))
     }
 
     /// Wraps an already-open handle. `align` is the sector alignment honoured
-    /// in [`IoMode::NoBuffering`] mode.
+    /// in [`IoMode::NoBuffering`] mode. No [`QueuedReader`] is attached.
     #[must_use]
     pub fn from_file(file: File, mode: IoMode, align: usize) -> Self {
         Self {
             file,
             mode,
             align: align.max(1).next_power_of_two(),
+            queued: None,
         }
+    }
+
+    /// Attaches (or with `None`, removes) the overlapped reader used for
+    /// queued scan reads.
+    #[must_use]
+    pub fn with_queue(mut self, queued: Option<QueuedReader>) -> Self {
+        self.queued = queued;
+        self
     }
 
     /// The mode this volume was opened with.
@@ -258,6 +304,59 @@ impl ReadAt for RawVolume {
             IoMode::NoBuffering => self.align,
             IoMode::Sequential => 1,
         }
+    }
+
+    fn queued(&self) -> Option<&QueuedReader> {
+        self.queued.as_ref()
+    }
+}
+
+/// Open flags for `mode`.
+fn mode_flags(mode: IoMode) -> u32 {
+    match mode {
+        IoMode::NoBuffering => FILE_FLAG_NO_BUFFERING,
+        IoMode::Sequential => FILE_FLAG_SEQUENTIAL_SCAN,
+    }
+}
+
+/// An overlapped handle that keeps several positioned reads in flight
+/// (Windows only; [`QueuedReader::open`] fails elsewhere).
+///
+/// The scan drives it through [`ReadAt::queued`]; it has no public read
+/// method of its own.
+#[derive(Debug)]
+pub struct QueuedReader {
+    file: OverlappedFile,
+    align: usize,
+}
+
+impl QueuedReader {
+    /// Opens `path` for overlapped reads with the flags of `mode` and
+    /// read/write sharing.
+    ///
+    /// # Errors
+    ///
+    /// The open fails, or the platform is not Windows.
+    pub fn open(path: impl AsRef<Path>, mode: IoMode) -> io::Result<Self> {
+        let file = OverlappedFile::open(path.as_ref(), SHARE_READ_WRITE, mode_flags(mode))?;
+        Ok(Self {
+            file,
+            align: match mode {
+                IoMode::NoBuffering => RAW_ALIGNMENT,
+                IoMode::Sequential => 1,
+            },
+        })
+    }
+
+    /// Offset, length and buffer alignment every queued read must honour.
+    #[must_use]
+    pub fn alignment(&self) -> usize {
+        self.align
+    }
+
+    /// Issues `parts` into `buf`; see [`Batch::wait`].
+    pub(crate) fn start(&self, buf: AlignedBuf, parts: &[Part]) -> Batch<'_> {
+        self.file.start(buf, parts)
     }
 }
 

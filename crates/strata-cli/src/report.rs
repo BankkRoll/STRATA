@@ -221,10 +221,28 @@ pub fn render(
     if secs > 0.0 {
         let _ = writeln!(
             o,
-            "  throughput                   {:.0} records/s",
-            stats.records_emitted as f64 / secs
+            "  throughput                   {:.0} records/s, {:.0} MB/s",
+            stats.records_emitted as f64 / secs,
+            stats.bytes_read as f64 / secs / 1e6
         );
     }
+    let avg_read = stats.bytes_read.checked_div(stats.reads).unwrap_or(0);
+    let _ = writeln!(
+        o,
+        "  I/O                          {} reads (avg {}, up to {} in flight), busy {:.3} s, parser waited {:.3} s",
+        stats.reads,
+        human(avg_read),
+        stats.peak_in_flight,
+        stats.read_time.as_secs_f64(),
+        stats.io_wait.as_secs_f64()
+    );
+    let _ = writeln!(
+        o,
+        "  CPU                          parse {:.3} s, assemble {:.3} s, sink {:.3} s",
+        stats.parse_time.as_secs_f64(),
+        stats.assemble_time.as_secs_f64(),
+        stats.sink_time.as_secs_f64()
+    );
     if stats.cancelled {
         let _ = writeln!(o, "  CANCELLED: totals are partial");
     }

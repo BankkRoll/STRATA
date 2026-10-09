@@ -95,6 +95,7 @@ fn scan(args: &ScanArgs, out: &mut dyn Write) -> Result<(), String> {
     let volume = NtfsVolume::open(reader).map_err(|e| e.to_string())?;
     let opts = ScanOptions {
         chunk_bytes: args.chunk_mib * 1024 * 1024,
+        io_depth: args.io_depth,
         use_mft_bitmap: args.mft_bitmap,
         ..ScanOptions::default()
     };

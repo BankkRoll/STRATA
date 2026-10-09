@@ -7,7 +7,8 @@
 //!
 //! Responsibilities:
 //! - [`io`]: [`ReadAt`] for memory, image files and raw volumes
-//!   (`FILE_FLAG_NO_BUFFERING` or `FILE_FLAG_SEQUENTIAL_SCAN`).
+//!   (`FILE_FLAG_NO_BUFFERING` or `FILE_FLAG_SEQUENTIAL_SCAN`), and
+//!   [`QueuedReader`] for overlapped reads with several requests in flight.
 //! - [`BootSector`]: geometry from sector 0.
 //! - [`apply_fixups`]: update sequence array verification.
 //! - [`parse_record`] / [`AttrIter`]: record headers and attributes.
@@ -41,6 +42,7 @@ mod error;
 mod fixup;
 pub mod io;
 mod le;
+mod overlapped;
 mod record;
 mod runlist;
 mod scan;
@@ -62,12 +64,12 @@ pub use attr::{
 pub use boot::{BootSector, MAX_CLUSTER_SIZE};
 pub use error::{NtfsError, RecordError, Result, RunlistError};
 pub use fixup::{FIXUP_STRIDE, FixupError, apply_fixups};
-pub use io::{AlignedBuf, IoMode, RawVolume, ReadAt};
+pub use io::{AlignedBuf, IoMode, QueuedReader, RawVolume, ReadAt};
 pub use record::{
     DataPiece, IndexPiece, ParseOptions, ParsedRecord, RECORD_IN_USE, RECORD_IS_DIRECTORY,
     RecordHeader, RecordOutcome, ReparseLoc, ValueLoc, parse_fixed_record, parse_record,
 };
 pub use runlist::{MAX_RUNS, Run, allocated_clusters, decode_runlist, encode_runlist};
-pub use scan::{DEFAULT_CHUNK_BYTES, ScanOptions, ScanStats};
+pub use scan::{DEFAULT_CHUNK_BYTES, DEFAULT_IO_DEPTH, ScanOptions, ScanStats};
 pub use usn::{UsnRecord, parse_usn_buffer};
 pub use volume::{BITMAP_RECORD, MFT_RECORD, MftLayout, NtfsVolume};

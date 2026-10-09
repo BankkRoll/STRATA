@@ -13,7 +13,9 @@ records in under 300 ms.
   compression, reparse points).
 - `NtfsVolume`: `$MFT` bootstrap, `read_record`, the parallel `scan` pipeline and `$Bitmap`
   reconciliation.
-- `io`: `ReadAt` for memory, image files and raw volumes (`RawVolume`, `IoMode`).
+- `io`: `ReadAt` for memory, image files and raw volumes (`RawVolume`, `IoMode`), plus
+  `QueuedReader`, an overlapped handle the scan uses to keep several reads in flight. Its
+  `OVERLAPPED` plumbing (the `overlapped` module) is the crate's only `unsafe` code.
 - `usn`: `USN_RECORD_V2/V3/V4` parsing (`parse_usn_buffer`).
 - `test_image` (feature `test-image`): builds synthetic NTFS images for tests.
 
@@ -26,6 +28,13 @@ cargo test -p strata-ntfs
 cargo bench -p strata-ntfs --bench parse
 ```
 
-Unit and property tests run on synthetic images. Real-NTFS coverage is the VHDX suite in
-[tests/fixtures](../../tests/fixtures) (elevated shell). Fuzz targets live in `fuzz/`, a
-separate workspace; run them on Linux or WSL.
+Unit and property tests run on synthetic images. For I/O benchmarks, write a large image and
+scan it unbuffered:
+
+```powershell
+cargo run --release -p strata-ntfs --features test-image --example perf_image -- D:\perf\mft5m.img
+cargo run --release -p strata-cli -- scan D:\perf\mft5m.img --no-buffering --top 0
+```
+
+Real-NTFS coverage is the VHDX suite in [tests/fixtures](../../tests/fixtures) (elevated
+shell). Fuzz targets live in `fuzz/`, a separate workspace; run them on Linux or WSL.

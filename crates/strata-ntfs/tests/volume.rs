@@ -12,9 +12,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use common::{base_record, link, scan, scan_with, sizes};
 use strata_core::{EntryFlags, FileRef, ScanRecord, Sizes, win32};
 use strata_ntfs::test_image::{
-    Geometry, ImageBuilder, NonResidentSpec, ROOT, RecordBuilder, chain_runs, sparse_run,
+    AttrListSpec, Geometry, ImageBuilder, NonResidentSpec, ROOT, RecordBuilder, chain_runs,
+    sparse_run,
 };
-use strata_ntfs::{IoMode, NtfsError, NtfsVolume, RawVolume, ReadAt, ScanOptions};
+use strata_ntfs::{
+    AT_DATA, AT_FILE_NAME, AT_STANDARD_INFORMATION, IoMode, NtfsError, NtfsVolume, RawVolume,
+    ReadAt, ScanOptions,
+};
 
 const ARCHIVE: u32 = win32::FILE_ATTRIBUTE_ARCHIVE;
 
@@ -233,7 +237,7 @@ fn mft_bitmap_option_skips_unused_records_with_identical_output() {
         );
     }
     let image = b.finish();
-    let (full, full_stats) = scan(image.clone());
+    let (full, full_stats) = scan_with(image.clone(), &FULL);
     let opts = ScanOptions {
         use_mft_bitmap: true,
         chunk_bytes: 64 * 1024,
@@ -247,10 +251,19 @@ fn mft_bitmap_option_skips_unused_records_with_identical_output() {
     assert_eq!(fast_stats.free, full_stats.free);
 }
 
+/// Reads every record: the reference the bitmap-skipping scans must match.
+const FULL: ScanOptions = ScanOptions {
+    chunk_bytes: strata_ntfs::DEFAULT_CHUNK_BYTES,
+    queue_depth: 4,
+    io_depth: 1,
+    use_mft_bitmap: false,
+    cancel: None,
+};
+
 #[test]
-fn split_mft_bitmap_in_an_extension_record_still_scans() {
+fn split_mft_bitmap_in_an_extension_record_skips_like_a_whole_one() {
     // Large, nearly full system volumes hold the second half of $MFT:$BITMAP
-    // in an $MFT extension record; that continuation must not stop the scan.
+    // in an $MFT extension record; both halves are joined and used.
     let mut b = ImageBuilder::new(Geometry::default())
         .with_system_files()
         .min_records(20_000)
@@ -264,22 +277,60 @@ fn split_mft_bitmap_in_an_extension_record_still_scans() {
         );
     }
     let image = b.finish();
-    let (full, full_stats) = scan(image.clone());
+    let (full, full_stats) = scan_with(image.clone(), &FULL);
     for n in [30u64, 31, 9000, 19_999] {
         assert!(full.contains_key(&n), "record {n} missing");
     }
-    let opts = ScanOptions {
-        use_mft_bitmap: true,
-        chunk_bytes: 64 * 1024,
-        ..ScanOptions::default()
-    };
-    let (fast, fast_stats) = scan_with(image, &opts);
-    assert_eq!(full, fast);
-    assert_eq!(
-        fast_stats.skipped_by_bitmap, 0,
-        "a split bitmap is not used for skipping"
-    );
-    assert_eq!(fast_stats.in_use, full_stats.in_use);
+    let vol = NtfsVolume::open(image.clone()).unwrap();
+    let bitmap = vol.mft_bitmap().unwrap().unwrap();
+    assert!(bitmap.len() * 8 >= 20_000, "both halves are joined");
+    assert_ne!(bitmap[19_999 / 8] & (1 << (19_999 % 8)), 0);
+    for chunk_bytes in [64 * 1024, 7 * 1024, 8 * 1024 * 1024] {
+        let opts = ScanOptions {
+            use_mft_bitmap: true,
+            chunk_bytes,
+            ..ScanOptions::default()
+        };
+        let (fast, fast_stats) = scan_with(image.clone(), &opts);
+        assert_eq!(full, fast, "chunk {chunk_bytes}");
+        assert!(fast_stats.skipped_by_bitmap > 15_000, "chunk {chunk_bytes}");
+        assert!(fast_stats.bytes_read < full_stats.bytes_read / 4);
+        assert_eq!(fast_stats.in_use, full_stats.in_use);
+        assert_eq!(fast_stats.free, full_stats.free);
+    }
+}
+
+#[test]
+fn a_bitmap_continuation_with_a_gap_falls_back_to_reading_everything() {
+    let mut b = ImageBuilder::new(Geometry::default())
+        .with_system_files()
+        .min_records(20_000)
+        .mft_fragments(4)
+        .mft_data_in_extension(17)
+        .mft_bitmap_in_extension();
+    b.insert(19_999, RecordBuilder::file(1, ROOT, "last").data("", b"x"));
+    let mut image = b.finish();
+    let vol = NtfsVolume::open(image.clone()).unwrap();
+    // Shift the continuation's start VCN in record 17 so the halves no longer meet.
+    let off = vol.boot().mft_offset() as usize + 17 * 1024;
+    let mut rec = image[off..off + 1024].to_vec();
+    strata_ntfs::apply_fixups(&mut rec).unwrap();
+    let first = u16::from_le_bytes([rec[0x14], rec[0x15]]) as usize;
+    let used = u32::from_le_bytes([rec[0x18], rec[0x19], rec[0x1A], rec[0x1B]]) as usize;
+    let bitmap_attr = strata_ntfs::AttrIter::new(&rec, first, used)
+        .map(Result::unwrap)
+        .find(|a| a.type_code == strata_ntfs::AT_BITMAP)
+        .unwrap()
+        .offset;
+    // The start VCN is outside the fixup tails, so it can be patched in place.
+    let vcn_at = off + bitmap_attr + 0x10;
+    let vcn = u64::from_le_bytes(image[vcn_at..vcn_at + 8].try_into().unwrap());
+    image[vcn_at..vcn_at + 8].copy_from_slice(&(vcn + 1).to_le_bytes());
+    let vol = NtfsVolume::open(image.clone()).unwrap();
+    assert!(vol.mft_bitmap().is_err() || vol.mft_bitmap().unwrap().is_none());
+    let (recs, stats) = scan(image);
+    assert_eq!(stats.skipped_by_bitmap, 0);
+    assert!(recs.contains_key(&19_999));
 }
 
 #[test]
@@ -463,4 +514,188 @@ fn mft_with_many_fragments() {
     for n in [16u64, 1999, 3999] {
         assert_eq!(recs[&n].sizes.logical, 1);
     }
+}
+
+/// A volume with a heavily fragmented MFT, `$DATA` and `$MFT:$BITMAP` both
+/// continued in an extension record, long free runs (so bitmap skipping
+/// cuts reads), and files that need their extension records.
+fn fragmented_image(g: Geometry, fragments: usize, records: u64) -> Vec<u8> {
+    let mut b = ImageBuilder::new(g)
+        .with_system_files()
+        .mft_fragments(fragments)
+        .mft_data_in_extension(15)
+        .mft_bitmap_in_extension()
+        .min_records(records);
+    let data = b.alloc(2);
+    for n in 24..records {
+        // Two long free runs, plus every seventh record free.
+        if (records / 3..records / 3 + 900).contains(&n) || n % 7 == 0 || n > records - 400 {
+            continue;
+        }
+        let rec = match n % 97 {
+            11 => RecordBuilder::file(1, ROOT, &format!("big{n}")).attr_list(&[
+                AttrListSpec::new(AT_STANDARD_INFORMATION, 0, FileRef::from_parts(n, 1)),
+                AttrListSpec::new(AT_FILE_NAME, 0, FileRef::from_parts(n, 1)),
+                AttrListSpec::new(AT_DATA, 0, FileRef::from_parts(n + 1, 1)),
+            ]),
+            12 => RecordBuilder::new(1)
+                .extension_of(FileRef::from_parts(n - 1, 1))
+                .data_nonresident(
+                    "",
+                    0,
+                    NonResidentSpec::new(
+                        data.clone(),
+                        2 * u64::from(g.cluster_size),
+                        g.cluster_size,
+                    ),
+                ),
+            13 => RecordBuilder::dir(1, ROOT, &format!("d{n}")),
+            _ => RecordBuilder::file(1, ROOT, &format!("f{n}"))
+                .data("", &vec![7u8; (n % 300) as usize]),
+        };
+        b.insert(n, rec);
+    }
+    b.finish()
+}
+
+/// Scans `vol`, returning records in emission order.
+fn scan_ordered<R: ReadAt + Sync>(
+    vol: &NtfsVolume<R>,
+    opts: &ScanOptions,
+) -> (Vec<ScanRecord>, strata_ntfs::ScanStats) {
+    let mut out = Vec::new();
+    let stats = vol.scan(opts, |b| out.extend(b)).unwrap();
+    assert_eq!(stats.records_emitted as usize, out.len());
+    (out, stats)
+}
+
+#[test]
+fn queued_reads_match_one_at_a_time_reads_on_fragmented_mfts() {
+    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+    let geometries = [
+        // Clusters smaller than the 4 KiB unbuffered alignment: fragment
+        // boundaries fall mid-sector-group, forcing synchronous fallbacks.
+        (
+            Geometry {
+                sector_size: 512,
+                cluster_size: 512,
+                record_size: 1024,
+            },
+            23,
+            6000,
+        ),
+        (Geometry::default(), 61, 9000),
+    ];
+    for (i, (g, fragments, records)) in geometries.into_iter().enumerate() {
+        let image = fragmented_image(g, fragments, records);
+        let reference_vol = NtfsVolume::open(image.clone()).unwrap();
+        assert_eq!(reference_vol.layout().fragment_count(), fragments);
+        let (want, want_stats) = scan_ordered(&reference_vol, &FULL);
+        assert!(want_stats.extensions_merged > 10);
+        let path = tmp.join(format!("strata-ntfs-queued-{i}.img"));
+        std::fs::write(&path, &image).unwrap();
+        for mode in [IoMode::NoBuffering, IoMode::Sequential] {
+            let vol = NtfsVolume::open(RawVolume::open(&path, mode).unwrap()).unwrap();
+            #[cfg(windows)]
+            assert!(vol.reader().queued().is_some(), "{mode:?}");
+            let rs = g.record_size as usize;
+            for chunk_bytes in [4 * rs, 7 * rs, 64 * 1024, 1024 * 1024 + rs] {
+                for io_depth in [1, 3, 16] {
+                    for use_mft_bitmap in [false, true] {
+                        let opts = ScanOptions {
+                            chunk_bytes,
+                            io_depth,
+                            use_mft_bitmap,
+                            ..ScanOptions::default()
+                        };
+                        let case = format!(
+                            "{g:?} {mode:?} chunk {chunk_bytes} depth {io_depth} bitmap {use_mft_bitmap}"
+                        );
+                        let (got, stats) = scan_ordered(&vol, &opts);
+                        if use_mft_bitmap {
+                            // Skipping drops whole free reads, so compare as sets.
+                            let a: BTreeMap<_, _> =
+                                got.iter().map(|r| (r.id.record(), r)).collect();
+                            let b: BTreeMap<_, _> =
+                                want.iter().map(|r| (r.id.record(), r)).collect();
+                            assert_eq!(a, b, "{case}");
+                            assert!(stats.skipped_by_bitmap > 0, "{case}");
+                            assert!(stats.bytes_read < want_stats.bytes_read, "{case}");
+                        } else {
+                            assert_eq!(got, want, "{case}");
+                            assert_eq!(stats.bytes_read, want_stats.bytes_read, "{case}");
+                        }
+                        assert_eq!(stats.in_use, want_stats.in_use, "{case}");
+                        assert_eq!(stats.free, want_stats.free, "{case}");
+                        assert_eq!(
+                            stats.extensions_merged, want_stats.extensions_merged,
+                            "{case}"
+                        );
+                        assert_eq!(stats.unreadable, 0, "{case}");
+                        #[cfg(windows)]
+                        if io_depth > 1 {
+                            assert!(stats.peak_in_flight > 1 || stats.reads < 3, "{case}");
+                        }
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[test]
+fn bitmap_skipping_keeps_emission_order_of_a_full_scan() {
+    let image = fragmented_image(Geometry::default(), 9, 5000);
+    let vol = NtfsVolume::open(image).unwrap();
+    let (full, _) = scan_ordered(&vol, &FULL);
+    for chunk_bytes in [64 * 1024, 8 * 1024 * 1024] {
+        let opts = ScanOptions {
+            chunk_bytes,
+            ..ScanOptions::default()
+        };
+        let (fast, stats) = scan_ordered(&vol, &opts);
+        assert_eq!(fast, full, "chunk {chunk_bytes}");
+        assert!(stats.skipped_by_bitmap > 900);
+    }
+}
+
+#[test]
+fn cancelling_with_queued_reads_in_flight_returns_promptly() {
+    let image = fragmented_image(Geometry::default(), 13, 20_000);
+    let path =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("strata-ntfs-queued-cancel.img");
+    std::fs::write(&path, &image).unwrap();
+    let vol = NtfsVolume::open(RawVolume::open(&path, IoMode::NoBuffering).unwrap()).unwrap();
+    let cancel = Arc::new(AtomicBool::new(false));
+    let opts = ScanOptions {
+        chunk_bytes: 16 * 1024,
+        io_depth: 16,
+        queue_depth: 1,
+        use_mft_bitmap: false,
+        cancel: Some(cancel.clone()),
+    };
+    let mut got = 0;
+    let stats = vol
+        .scan(&opts, |batch| {
+            got += batch.len();
+            cancel.store(true, Ordering::Relaxed);
+        })
+        .unwrap();
+    assert!(stats.cancelled);
+    assert!(got > 0 && got < 15_000, "got {got}");
+    drop(vol);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn scan_stats_account_for_reads_and_time() {
+    let image = fragmented_image(Geometry::default(), 5, 3000);
+    let vol = NtfsVolume::open(image).unwrap();
+    let (_, stats) = scan_ordered(&vol, &FULL);
+    assert!(stats.reads >= 5, "one read per fragment at least");
+    assert_eq!(stats.peak_in_flight, 1);
+    assert!(stats.bytes_read >= 3000 * 1024);
+    assert!(stats.elapsed >= stats.parse_time);
+    assert!(stats.elapsed >= stats.sink_time);
 }

@@ -26,6 +26,8 @@
 
 use std::collections::BTreeMap;
 
+use rayon::prelude::*;
+
 use strata_core::{FileRef, FileTime, Times, win32};
 
 use crate::attr::{
@@ -666,6 +668,44 @@ pub struct ImageBuilder {
     mft_bitmap_split: bool,
     system_files: bool,
     serial: u64,
+    generator: Option<Box<RecordGenerator>>,
+}
+
+/// Produces the record at a given index, or `None` for a free record.
+type RecordGenerator = dyn Fn(u64) -> Option<RecordBuilder> + Send + Sync;
+
+/// Records rendered per parallel batch.
+const RENDER_SLAB: u64 = 16_384;
+
+/// Writes `data` at virtual byte `start` of an attribute stored in `runs`
+/// (VCN-ordered, contiguous from VCN 0). Sparse runs are skipped and data
+/// past the last run is dropped.
+fn emit_runs(
+    cs: u64,
+    runs: &[Run],
+    start: u64,
+    data: &[u8],
+    sink: &mut dyn FnMut(u64, &[u8]) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let mut pos = 0usize;
+    for r in runs {
+        if pos >= data.len() {
+            break;
+        }
+        let v = start + pos as u64;
+        let (r_start, r_end) = (r.vcn * cs, r.end_vcn() * cs);
+        if v >= r_end || v < r_start {
+            continue;
+        }
+        let n = usize::try_from(r_end - v)
+            .unwrap_or(usize::MAX)
+            .min(data.len() - pos);
+        if let Some(lcn) = r.lcn {
+            sink(lcn * cs + (v - r_start), &data[pos..pos + n])?;
+        }
+        pos += n;
+    }
+    Ok(())
 }
 
 impl std::fmt::Debug for ImageBuilder {
@@ -712,6 +752,7 @@ impl ImageBuilder {
             mft_bitmap_split: false,
             system_files: false,
             serial: 0x1234_5678_9ABC_DEF0,
+            generator: None,
         }
     }
 
@@ -781,6 +822,19 @@ impl ImageBuilder {
     #[must_use]
     pub fn with_system_files(mut self) -> Self {
         self.system_files = true;
+        self
+    }
+
+    /// Supplies every record that was not placed with [`ImageBuilder::insert`]
+    /// or [`ImageBuilder::insert_raw`]; `None` leaves the record free. Combine
+    /// with [`ImageBuilder::min_records`] and [`ImageBuilder::write_to`] to
+    /// build multi-million-record images.
+    #[must_use]
+    pub fn generate(
+        mut self,
+        f: impl Fn(u64) -> Option<RecordBuilder> + Send + Sync + 'static,
+    ) -> Self {
+        self.generator = Some(Box::new(f));
         self
     }
 
@@ -863,7 +917,61 @@ impl ImageBuilder {
     /// A record does not fit, or the `$MFT` extension record is not
     /// reachable through the runs held by record 0.
     #[must_use]
-    pub fn finish(mut self) -> Vec<u8> {
+    pub fn finish(self) -> Vec<u8> {
+        let cs = u64::from(self.geometry.cluster_size);
+        let mut writes: Vec<(u64, Vec<u8>)> = Vec::new();
+        let rendered = self.render(&mut |off, data| {
+            writes.push((off, data.to_vec()));
+            Ok(())
+        });
+        if let Err(e) = rendered {
+            panic!("in-memory rendering cannot fail: {e}");
+        }
+        let end = writes
+            .iter()
+            .map(|(o, d)| o + d.len() as u64)
+            .max()
+            .unwrap_or(0)
+            .next_multiple_of(cs);
+        let mut img = vec![0u8; end as usize];
+        for (o, d) in &writes {
+            img[*o as usize..*o as usize + d.len()].copy_from_slice(d);
+        }
+        img
+    }
+
+    /// Streams the image into `file` without holding it in memory, which
+    /// makes multi-gigabyte benchmark images practical. Returns the image
+    /// length in bytes.
+    ///
+    /// # Errors
+    ///
+    /// A write to `file` fails.
+    ///
+    /// # Panics
+    ///
+    /// As [`ImageBuilder::finish`].
+    pub fn write_to(self, file: &std::fs::File) -> std::io::Result<u64> {
+        use std::io::{Seek, SeekFrom, Write};
+        let cs = u64::from(self.geometry.cluster_size);
+        let mut end = 0u64;
+        let mut out = file;
+        self.render(&mut |off, data| {
+            end = end.max(off + data.len() as u64);
+            out.seek(SeekFrom::Start(off))?;
+            out.write_all(data)
+        })?;
+        let end = end.next_multiple_of(cs);
+        file.set_len(end)?;
+        Ok(end)
+    }
+
+    /// Lays out the image and hands every byte range to `sink`, in the order
+    /// later ranges would overwrite earlier ones.
+    fn render(
+        mut self,
+        sink: &mut dyn FnMut(u64, &[u8]) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
         let g = self.geometry;
         let cs = u64::from(g.cluster_size);
         let rs = u64::from(g.record_size);
@@ -1064,31 +1172,35 @@ impl ImageBuilder {
             );
         }
 
-        // Render records into MFT space and the $MFT:$BITMAP.
-        let mut mft = vec![0u8; mft_bytes as usize];
-        let mut mft_bits = vec![0u8; bitmap_bytes as usize];
-        for n in 0..record_count {
-            let bytes = match self.records.get(&n) {
-                Some(Slot::Built(b)) => {
-                    if b.flags & RECORD_IN_USE != 0 || b.signature != *b"FILE" {
-                        mft_bits[(n / 8) as usize] |= 1 << (n % 8);
-                    }
-                    b.build(g, n)
-                }
-                Some(Slot::Raw(raw)) => {
-                    mft_bits[(n / 8) as usize] |= 1 << (n % 8);
-                    let mut v = raw.clone();
-                    v.resize(rs as usize, 0);
-                    v
-                }
-                None => RecordBuilder::new(1).free().build(g, n),
-            };
-            let off = (n * rs) as usize;
-            mft[off..off + rs as usize].copy_from_slice(&bytes);
+        // Render records into MFT space and the $MFT:$BITMAP, a slab at a
+        // time so huge MFTs never need to be held whole.
+        for (o, d) in std::mem::take(&mut self.writes) {
+            sink(o, &d)?;
         }
-        self.write_runs(&mft_runs, &mft);
-        self.write_runs(&mirror_runs, &mft[..(4 * rs) as usize]);
-        self.write_runs(&mft_bitmap_runs, &mft_bits);
+        let mut mft_bits = vec![0u8; bitmap_bytes as usize];
+        let mut mirror = Vec::new();
+        let mut first = 0u64;
+        while first < record_count {
+            let last = (first + RENDER_SLAB).min(record_count);
+            let slab: Vec<(Vec<u8>, bool)> = (first..last)
+                .into_par_iter()
+                .map(|n| self.render_record(n))
+                .collect();
+            let mut bytes = Vec::with_capacity(slab.len() * rs as usize);
+            for (n, (b, in_bitmap)) in (first..).zip(slab) {
+                if in_bitmap {
+                    mft_bits[(n / 8) as usize] |= 1 << (n % 8);
+                }
+                bytes.extend_from_slice(&b);
+            }
+            if first == 0 {
+                mirror = bytes[..(4 * rs) as usize].to_vec();
+            }
+            emit_runs(cs, &mft_runs, first * rs, &bytes, sink)?;
+            first = last;
+        }
+        emit_runs(cs, &mirror_runs, 0, &mirror, sink)?;
+        emit_runs(cs, &mft_bitmap_runs, 0, &mft_bits, sink)?;
 
         // Boot sector.
         let mut boot = vec![0u8; 512];
@@ -1111,20 +1223,30 @@ impl ImageBuilder {
         boot[0x48..0x50].copy_from_slice(&self.serial.to_le_bytes());
         boot[0x1FE] = 0x55;
         boot[0x1FF] = 0xAA;
-        self.writes.push((0, boot));
+        sink(0, &boot)
+    }
 
-        let end = self
-            .writes
-            .iter()
-            .map(|(o, d)| o + d.len() as u64)
-            .max()
-            .unwrap_or(0)
-            .next_multiple_of(cs);
-        let mut img = vec![0u8; end as usize];
-        for (o, d) in &self.writes {
-            img[*o as usize..*o as usize + d.len()].copy_from_slice(d);
+    /// Bytes of record `n` and whether `$MFT:$BITMAP` marks it used.
+    fn render_record(&self, n: u64) -> (Vec<u8>, bool) {
+        let g = self.geometry;
+        let built = |b: &RecordBuilder| {
+            (
+                b.build(g, n),
+                b.flags & RECORD_IN_USE != 0 || b.signature != *b"FILE",
+            )
+        };
+        match self.records.get(&n) {
+            Some(Slot::Built(b)) => built(b),
+            Some(Slot::Raw(raw)) => {
+                let mut v = raw.clone();
+                v.resize(g.record_size as usize, 0);
+                (v, true)
+            }
+            None => match self.generator.as_ref().and_then(|f| f(n)) {
+                Some(b) => built(&b),
+                None => (RecordBuilder::new(1).free().build(g, n), false),
+            },
         }
-        img
     }
 
     fn add_system_files(&mut self, mirror_runs: &[Run], rs: u64) {

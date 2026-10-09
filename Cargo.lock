@@ -4250,6 +4250,7 @@ dependencies = [
  "strata-core",
  "strata-ntfs",
  "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]

@@ -488,6 +488,46 @@ fn merge_piece_runs(mut pieces: Vec<DataPiece>) -> Option<Vec<Run>> {
     Some(runs)
 }
 
+/// Unnamed non-resident `$BITMAP` instances of a fixed-up record that
+/// continue past VCN 0, as `(first VCN, runs)`. Instances whose runlist does
+/// not decode are left out, which makes [`join_bitmap`] reject the bitmap.
+fn bitmap_continuations(rec: &[u8], total_clusters: u64) -> Vec<(u64, Vec<Run>)> {
+    let first = usize::from(crate::le::u16_at(rec, 0x14).unwrap_or(0));
+    let used = crate::le::u32_at(rec, 0x18).unwrap_or(0) as usize;
+    crate::attr::AttrIter::new(rec, first, used)
+        .map_while(std::result::Result::ok)
+        .filter(|a| a.type_code == AT_BITMAP && a.is_unnamed())
+        .filter_map(|a| match a.form {
+            crate::attr::AttrForm::NonResident(nr) if nr.start_vcn != 0 => {
+                crate::runlist::decode_runlist(nr.runlist, nr.start_vcn, total_clusters)
+                    .ok()
+                    .map(|runs| (nr.start_vcn, runs))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Joins the VCN-0 piece of `$MFT:$BITMAP` with its continuations from
+/// extension records (large MFTs split the bitmap across records). `None`
+/// when the pieces leave a gap or overlap: the scan then reads every record.
+fn join_bitmap(head: Option<ValueLoc>, mut tail: Vec<(u64, Vec<Run>)>) -> Option<ValueLoc> {
+    if tail.is_empty() {
+        return head;
+    }
+    let ValueLoc::NonResident { mut runs, size } = head? else {
+        return None;
+    };
+    tail.sort_by_key(|&(vcn, _)| vcn);
+    for (vcn, piece) in tail {
+        if vcn != runs.last().map_or(0, Run::end_vcn) {
+            return None;
+        }
+        runs.extend(piece);
+    }
+    Some(ValueLoc::NonResident { runs, size })
+}
+
 /// Locates every `$MFT:$DATA` run, following record 0's attribute list
 /// into extension records that are reachable through the runs found so far.
 fn bootstrap_mft<R: ReadAt + ?Sized>(
@@ -519,8 +559,8 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
     };
     let mut pieces = unnamed(&base);
     let mut bitmap = base.bitmap.clone();
+    let mut bitmap_tail = bitmap_continuations(&rec0, boot.total_clusters);
     let mut pending: BTreeSet<u64> = BTreeSet::new();
-    let mut bitmap_split = false;
     if let Some(list) = &base.attr_list {
         let bytes = match list {
             ValueLoc::Resident(v) => v.clone(),
@@ -537,13 +577,6 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
         };
         let entries = parse_attr_list(&bytes)
             .map_err(|e| NtfsError::Mft(format!("$MFT attribute list: {e}")))?;
-        // A bitmap held in more than one piece is not captured whole, so the
-        // scan reads every record instead of skipping by bitmap.
-        bitmap_split = entries
-            .iter()
-            .filter(|e| e.type_code == AT_BITMAP && e.name.is_empty())
-            .count()
-            > 1;
         pending = entries
             .iter()
             .filter(|e| matches!(e.type_code, AT_DATA | AT_BITMAP) && e.name.is_empty())
@@ -571,6 +604,7 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
                     if bitmap.is_none() {
                         bitmap = e.bitmap.clone();
                     }
+                    bitmap_tail.extend(bitmap_continuations(&buf, boot.total_clusters));
                 }
                 other => {
                     return Err(NtfsError::Mft(format!(
@@ -597,9 +631,7 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
     if vcn0.logical < rs {
         return Err(NtfsError::Mft("$MFT is smaller than one record".into()));
     }
-    if bitmap_split {
-        bitmap = None;
-    }
+    let bitmap = join_bitmap(bitmap, bitmap_tail);
     Ok((
         MftLayout {
             record_size: boot.record_size,

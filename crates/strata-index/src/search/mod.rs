@@ -182,6 +182,9 @@ struct Compiled<'q> {
     matchers: Vec<Matcher>,
     needs_raw: bool,
     filter: crate::query::Filter,
+    /// Folded `ext:` values with no id of their own because the extension
+    /// table was full; entries sharing the overflow id are matched by name.
+    overflow_exts: Vec<Vec<u8>>,
 }
 
 impl Index {
@@ -289,12 +292,20 @@ impl Index {
         }
         let mut filter = q.filter.clone();
         filter.size_mode = opts.mode;
+        let mut overflow_exts = Vec::new();
         if !q.ext_names.is_empty() {
-            filter.exts = q
-                .ext_names
-                .iter()
-                .filter_map(|e| self.exts.lookup(&fold::fold(e.as_bytes())))
-                .collect();
+            filter.exts = Vec::new();
+            for e in &q.ext_names {
+                let folded = fold::fold(e.as_bytes());
+                match self.exts.lookup(&folded) {
+                    Some(id) => filter.exts.push(id),
+                    None if self.exts.is_full() => overflow_exts.push(folded),
+                    None => {}
+                }
+            }
+            if !overflow_exts.is_empty() {
+                filter.exts.push(crate::ext::EXT_OVERFLOW);
+            }
             if filter.exts.is_empty() {
                 return Ok(None);
             }
@@ -315,6 +326,7 @@ impl Index {
             matchers,
             needs_raw,
             filter,
+            overflow_exts,
         }))
     }
 
@@ -328,6 +340,13 @@ impl Index {
         buf: &mut Vec<u8>,
     ) -> Option<Hit> {
         if self.col.parent[id as usize] == DEAD || !c.filter.matches_u32(self, id) {
+            return None;
+        }
+        if !c.overflow_exts.is_empty()
+            && self.col.ext_id[id as usize] == crate::ext::EXT_OVERFLOW
+            && !crate::ext::extension_of(raw)
+                .is_some_and(|e| c.overflow_exts.contains(&fold::fold(e)))
+        {
             return None;
         }
         if !c.q.reparse_kinds.is_empty()

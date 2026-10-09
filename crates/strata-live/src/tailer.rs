@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use strata_core::FileRef;
+use strata_core::{FileRef, FileTime};
 use strata_index::{ChangeSet, Index, Update};
 use strata_ntfs::{UsnRecord, parse_usn_buffer};
 
@@ -552,7 +552,14 @@ impl Tailer {
             };
             report.fetched += plan.refresh.len();
             self.stats.fetched += plan.refresh.len() as u64;
-            self.apply(plan, fetched, index, &mut merger, &mut report)?;
+            self.apply(
+                plan,
+                fetched,
+                index,
+                clock.wall_now(),
+                &mut merger,
+                &mut report,
+            )?;
         }
         self.coalescer.advance_epoch();
 
@@ -602,6 +609,7 @@ impl Tailer {
         plan: Plan,
         fetched: Fetched,
         index: &mut dyn IndexAccess,
+        wall_now: FileTime,
         merger: &mut ChangeMerger,
         report: &mut TickReport,
     ) -> Result<(), Halt> {
@@ -627,6 +635,10 @@ impl Tailer {
             let mut result = None;
             let ok = index.with_index(&mut |idx| {
                 let Some(chunk) = chunk.take() else { return };
+                // The index's reference time is its scan time; without
+                // moving it, every file written more than a day after the
+                // scan would be flagged as having a future timestamp.
+                idx.set_now(wall_now);
                 let (kept, skipped) = guard_root(idx, chunk);
                 if refresh_parents {
                     changed_parents(idx, &kept, &mut parents);

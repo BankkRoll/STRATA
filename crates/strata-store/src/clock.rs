@@ -66,7 +66,11 @@ impl Timestamp {
         minute: u32,
         second: u32,
     ) -> Option<Self> {
-        if !(1..=12).contains(&month)
+        // Beyond this the day count overflows `i64` inside `days_from_civil`;
+        // such instants are not representable as Unix seconds anyway.
+        const MAX_YEAR: i64 = 200_000_000_000;
+        if !(-MAX_YEAR..=MAX_YEAR).contains(&year)
+            || !(1..=12).contains(&month)
             || day == 0
             || day > days_in_month(year, month)
             || hour > 23
@@ -107,10 +111,11 @@ impl Timestamp {
         (self.days_since_epoch() + 3).div_euclid(7)
     }
 
-    /// Start of the UTC hour containing this instant.
+    /// Start of the UTC hour containing this instant (saturating at the
+    /// bottom of the range, whose hour starts before `i64::MIN`).
     #[must_use]
     pub const fn hour_start(self) -> Self {
-        Self(self.0.div_euclid(SECS_PER_HOUR) * SECS_PER_HOUR)
+        Self(self.0.saturating_sub(self.0.rem_euclid(SECS_PER_HOUR)))
     }
 
     /// This instant minus `days` whole days, saturating at the range ends.

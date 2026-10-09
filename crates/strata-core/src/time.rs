@@ -20,7 +20,7 @@ const EPOCH_2000_FILETIME: u64 = 125_911_584_000_000_000;
 const UNIX_EPOCH_FILETIME: u64 = 116_444_736_000_000_000;
 
 /// FILETIME of 1990-01-01T00:00:00Z; earlier timestamps are suspicious.
-const SUSPICIOUS_BEFORE_FILETIME: u64 = 122_756_976_000_000_000;
+const SUSPICIOUS_BEFORE_FILETIME: u64 = 122_756_256_000_000_000;
 
 impl FileTime {
     /// Seconds since the Unix epoch (negative before 1970).

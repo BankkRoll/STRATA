@@ -31,7 +31,8 @@ use strata_core::{CloudState, EntryFlags, EpochSecs, FileTime, NameLink, Reparse
 use crate::IndexError;
 use crate::ext::ExtTable;
 use crate::index::{
-    Columns, EntryTimes, Index, IndexOptions, MAX_ENTRIES, NO_REF, NONE, NewEntry, Rows, ref_key,
+    Columns, EntryTimes, Index, IndexOptions, Limits, NO_REF, NONE, NewEntry, Rows,
+    name_bytes_needed, ref_key,
 };
 use crate::names::{self, NameStore};
 use crate::query::PathCache;
@@ -186,6 +187,7 @@ pub struct IndexBuilder {
     exts: ExtTable,
     partial: bool,
     blocks: Vec<(String, u64, u64)>,
+    limits: Limits,
 }
 
 impl IndexBuilder {
@@ -203,7 +205,15 @@ impl IndexBuilder {
             exts: ExtTable::default(),
             partial: false,
             blocks: Vec::new(),
+            limits: Limits::default(),
         }
+    }
+
+    /// Replaces the capacity limits (tests use tiny ones).
+    #[cfg(test)]
+    pub(crate) fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
     }
 
     /// Pre-allocates for about `entries` entries.
@@ -265,16 +275,21 @@ impl IndexBuilder {
     /// # Errors
     ///
     /// [`IndexError::TooManyEntries`] when the volume would exceed
-    /// [`MAX_ENTRIES`]; [`IndexError::ReservedFileRef`] for the reserved
-    /// reference `u64::MAX`.
+    /// [`MAX_ENTRIES`](crate::MAX_ENTRIES); [`IndexError::NameStoreFull`] when the names would
+    /// outgrow the 4 GiB name buffer; [`IndexError::ReservedFileRef`] for the
+    /// reserved reference `u64::MAX`. The builder is unchanged on error.
     pub fn push(&mut self, rec: ScanRecord) -> Result<(), IndexError> {
         if rec.id.0 == NO_REF {
             return Err(IndexError::ReservedFileRef(rec.id.0));
         }
         let n = rec.links.len().max(1);
         let total = self.col.len() as u64 + n as u64;
-        if total > u64::from(MAX_ENTRIES) {
+        if total > self.limits.entries {
             return Err(IndexError::TooManyEntries(total));
+        }
+        let bytes = self.names.len() as u64 + name_bytes_needed(&rec);
+        if bytes > self.limits.name_bytes {
+            return Err(IndexError::NameStoreFull(bytes));
         }
         let key = ref_key(rec.id.0);
         if let Some(&first) = self.first.get(&key) {
@@ -329,7 +344,7 @@ impl IndexBuilder {
     /// # Errors
     ///
     /// [`IndexError::TooManyEntries`] if virtual nodes push the count past
-    /// [`MAX_ENTRIES`].
+    /// [`MAX_ENTRIES`](crate::MAX_ENTRIES).
     pub fn finish(self) -> Result<Index, IndexError> {
         self.finish_with_stats().map(|(index, _)| index)
     }
@@ -394,9 +409,13 @@ impl IndexBuilder {
             old_to_new[old as usize] = new as u32;
         }
 
-        let virtual_count = 2 + u32::from(root_staged.is_none()) + self.blocks.len() as u32;
-        let total = u64::from(base_len) + u64::from(virtual_count);
-        if total > u64::from(MAX_ENTRIES) {
+        // Virtual nodes take ids from the range reserved above the entry
+        // limit (below the two sentinels), so a builder `push` accepted to
+        // the limit still finishes.
+        const VIRTUAL_RESERVE: u64 = (1 << 16) - 2;
+        let virtual_count = 2 + u64::from(root_staged.is_none()) + self.blocks.len() as u64;
+        let total = u64::from(base_len) + virtual_count;
+        if total > self.limits.entries + VIRTUAL_RESERVE {
             return Err(IndexError::TooManyEntries(total));
         }
 
@@ -463,6 +482,7 @@ impl IndexBuilder {
             live: base_len,
             opts: self.opts,
             path_cache: PathCache::default(),
+            limits: self.limits,
         };
 
         if root_staged.is_none() {

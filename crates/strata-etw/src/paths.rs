@@ -107,6 +107,8 @@ impl PathMapper {
             if let Some(p) = self.devices.to_dos(&os) {
                 return p.to_string_lossy().into_owned();
             }
+        } else if starts(r"\??\UNC\") || starts(r"\\?\UNC\") {
+            return format!(r"\\{}", String::from_utf16_lossy(&nt[8..]));
         } else if starts(r"\??\") || starts(r"\\?\") {
             return String::from_utf16_lossy(&nt[4..]);
         }

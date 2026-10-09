@@ -30,6 +30,7 @@ windows = { workspace = true, features = [
 [dev-dependencies]
 rayon = { workspace = true }
 proptest = { workspace = true }
+strata-clean = { path = "../strata-clean" }
 
 [lints]
 workspace = true

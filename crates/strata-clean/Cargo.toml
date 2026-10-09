@@ -37,6 +37,7 @@ windows = { workspace = true, features = [
 
 [dev-dependencies]
 proptest = { workspace = true }
+strata-store = { path = "../strata-store" }
 serde_json = { workspace = true }
 
 [lints]

@@ -315,8 +315,11 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
             exts.retain(|e| e.base == Some(base_ref));
             stats.extensions_orphaned += (before - exts.len()) as u64;
             stats.extensions_merged += exts.len() as u64;
+            let complete = self.extensions_complete(&base, &exts);
             let reparse = self.resolve_reparse(&base, &exts);
-            batch.push(assemble(base, exts, reparse, cs));
+            let mut rec = assemble(base, exts, reparse, cs);
+            rec.flags.set(strata_core::EntryFlags::PARTIAL, !complete);
+            batch.push(rec);
             if batch.len() >= DEFERRED_BATCH {
                 stats.records_emitted += batch.len() as u64;
                 sink(std::mem::take(&mut batch));

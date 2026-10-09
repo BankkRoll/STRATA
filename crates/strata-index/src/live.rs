@@ -44,9 +44,7 @@ use strata_core::{EntryFlags, FileRef, NameLink, ScanRecord};
 use crate::IndexError;
 use crate::agg::Summary;
 use crate::build::{link_name, new_entry, own_partial, record_flags};
-use crate::index::{
-    DEAD, DirAggregate, EntryId, Index, MAX_ENTRIES, NO_REF, NONE, NewEntry, ref_key,
-};
+use crate::index::{DEAD, DirAggregate, EntryId, Index, NO_REF, NONE, NewEntry, ref_key};
 
 /// One live update.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,6 +276,19 @@ impl Index {
         }
         let key = ref_key(rec.id.0);
         let existing = self.links_of_key(key);
+        // Checked before any change, as an upper bound for every path below
+        // (creates, renames, re-links), so a full buffer leaves the index
+        // untouched. Updates that keep every name write no name bytes.
+        let same_names = existing.len() == rec.links.len().max(1)
+            && existing.iter().enumerate().all(|(rank, &e)| {
+                self.names.get(e) == link_name(&rec, rec.links.get(rank)).as_slice()
+            });
+        if !same_names {
+            let bytes = self.names.buf.len() as u64 + crate::index::name_bytes_needed(&rec);
+            if bytes > self.limits.name_bytes {
+                return Err(IndexError::NameStoreFull(bytes));
+            }
+        }
         if existing.is_empty() {
             return self.create(&rec, cx);
         }
@@ -322,7 +333,7 @@ impl Index {
     fn check_capacity(&self, n: usize) -> Result<(), IndexError> {
         let fresh = n.saturating_sub(self.free.len()) as u64;
         let total = self.col.len() as u64 + fresh;
-        if total > u64::from(MAX_ENTRIES) {
+        if total > self.limits.entries {
             return Err(IndexError::TooManyEntries(total));
         }
         Ok(())

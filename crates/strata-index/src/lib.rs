@@ -26,6 +26,8 @@ mod check;
 mod compact;
 mod ext;
 mod fold;
+#[cfg(test)]
+mod harden_tests;
 mod index;
 mod live;
 mod mem;
@@ -50,6 +52,9 @@ pub enum IndexError {
     /// The volume has more entries than a `u32`-id index can hold.
     #[error("too many entries for the index: {0} (limit {MAX_ENTRIES})")]
     TooManyEntries(u64),
+    /// The names would exceed the 4 GiB name buffer (`u32` offsets).
+    #[error("too many name bytes for the index: {0}")]
+    NameStoreFull(u64),
     /// The file reference `u64::MAX` is reserved for virtual nodes.
     #[error("file reference {0:#x} is reserved")]
     ReservedFileRef(u64),

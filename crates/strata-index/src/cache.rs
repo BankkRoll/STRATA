@@ -777,6 +777,7 @@ impl Index {
                 },
             },
             path_cache: PathCache::default(),
+            limits: crate::index::Limits::default(),
         };
         let mut index = index;
         index.validate()?;

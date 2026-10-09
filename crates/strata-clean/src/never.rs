@@ -413,6 +413,7 @@ const ROOT_EXACT: &[(&str, ProtectedKind)] = &[
 #[derive(Debug, Clone)]
 pub struct NeverList {
     rules: Vec<Rule>,
+    windir: CanonicalPath,
     volume_mounts: Vec<(Name, Option<Name>, Vec<CanonicalPath>)>,
     local_hosts: Vec<Box<[u16]>>,
 }
@@ -464,8 +465,9 @@ impl NeverList {
 
         let windir = machine(KnownFolder::Windir)
             .ok_or(NeverListError::MissingKnownFolder(KnownFolder::Windir))?;
+        let windir = canon_config(windir)?;
         rules.push(Rule {
-            anchor: Anchor::Absolute(canon_config(windir)?),
+            anchor: Anchor::Absolute(windir.clone()),
             scope: Scope::Subtree(
                 WINDIR_ALLOW
                     .iter()
@@ -597,6 +599,7 @@ impl NeverList {
 
         Ok(Self {
             rules,
+            windir,
             volume_mounts,
             local_hosts,
         })
@@ -721,10 +724,33 @@ impl NeverList {
             .collect()
     }
 
+    /// Whether a UNC server name may address this machine.
+    ///
+    /// The SMB client resolves names through DNS and `inet_aton`-style
+    /// parsing, so `localhost.`, `127.1`, `2130706433`, `0x7f.1`, `[::1]`
+    /// and `0--1.ipv6-literal.net` all reach the local host. Any spelling
+    /// that could be this machine is treated as loopback; over-refusing a
+    /// remote host is harmless, missing a local one is not.
     fn is_loopback(&self, server: &Name) -> bool {
-        let f = server.folded();
-        let s = String::from_utf16_lossy(f);
-        s.starts_with("127.") || self.local_hosts.iter().any(|h| **h == *f)
+        let raw = String::from_utf16_lossy(server.folded()).to_ascii_lowercase();
+        let host = raw.trim_end_matches('.');
+        if host.is_empty() || host == "localhost" || host.ends_with(".localhost") {
+            return true;
+        }
+        if ip_is_local(host) {
+            return true;
+        }
+        let first_label = host.split('.').next().unwrap_or(host);
+        self.local_hosts.iter().any(|h| {
+            let h = String::from_utf16_lossy(h).to_ascii_lowercase();
+            let h = h.trim_end_matches('.');
+            h == host || (!h.contains('.') && h == first_label)
+        })
+    }
+
+    /// Every configured mount point of every local volume.
+    pub(crate) fn mount_points(&self) -> impl Iterator<Item = &CanonicalPath> {
+        self.volume_mounts.iter().flat_map(|(_, _, m)| m.iter())
     }
 
     fn mounts_for_guid(&self, guid: &Name) -> Option<&[CanonicalPath]> {
@@ -775,6 +801,22 @@ impl NeverList {
                             q.components().to_vec(),
                         );
                         out.push((drive, false));
+                    }
+                    // Default shares onto the Windows directory, whatever the
+                    // server is called: `ADMIN$` is `%WINDIR%` and `PRINT$`
+                    // is the spooler's driver store inside it.
+                    let into_windir: Option<&[&str]> = if share.is("ADMIN$") {
+                        Some(&[])
+                    } else if share.is("PRINT$") {
+                        Some(&["System32", "spool", "drivers"])
+                    } else {
+                        None
+                    };
+                    if let Some(prefix) = into_windir {
+                        let mut parts: Vec<Name> =
+                            prefix.iter().map(|s| Name::from_str_name(s)).collect();
+                        parts.extend_from_slice(q.components());
+                        out.push((self.windir.join_all(&parts), false));
                     }
                     out.push((q, false));
                 }
@@ -852,6 +894,71 @@ impl NeverList {
         }
         Ok(())
     }
+}
+
+/// Whether `host` (lowercase, trailing dots removed) is an IPv4 or IPv6
+/// literal for the loopback or unspecified address, in any spelling the
+/// Windows resolver accepts.
+fn ip_is_local(host: &str) -> bool {
+    use std::net::IpAddr;
+    let local_v4 = |a: u32| a >> 24 == 127 || a == 0;
+    if let Some(a) = parse_inet_aton(host) {
+        return local_v4(a);
+    }
+    let v6 = host
+        .strip_suffix(".ipv6-literal.net")
+        .map(|s| s.replace('-', ":").replace('s', "%"))
+        .unwrap_or_else(|| host.to_string());
+    let v6 = v6.trim_start_matches('[').trim_end_matches(']');
+    let v6 = v6.split('%').next().unwrap_or(v6);
+    match v6.parse::<IpAddr>() {
+        Ok(IpAddr::V6(a)) => {
+            a.is_loopback()
+                || a.is_unspecified()
+                || a.to_ipv4().is_some_and(|v4| local_v4(u32::from(v4)))
+        }
+        Ok(IpAddr::V4(a)) => local_v4(u32::from(a)),
+        Err(_) => false,
+    }
+}
+
+/// `inet_aton` parsing: one to four dot-separated parts, each decimal, octal
+/// (leading `0`) or hex (`0x`); the last part fills the remaining bytes.
+fn parse_inet_aton(s: &str) -> Option<u32> {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 {
+        return None;
+    }
+    let mut nums = Vec::with_capacity(parts.len());
+    for p in &parts {
+        let n = if let Some(h) = p.strip_prefix("0x") {
+            if h.is_empty() {
+                0
+            } else {
+                u64::from_str_radix(h, 16).ok()?
+            }
+        } else if p.len() > 1 && p.starts_with('0') {
+            u64::from_str_radix(&p[1..], 8).ok()?
+        } else if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) {
+            p.parse::<u64>().ok()?
+        } else {
+            return None;
+        };
+        nums.push(n);
+    }
+    let (last, head) = nums.split_last()?;
+    let mut addr: u64 = 0;
+    for (i, &n) in head.iter().enumerate() {
+        if n > 0xFF {
+            return None;
+        }
+        addr |= n << (24 - 8 * i);
+    }
+    let rest_bits = 32 - 8 * head.len() as u32;
+    if *last >= 1u64 << rest_bits {
+        return None;
+    }
+    u32::try_from(addr | last).ok()
 }
 
 fn evaluate(

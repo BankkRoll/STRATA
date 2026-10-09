@@ -60,6 +60,11 @@ impl ExtTable {
         id
     }
 
+    /// Whether new extensions now share [`EXT_OVERFLOW`].
+    pub(crate) fn is_full(&self) -> bool {
+        self.names.len() >= EXT_OVERFLOW as usize
+    }
+
     /// Id of an already-interned folded extension.
     pub(crate) fn lookup(&self, folded: &[u8]) -> Option<u16> {
         self.map.get(folded).copied()

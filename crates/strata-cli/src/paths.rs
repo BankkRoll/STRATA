@@ -43,6 +43,11 @@ impl PathIndex {
                     name: l.name.clone(),
                 },
             );
+            // A directory arriving after paths were resolved can complete
+            // (or change) any memoized chain, including "<orphan>" ones.
+            if !self.memo.is_empty() {
+                self.memo.clear();
+            }
         }
     }
 

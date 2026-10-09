@@ -318,13 +318,17 @@ pub(crate) fn load_snapshot(conn: &Connection, id: SnapshotId) -> Result<Snapsho
 }
 
 /// Latest snapshots of a volume, newest first.
+///
+/// "Newest" is commit order, not `taken_at`: after the system clock is set
+/// back, a snapshot taken under the wrong (later) time must not outrank the
+/// scans that followed it.
 pub(crate) fn latest_snapshots(
     conn: &Connection,
     volume_id: i64,
     limit: usize,
 ) -> Result<Vec<SnapshotInfo>> {
     let mut stmt = conn.prepare_cached(&format!(
-        "{SQL_SNAPSHOT_SELECT} WHERE s.volume_id = ?1 ORDER BY s.taken_at DESC, s.id DESC LIMIT ?2"
+        "{SQL_SNAPSHOT_SELECT} WHERE s.volume_id = ?1 ORDER BY s.id DESC LIMIT ?2"
     ))?;
     let rows = stmt
         .query_map(

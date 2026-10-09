@@ -18,14 +18,14 @@
 //! Every action re-runs 3-6 on the handle it is about to delete through, so
 //! a path swapped after pre-flight is caught at the last moment.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use strata_core::FileTime;
 use strata_core::known::KnownFolders;
 
-use crate::canon::CanonicalPath;
+use crate::canon::{CanonicalPath, Root};
 use crate::error::CleanError;
 use crate::never::{NeverList, NeverListConfig, ProtectedKind, Refusal, RefusalReason, Relation};
 use crate::win::handle::{
@@ -146,6 +146,8 @@ struct IdRule {
 pub struct SafetyGuard {
     list: NeverList,
     ids: HashMap<(u64, u128), IdRule>,
+    /// Serials of this machine's volumes (64-bit and their low 32 bits).
+    local_serials: HashSet<u64>,
 }
 
 impl SafetyGuard {
@@ -204,7 +206,18 @@ impl SafetyGuard {
                 ancestor = a.parent();
             }
         }
-        Self { list, ids }
+        let mut local_serials = HashSet::new();
+        for m in list.mount_points() {
+            if let Some((serial, _)) = identity_of(&m.to_verbatim_wide(), Follow::Follow) {
+                local_serials.insert(serial);
+                local_serials.insert(serial & 0xFFFF_FFFF);
+            }
+        }
+        Self {
+            list,
+            ids,
+            local_serials,
+        }
     }
 
     /// The compiled never-list.
@@ -304,6 +317,16 @@ impl SafetyGuard {
         let info = handle::info(h).map_err(|e| CleanError::from_io(display, &e))?;
         let resolved = self.check_resolved(h, display, info.attributes)?;
         self.check_identity(&info, display)?;
+        // SECURITY: a share on this machine reached under a name the
+        // never-list cannot recognize (a LAN address, an alias) bypasses
+        // every path rule; the server reports our own volume serial.
+        if matches!(resolved.root(), Root::Unc { .. }) && self.is_local_serial(info.volume_serial) {
+            return Err(Refusal {
+                path: display.to_string(),
+                reason: RefusalReason::LoopbackShare,
+            }
+            .into());
+        }
 
         if info.is_reparse() && info.reparse_tag & NAME_SURROGATE_BIT != 0 {
             self.check_link_target(&resolved, display)?;
@@ -371,6 +394,10 @@ impl SafetyGuard {
         dos.or(guid).ok_or_else(|| {
             Refusal::unverifiable(display, "Windows could not resolve its final path").into()
         })
+    }
+
+    fn is_local_serial(&self, serial: u64) -> bool {
+        self.local_serials.contains(&serial)
     }
 
     pub(crate) fn check_identity(

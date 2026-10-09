@@ -76,6 +76,41 @@ impl EntryId {
 /// gracefully (with [`crate::IndexError::TooManyEntries`]) past this point.
 pub const MAX_ENTRIES: u32 = u32::MAX - (1 << 16);
 
+/// Bytes of name storage records may use. Name offsets are `u32`; the top
+/// 64 KiB is left for virtual node names, which are added infallibly.
+pub(crate) const MAX_NAME_BYTES: u64 = u32::MAX as u64 - (1 << 16);
+
+/// Capacity limits of an index. Always the real constants outside tests,
+/// which shrink them to exercise the refusal paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Limits {
+    /// Maximum entries (see [`MAX_ENTRIES`]).
+    pub entries: u64,
+    /// Maximum bytes of length-prefixed record names (see [`MAX_NAME_BYTES`]).
+    pub name_bytes: u64,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            entries: u64::from(MAX_ENTRIES),
+            name_bytes: MAX_NAME_BYTES,
+        }
+    }
+}
+
+/// Upper bound on the name-buffer bytes a record's links need (name plus
+/// LEB128 prefix), counting link-less records' synthesized names.
+pub(crate) fn name_bytes_needed(rec: &strata_core::ScanRecord) -> u64 {
+    if rec.links.is_empty() {
+        return 32;
+    }
+    rec.links
+        .iter()
+        .map(|l| l.name.units().len() as u64 * 3 + 10)
+        .sum()
+}
+
 /// No entry (root's parent, empty largest-descendant, ...).
 pub(crate) const NONE: u32 = u32::MAX;
 /// Parent value marking a removed slot.
@@ -633,6 +668,7 @@ pub struct Index {
     pub(crate) live: u32,
     pub(crate) opts: IndexOptions,
     pub(crate) path_cache: PathCache,
+    pub(crate) limits: Limits,
 }
 
 /// Iterator over the children of a directory.

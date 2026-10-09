@@ -6,11 +6,12 @@
 //!   `FSCTL_READ_USN_JOURNAL`.
 //! - [`RecordSource`]: fresh metadata for changed files (`read_record` on the
 //!   raw MFT, or `OpenFileById` with read-attributes access).
-//! - [`Clock`]: monotonic time, so tick logic is testable.
+//! - [`Clock`]: monotonic time, so tick logic is testable, and wall-clock
+//!   time for flagging future timestamps.
 
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use strata_core::{FileRef, ScanRecord};
+use strata_core::{FileRef, FileTime, ScanRecord};
 
 /// State of an active USN journal (`USN_JOURNAL_DATA`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,6 +120,20 @@ pub trait RecordSource {
 pub trait Clock {
     /// The current instant.
     fn now(&self) -> Instant;
+
+    /// The current wall-clock time, the reference for flagging timestamps
+    /// in the future as suspicious.
+    fn wall_now(&self) -> FileTime {
+        wall_clock_now()
+    }
+}
+
+/// The system's wall-clock time as a FILETIME.
+pub(crate) fn wall_clock_now() -> FileTime {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    FileTime::from_unix_secs(i64::try_from(secs).unwrap_or(i64::MAX))
 }
 
 /// [`Clock`] backed by [`Instant::now`].

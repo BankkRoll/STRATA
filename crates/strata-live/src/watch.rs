@@ -215,6 +215,7 @@ pub fn reconcile_subtree(
         .into_iter()
         .map(Update::Remove)
         .chain(fresh.into_iter().map(Update::Upsert));
+    index.set_now(crate::source::wall_clock_now());
     index.apply(updates)
 }
 

@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use strata_core::{FileRef, Reparse, ScanRecord};
+use strata_core::{EntryFlags, FileRef, Reparse, ScanRecord};
 
 use crate::assemble::assemble;
 use crate::attr::{AT_BITMAP, AT_DATA, parse_attr_list, parse_reparse};
@@ -254,13 +254,36 @@ impl<R: ReadAt> NtfsVolume<R> {
             return Ok(None);
         }
         let extensions = self.extensions_via_list(&p, &opts)?;
+        let complete = self.extensions_complete(&p, &extensions);
         let reparse = self.resolve_reparse(&p, &extensions);
-        Ok(Some(assemble(
-            p,
-            extensions,
-            reparse,
-            self.boot.cluster_size,
-        )))
+        let mut rec = assemble(p, extensions, reparse, self.boot.cluster_size);
+        rec.flags.set(EntryFlags::PARTIAL, !complete);
+        Ok(Some(rec))
+    }
+
+    /// Whether every extension record `base`'s attribute list names is among
+    /// `extensions`. A holder that is torn, corrupt, unreadable or reused
+    /// leaves attributes (names, streams, sizes) unaccounted for, so the
+    /// assembled record must be marked partial rather than look complete.
+    pub(crate) fn extensions_complete(
+        &self,
+        base: &ParsedRecord,
+        extensions: &[ParsedRecord],
+    ) -> bool {
+        let Some(list) = &base.attr_list else {
+            return true;
+        };
+        let Ok(bytes) = self.read_value(list, MAX_SMALL_VALUE) else {
+            return false;
+        };
+        let Ok(entries) = parse_attr_list(&bytes) else {
+            return false;
+        };
+        entries
+            .iter()
+            .map(|e| e.holder.record())
+            .filter(|&h| h != base.record)
+            .all(|h| extensions.iter().any(|x| x.record == h))
     }
 
     /// Reads the extension records named by `base`'s attribute list.

@@ -1,0 +1,33 @@
+[package]
+name = "strata-etw"
+description = "Live file-activity attribution for Strata: ETW session, event decoding, process/file mapping and rollups"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+strata-store = { path = "../strata-store" }
+strata-win = { path = "../strata-win" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+crossbeam-channel = { workspace = true }
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Diagnostics_Etw",
+    "Win32_System_Threading",
+    "Win32_System_Time",
+] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = "3.27.0"
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+[lints]
+workspace = true

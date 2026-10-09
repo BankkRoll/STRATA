@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Strata doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Strata is provided as-is, so fixes are best effort.
+        Please don't paste full paths that contain your user name or other personal data.
+  - type: input
+    id: version
+    attributes:
+      label: Strata version
+      description: Settings → About shows it. "Report an issue" fills this in for you.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      placeholder: "Windows 11 26100, x64"
+    validations:
+      required: true
+  - type: dropdown
+    id: scan
+    attributes:
+      label: Scan mode
+      options:
+        - Fast scan (MFT, administrator)
+        - Standard scan
+        - Not related to scanning
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Volume type (NTFS, ReFS, exFAT, network), screenshots, or error messages.

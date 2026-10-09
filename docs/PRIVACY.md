@@ -35,6 +35,10 @@ to stay under a CPU cap (2% by default).
 | Rollback | Only if a just-installed update fails to start and you confirm the prompt | The previous version's manifest and installer are downloaded from GitHub Releases |
 | WebView2 bootstrapper | During installation, only if the WebView2 Runtime is missing | Microsoft's bootstrapper downloads the runtime from Microsoft |
 
+**Report an issue** (in Settings) opens a new GitHub issue in your browser, pre-filled with the
+Strata version, Windows build and architecture. Strata itself sends nothing; you review and submit
+the issue yourself, and it never includes paths or file names.
+
 Nothing else in Strata makes network requests. The signature checks between the app and its
 helper run without revocation checking, so they never contact certificate servers. Scanning a
 network share you enable reads that share, as any file browser would.

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "pnpm --dir ui build && node scripts/release/stage-helper.mjs"
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "externalBin": ["../target/release-stage/strata-helper"],
+    "resources": {
+      "../target/release-stage/THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
+    "windows": {
+      "signCommand": {
+        "cmd": "node",
+        "args": ["../scripts/release/sign.mjs", "%1"]
+      }
+    }
+  }
+}

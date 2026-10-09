@@ -20,6 +20,7 @@ tauri-plugin-single-instance = "2.5"
 tauri-plugin-dialog = "2.8"
 tauri-plugin-notification = "2.5"
 tauri-plugin-autostart = "2.7"
+tauri-plugin-updater = "2.13"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -33,6 +34,7 @@ strata-win = { path = "../crates/strata-win" }
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1.7"
+windows = { workspace = true, features = ["Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

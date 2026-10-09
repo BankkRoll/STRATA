@@ -1,0 +1,248 @@
+name: Release
+
+# Builds the x64 and ARM64 installers, the updater manifest, checksums and
+# third-party notices, and attaches them to a draft GitHub Release. Publishing
+# the draft is a manual step; publishing also repoints the beta update channel.
+# See docs/RELEASING.md.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# SECURITY: nothing by default; each job asks for exactly what it needs.
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # Pinned so a compromised or broken upstream release can't change what signs
+  # our binaries. Bump both together after checking the new package.
+  ARTIFACT_SIGNING_CLIENT_VERSION: 1.0.146
+  ARTIFACT_SIGNING_CLIENT_SHA256: 7761E5D8F31E54B764DA21D33CD8B0A2940E1B05526C7DFCB5E94B0431426F70
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    if: github.event_name != 'release'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+    env:
+      # Updater signing (minisign). Without it the release ships no latest.json.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+      # Optional Azure Artifact Signing (Authenticode). All six must be set.
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      # SECURITY: no build cache here. Release binaries are compiled from
+      # scratch so a poisoned cache entry can never reach users.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check version and release notes
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(node scripts/release/version.mjs)"
+          fi
+          node scripts/release/version.mjs --check "$version"
+          node scripts/release/changelog.mjs "$version" > /dev/null
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-about@0.9.2
+      - name: Generate third-party notices
+        run: node scripts/release/licenses.mjs
+
+      - name: Set up code signing (optional)
+        shell: pwsh
+        run: |
+          $names = 'AZURE_TENANT_ID','AZURE_CLIENT_ID','AZURE_CLIENT_SECRET',
+                   'AZURE_SIGNING_ENDPOINT','AZURE_SIGNING_ACCOUNT','AZURE_SIGNING_PROFILE'
+          $missing = @($names | Where-Object { -not [Environment]::GetEnvironmentVariable($_) })
+          if ($missing.Count -eq $names.Count) {
+            Write-Output "::notice title=Code signing skipped::No Azure Artifact Signing secrets are configured; building unsigned installers."
+            exit 0
+          }
+          if ($missing.Count -gt 0) {
+            Write-Output "::error title=Code signing misconfigured::Missing secrets: $($missing -join ', ')"
+            exit 1
+          }
+          $dir = Join-Path $env:RUNNER_TEMP 'artifact-signing'
+          $pkg = "$dir.nupkg"
+          $url = "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$env:ARTIFACT_SIGNING_CLIENT_VERSION/microsoft.artifactsigning.client.$env:ARTIFACT_SIGNING_CLIENT_VERSION.nupkg"
+          Invoke-WebRequest $url -OutFile $pkg
+          if ((Get-FileHash $pkg -Algorithm SHA256).Hash -ne $env:ARTIFACT_SIGNING_CLIENT_SHA256) {
+            Write-Output "::error::Artifact Signing client checksum mismatch"
+            exit 1
+          }
+          Expand-Archive $pkg -DestinationPath $dir
+          $metadata = Join-Path $dir 'metadata.json'
+          @{
+            Endpoint = $env:AZURE_SIGNING_ENDPOINT
+            CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT
+            CertificateProfileName = $env:AZURE_SIGNING_PROFILE
+          } | ConvertTo-Json | Set-Content $metadata -Encoding utf8
+          "AZURE_SIGNING_DLIB=$(Join-Path $dir 'bin\x64\Azure.CodeSigning.Dlib.dll')" >> $env:GITHUB_ENV
+          "AZURE_SIGNING_METADATA=$metadata" >> $env:GITHUB_ENV
+          "STRATA_REQUIRE_SIGNING=1" >> $env:GITHUB_ENV
+          Write-Output "Code signing: Azure Artifact Signing"
+
+      - name: Configure updater artifacts
+        shell: pwsh
+        run: |
+          $overlay = @{}
+          $configured = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            Write-Output "::warning title=Updates disabled::TAURI_SIGNING_PRIVATE_KEY is not set; this release has no latest.json and installed copies will not see it as an update."
+            $overlay.bundle = @{ createUpdaterArtifacts = $false }
+          } elseif ($env:TAURI_UPDATER_PUBKEY) {
+            $overlay.plugins = @{ updater = @{ pubkey = $env:TAURI_UPDATER_PUBKEY } }
+          } elseif ($configured.StartsWith('REPLACE_WITH')) {
+            Write-Output "::error title=Updater public key missing::Set the TAURI_UPDATER_PUBKEY repository variable or commit the public key to src-tauri/tauri.conf.json."
+            exit 1
+          }
+          $path = Join-Path $env:RUNNER_TEMP 'ci.conf.json'
+          $overlay | ConvertTo-Json -Depth 5 | Set-Content $path -Encoding utf8
+          "CI_TAURI_CONFIG=$path" >> $env:GITHUB_ENV
+
+      # Full release optimizations come from [profile.release] in Cargo.toml.
+      - name: Build installer
+        run: >-
+          pnpm tauri build --ci --target ${{ matrix.target }} --bundles nsis
+          --config src-tauri/tauri.release.conf.json --config "$env:CI_TAURI_CONFIG"
+
+      - name: Collect assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          installer="target/$TARGET/release/bundle/nsis/Strata_${VERSION}_${ARCH}-setup.exe"
+          if [[ ! -f "$installer" ]]; then
+            echo "::error::Expected $installer; the asset names in README and latest.json depend on it."
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$installer" dist/
+          if [[ -f "$installer.sig" ]]; then cp "$installer.sig" dist/; fi
+          if [[ "$ARCH" == x64 ]]; then cp target/release-stage/THIRD_PARTY_NOTICES.md dist/; fi
+          ls -l dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Draft GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Assemble manifest and checksums
+        id: assemble
+        run: |
+          version="$(node scripts/release/version.mjs)"
+          node scripts/release/changelog.mjs "$version" > "$RUNNER_TEMP/notes.md"
+          node scripts/release/assemble.mjs --dir assets --version "$version" \
+            --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.assemble.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::Release $tag already exists. Delete the draft or bump the version."
+            exit 1
+          fi
+          flags=(--draft --title "Strata $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            flags+=(--verify-tag)
+          else
+            flags+=(--target "$GITHUB_SHA")
+          fi
+          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$tag" assets/* --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+
+  # The beta channel follows the newest published release of any kind via a
+  # rolling pre-release whose only asset is latest.json. Stable users read
+  # releases/latest, which GitHub resolves to the newest non-pre-release.
+  beta-channel:
+    name: Update beta channel
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+      CHANNEL: updater-beta
+    steps:
+      - name: Repoint updater-beta
+        run: |
+          if [[ "$TAG" == "$CHANNEL" ]]; then exit 0; fi
+          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -D "$RUNNER_TEMP"; then
+            echo "::notice::$TAG has no latest.json; beta channel unchanged."
+            exit 0
+          fi
+          if ! gh release view "$CHANNEL" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$CHANNEL" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+              --title "Beta update channel" \
+              --notes "Machine-readable update feed for the beta channel. Download Strata from the latest release instead."
+          fi
+          gh release upload "$CHANNEL" "$RUNNER_TEMP/latest.json" --repo "$GITHUB_REPOSITORY" --clobber

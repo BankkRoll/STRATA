@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Strata",
+  "version": "0.1.0",
   "identifier": "app.strata.desktop",
   "build": {
     "beforeDevCommand": "pnpm --dir ui dev",
@@ -27,10 +28,29 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis"],
+    "publisher": "Strata contributors",
+    "homepage": "https://github.com/BankkRoll/STRATA",
+    "copyright": "Copyright (c) Strata contributors. MIT License.",
+    "license": "MIT",
+    "category": "Utility",
+    "shortDescription": "Disk-space intelligence for Windows",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "windows/hooks.nsh",
+        "compression": "lzma"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_YOUR_UPDATER_PUBLIC_KEY (see docs/RELEASING.md)",
+      "endpoints": ["https://github.com/BankkRoll/STRATA/releases/latest/download/latest.json"],
+      "requireSignedVersion": true,
+      "windows": { "installMode": "passive" }
     }
   }
 }

@@ -8,6 +8,7 @@
 
 mod backdrop;
 pub mod features;
+pub mod updater;
 
 use serde::Serialize;
 use tauri::Manager;
@@ -53,6 +54,8 @@ pub fn run() {
             features::on_second_instance(app, argv, cwd)
         }));
     features::register(builder)
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(updater::init())
         .setup(|app| {
             let window = app
                 .get_webview_window("main")

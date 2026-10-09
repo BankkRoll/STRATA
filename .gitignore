@@ -1,0 +1,12 @@
+/target
+node_modules/
+dist/
+*.log
+/src-tauri/gen/schemas
+/fuzz/artifacts
+/fuzz/corpus/*/.*
+*.vhdx
+.vscode/*
+!.vscode/extensions.json
+*.tsbuildinfo
+.claude/

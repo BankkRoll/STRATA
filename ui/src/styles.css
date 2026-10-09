@@ -1,0 +1,115 @@
+/*
+ * Design tokens. Each color is light-dark(light, dark); color-scheme picks the
+ * branch. "system" follows prefers-color-scheme; [data-theme] forces a scheme.
+ * [data-backdrop="mica"] makes the page background translucent so the Windows 11
+ * Mica material shows through.
+ */
+:root {
+  color-scheme: light dark;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+
+  --bg: light-dark(#f3f3f3, #1c1c1c);
+  --bg-mica: light-dark(rgb(243 243 243 / 0.55), rgb(28 28 28 / 0.45));
+  --surface: light-dark(#ffffff, #262626);
+  --text: light-dark(#1b1b1b, #f2f2f2);
+  --text-muted: light-dark(#5c5c5c, #a8a8a8);
+  --border: light-dark(#e0e0e0, #3a3a3a);
+  --accent: light-dark(#2563eb, #60a5fa);
+  --mark-1: light-dark(#2563eb, #60a5fa);
+  --mark-2: light-dark(#0891b2, #22d3ee);
+  --mark-3: light-dark(#7c3aed, #a78bfa);
+  --focus: light-dark(#1d4ed8, #93c5fd);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-backdrop="mica"] body {
+  background: var(--bg-mica);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.home {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+  min-width: 0;
+}
+
+.empty-state {
+  align-self: center;
+  justify-self: center;
+  max-width: 520px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-state h1 {
+  margin: 16px 0 8px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+
+.empty-state__hint {
+  font-size: 12px;
+}
+
+.empty-state__mark {
+  width: 64px;
+  height: 64px;
+}
+
+.empty-state__mark rect:nth-child(1) {
+  fill: var(--mark-1);
+}
+.empty-state__mark rect:nth-child(2) {
+  fill: var(--mark-2);
+}
+.empty-state__mark rect:nth-child(3) {
+  fill: var(--mark-3);
+}
+
+.status-bar {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+}

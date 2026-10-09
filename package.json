@@ -1,0 +1,14 @@
+{
+  "name": "strata",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check": "pnpm --dir ui typecheck && pnpm --dir ui lint && pnpm --dir ui test"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}

@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# SECURITY: least privilege; no job needs to write to the repo.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # PERF: CI never debugs these binaries; dropping debuginfo cuts compile and link time.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  RUSTFLAGS: -D warnings
+
+jobs:
+  # PERF: pull requests skip the half of the repo they don't touch. Pushes to main and
+  # tags always run everything, so main is fully verified and needs no git history.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      ui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.ui == 'true' }}
+    steps:
+      # NOTE: on pull_request events paths-filter reads the changed files from the
+      # GitHub API, so no checkout (and no credentials) are needed.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            rust:
+              - "crates/**"
+              - "src-tauri/**"
+              - "rules/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - ".rustfmt.toml"
+              - ".github/workflows/**"
+            ui:
+              - "ui/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - ".github/workflows/**"
+
+  # SECURITY: this is a public repo; block real profile paths, SIDs and local
+  # worktree paths from ever landing.
+  privacy:
+    name: Privacy check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: node scripts/check-privacy.mjs
+
+  lint:
+    name: Rust lint
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: lint
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo fmt --all -- --check
+      # NOTE: tauri::generate_context! requires the frontend dist folder to exist.
+      - run: New-Item -ItemType Directory -Force ui/dist | Out-Null
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: Rust tests
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: New-Item -ItemType Directory -Force ui/dist | Out-Null
+      # NOTE: tauri-build drops a stub msvcrt.lib in its OUT_DIR and cargo leaks that
+      # link path into every workspace doctest, so the app crate is tested on its own.
+      - run: cargo test --workspace --exclude strata-app
+      - run: cargo test -p strata-app
+
+  frontend:
+    name: Frontend
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir ui typecheck
+      - run: pnpm --dir ui lint
+      - run: pnpm --dir ui test
+
+  # PERF: bundles run in parallel with checks instead of after them, and only for
+  # main, tags and manual runs. Pull requests never pay for a release build.
+  bundle:
+    name: Bundle (${{ matrix.target }})
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    env:
+      # PERF: full LTO + single codegen unit only for tagged releases; main-branch
+      # artifacts are for smoke testing and build several times faster without them.
+      CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/v') && 'thin' || 'off' }}
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '16' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: bundle-${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --target ${{ matrix.target }} --bundles nsis
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: strata-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/bundle/nsis/*.exe
+          retention-days: 14

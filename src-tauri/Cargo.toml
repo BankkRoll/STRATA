@@ -15,13 +15,27 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2.5"
+tauri-plugin-dialog = "2.8"
+tauri-plugin-notification = "2.5"
+tauri-plugin-autostart = "2.7"
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+getrandom = "0.3.4"
+strata-core = { path = "../crates/strata-core" }
+strata-store = { path = "../crates/strata-store" }
+# NOTE: the cleaner and the Win32 layer only build on Windows, which is the
+# only platform Strata ships for.
+strata-clean = { path = "../crates/strata-clean" }
+strata-win = { path = "../crates/strata-win" }
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1.7"
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [lints]
 workspace = true

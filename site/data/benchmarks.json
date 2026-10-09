@@ -286,7 +286,8 @@
         "lowerIsBetter": true,
         "values": [
           { "tool": "Strata", "version": "0.1.0", "value": 918 },
-          { "tool": "WizTree", "version": "4.28", "value": 2857 }
+          { "tool": "WizTree", "version": "4.28", "value": 2857 },
+          { "tool": "Windows File Explorer", "value": null }
         ]
       }
     ]

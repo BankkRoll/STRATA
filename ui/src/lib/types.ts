@@ -15,8 +15,22 @@ export type TreemapStyle = "flat" | "cushion";
 /** Visual views that render a layout. */
 export type VisualView = "treemap" | "sunburst" | "icicle" | "flame" | "bubbles" | "mindmap";
 
+/** Non-visual views from UI wave 2 (insights, cleanup, settings); each is a lazy chunk. */
+export type FeatureView =
+  | "cleanup"
+  | "recommendations"
+  | "largest"
+  | "filetypes"
+  | "apps"
+  | "categories"
+  | "duplicates"
+  | "history"
+  | "activity"
+  | "tools"
+  | "settings";
+
 /** Every top-level view in the left nav. */
-export type ViewId = "home" | VisualView;
+export type ViewId = "home" | VisualView | FeatureView;
 
 /** Filters applied by the backend when it lays out and lists entries. */
 export interface ViewFilters {

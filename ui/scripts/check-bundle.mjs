@@ -8,7 +8,23 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
 const ENTRY_GZIP_BUDGET = 130 * 1024;
-const LAZY = ["ArcRenderer", "CircleRenderer", "CommandPalette"];
+const LAZY = [
+  "ArcRenderer",
+  "CircleRenderer",
+  "CommandPalette",
+  // Wave-2 views: each must stay its own chunk so the entry keeps its budget.
+  "CleanupView",
+  "RecommendationsView",
+  "LargestView",
+  "FileTypesView",
+  "AppsView",
+  "CategoriesView",
+  "DuplicatesView",
+  "HistoryView",
+  "ActivityView",
+  "ToolsView",
+  "SettingsView",
+];
 const FORBIDDEN = ["__fixtures__", "Fixture harness", "fixtureServices"];
 
 const dir = join(import.meta.dirname, "..", "dist", "assets");

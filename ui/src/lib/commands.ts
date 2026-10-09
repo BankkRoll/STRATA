@@ -6,7 +6,9 @@
  * a reason* rather than hiding them or pretending they worked. Backend
  * actions are available only when `app_capabilities` lists their command.
  */
+import { applyAddResult } from "../store/queue";
 import { call, errorMessage } from "./backend";
+import { addToQueue } from "./cleanup";
 import { fetchEntryPath } from "./entries";
 
 /** Actions on entries (SPEC §16.1 context menu). */
@@ -134,8 +136,8 @@ export class CommandBus {
           return;
         }
         case "addToCleanup":
-          await call<null>("cleanup_queue_add", { volumeId: target.volumeId, ids: target.ids });
-          this.deps.ui.notify("Added to the cleanup queue.");
+          // Never-tier refusals come back with reasons; reportAdd shows them.
+          this.deps.ui.notify(applyAddResult(await addToQueue(target.volumeId, target.ids)));
           return;
         case "open":
         case "reveal":

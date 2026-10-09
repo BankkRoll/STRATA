@@ -131,7 +131,8 @@ describe("palette ranking", () => {
     const cmds = buildCommands(testServices(), []);
     const ranked = rankCommands(cmds, "settings");
     expect(ranked[0]?.cmd.id).toBe("settings.open");
-    expect(ranked[0]?.cmd.availability.enabled).toBe(false);
+    expect(ranked[0]?.cmd.availability.enabled).toBe(true);
+    expect(rankCommands(cmds, "largest files")[0]?.cmd.availability.enabled).toBe(false);
     const views = rankCommands(cmds, "treemap");
     expect(views.slice(0, 2).map((v) => v.cmd.title)).toContain("Show Treemap");
   });

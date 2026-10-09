@@ -7,13 +7,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { errorMessage } from "../lib/backend";
 import { ENTRY_ACTIONS } from "../lib/commands";
 import type { DetailTime, EntryDetail } from "../lib/detail";
-import { describeTimestamp, formatBytes, formatBytesExact, formatCount, formatDate } from "../lib/format";
+import { describeTimestamp, formatBytes, formatBytesExact, formatCount } from "../lib/format";
 import { categoryInfo } from "../lib/palette";
 import { ATTRIBUTE_LABELS, EntryFlag } from "../lib/rows";
 import { useServices } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
 import { Icon } from "../components/icons";
+import { DirHistory, DirWriters, WhyClassified } from "./DetailExtras";
 
 /** Result of the latest fetch, tagged with the entry it belongs to. */
 type Load = { id: number; volumeId: string } & ({ state: "error"; message: string } | { state: "ready"; detail: EntryDetail });
@@ -68,27 +69,6 @@ function Time({ label, t, note }: { label: string; t: DetailTime; note?: string 
         {note && <span className="detail__muted detail__note">{note}</span>}
       </dd>
     </>
-  );
-}
-
-/** Tiny inline SVG sparkline of a directory's size history. */
-export function Sparkline({ points, label }: { points: { atMs: number; allocated: number }[]; label: string }) {
-  if (points.length < 2) return <Unknown text="Not enough history yet" />;
-  const w = 220;
-  const h = 40;
-  const xs = points.map((p) => p.atMs);
-  const ys = points.map((p) => p.allocated);
-  const x0 = Math.min(...xs);
-  const x1 = Math.max(...xs);
-  const y0 = Math.min(...ys);
-  const y1 = Math.max(...ys);
-  const px = (x: number) => (x1 === x0 ? 0 : ((x - x0) / (x1 - x0)) * w);
-  const py = (y: number) => (y1 === y0 ? h / 2 : h - ((y - y0) / (y1 - y0)) * (h - 4) - 2);
-  const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${px(p.atMs).toFixed(1)},${py(p.allocated).toFixed(1)}`).join(" ");
-  return (
-    <svg className="sparkline" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={label}>
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
   );
 }
 
@@ -255,6 +235,7 @@ function DetailBody({ d }: { d: EntryDetail }) {
         ) : (
           <Unknown text="Not classified by any rule" />
         )}
+        <WhyClassified path={d.path} label={d.classification ? categoryInfo(d.classification.category).label : "unclassified"} />
       </Section>
       <Section title="Owner">
         {d.attribution ? (
@@ -278,6 +259,7 @@ function DetailBody({ d }: { d: EntryDetail }) {
         ) : (
           <p className="detail__muted">Last writer unknown (activity tracking off or no events).</p>
         )}
+        {d.isDir && <DirWriters volumeId={d.volumeId} id={d.id} />}
       </Section>
       <Section title="Safety">
         {d.safety ? (
@@ -294,18 +276,7 @@ function DetailBody({ d }: { d: EntryDetail }) {
       </Section>
       {d.isDir && (
         <Section title="History">
-          {d.history ? (
-            <>
-              <Sparkline points={d.history} label={`Size history of ${d.name}`} />
-              {d.history.length > 1 && (
-                <p className="detail__muted">
-                  Since {formatDate(d.history[0]?.atMs ?? null)}
-                </p>
-              )}
-            </>
-          ) : (
-            <Unknown text="No snapshots yet" />
-          )}
+          <DirHistory detail={d} />
         </Section>
       )}
       <Section title="Actions">

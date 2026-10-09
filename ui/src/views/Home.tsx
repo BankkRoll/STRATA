@@ -167,6 +167,19 @@ function SinceLastScanBanner({ volume }: { volume: VolumeInfo }) {
           — biggest: <code>{data.biggest.path}</code> {data.biggest.deltaBytes > 0 ? "+" : ""}
           {formatBytes(data.biggest.deltaBytes, { units })}
         </>
+      )}{" "}
+      {volume.scan.rootId !== null && (
+        <button
+          type="button"
+          className="linkish"
+          onClick={() => {
+            const s = useApp.getState();
+            if (volume.scan.rootId !== null && s.volumeId !== volume.id) s.openVolume(volume.id, volume.scan.rootId);
+            s.setView("history");
+          }}
+        >
+          See what changed
+        </button>
       )}
     </p>
   );

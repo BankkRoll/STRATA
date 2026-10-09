@@ -13,10 +13,13 @@ import { useMediaQuery } from "../lib/hooks";
 import type { ContextMenuRequest } from "../render/ViewController";
 import { useServices } from "../services";
 import { isVisualView, useApp } from "../store/app";
+import { useAppearanceSync } from "../store/prefs";
+import { useQueueSync } from "../store/queue";
 import { DetailPanel } from "../views/DetailPanel";
 import { Home, useVolumeSync } from "../views/Home";
 import { ListPane } from "../views/ListPane";
 import { VisualPane } from "../views/VisualPane";
+import { FeatureRouter, featureInfo, isFeatureView } from "../views/featureViews";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
 import { NAV_VIEWS, NavRail } from "./NavRail";
 import { StatusBar } from "./StatusBar";
@@ -30,7 +33,7 @@ export interface AppShellProps {
   info: AppInfo | null;
 }
 
-const REGIONS = [".topbar", ".nav", ".visual__surface, .home", ".list [role=treegrid]", ".detail"];
+const REGIONS = [".topbar", ".nav", ".visual__surface, .home, .fview", ".list [role=treegrid]", ".detail"];
 
 function isTyping(el: EventTarget | null): boolean {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || (el instanceof HTMLElement && el.isContentEditable);
@@ -40,6 +43,8 @@ function isTyping(el: EventTarget | null): boolean {
 export function AppShell({ info }: AppShellProps) {
   const services = useServices();
   useVolumeSync();
+  useQueueSync();
+  useAppearanceSync();
   const view = useApp((s) => s.view);
   const volumeId = useApp((s) => s.volumeId);
   const root = useApp((s) => s.path[s.path.length - 1] ?? null);
@@ -113,7 +118,8 @@ export function AppShell({ info }: AppShellProps) {
   const visual = isVisualView(view) && volumeId !== null && root !== null;
   // Narrow windows show details as a drawer over the map, so it opens only
   // once something is selected instead of covering the view up front.
-  const detailOpen = panes.detail && volumeId !== null && (!narrow || primary !== null);
+  const detailOpen =
+    panes.detail && volumeId !== null && (!narrow || primary !== null) && (!isFeatureView(view) || featureInfo(view).showsDetail);
   const maxList = short ? 170 : 520;
 
   return (
@@ -154,6 +160,8 @@ export function AppShell({ info }: AppShellProps) {
               </>
             )}
           </div>
+        ) : isFeatureView(view) ? (
+          <FeatureRouter view={view} />
         ) : (
           <Home />
         )}

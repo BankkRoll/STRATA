@@ -10,6 +10,7 @@ import { volumeName, type VolumeInfo } from "../lib/volumes";
 import type { Services } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
+import { FEATURE_VIEWS } from "../views/featureViews";
 import { NAV_VIEWS } from "./NavRail";
 
 /** One palette command. */
@@ -47,6 +48,18 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
       group: "Go to",
       shortcut: v.shortcut,
       availability: v.id === "home" || hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." },
+      run: () => {
+        useApp.getState().setView(v.id);
+      },
+    });
+  }
+  // Settings and Largest files have their own "Actions" entries below.
+  for (const v of FEATURE_VIEWS.filter((f) => f.id !== "settings" && f.id !== "largest")) {
+    out.push({
+      id: `view.${v.id}`,
+      title: `Show ${v.label}`,
+      group: "Go to",
+      availability: !v.needsVolume || hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." },
       run: () => {
         useApp.getState().setView(v.id);
       },
@@ -184,15 +197,19 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
     id: "settings.open",
     title: "Open settings",
     group: "Actions",
-    availability: { enabled: false, reason: "The settings screen is not part of this build yet." },
-    run: () => undefined,
+    availability: ok,
+    run: () => {
+      useApp.getState().setView("settings");
+    },
   });
   out.push({
     id: "largest.show",
     title: "Show largest files",
     group: "Actions",
-    availability: { enabled: false, reason: "The largest-files view is not part of this build yet." },
-    run: () => undefined,
+    availability: hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." },
+    run: () => {
+      useApp.getState().setView("largest");
+    },
   });
   return out;
 }

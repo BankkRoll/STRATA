@@ -10,7 +10,7 @@
  *   registered" into {@link BackendUnavailableError}.
  * - {@link getAppInfo} and {@link getCapabilities}: startup facts.
  *
- * The full command/channel contract is in `docs/tracks/ui.md`.
+ * Each command's arguments and result types are documented where it is wrapped.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
@@ -71,8 +71,33 @@ export async function call<T>(command: string, args?: Record<string, unknown>): 
     if (typeof err === "string" && /command .* not found/i.test(err)) {
       throw new BackendUnavailableError(command, "This build does not include that feature yet.");
     }
+    const failure = asCommandFailure(err);
+    if (failure?.code === "unavailable") throw new BackendUnavailableError(command, failure.message);
     throw err;
   }
+}
+
+/**
+ * A command failure as the backend serializes it (`CommandError` in
+ * `src-tauri/src/error.rs`).
+ */
+export interface CommandFailure {
+  /** `unavailable`, `not_found`, `bad_request`, `busy`, `declined`, `io` or `internal`. */
+  code: string;
+  /** User-facing explanation. */
+  message: string;
+}
+
+/**
+ * Recognizes a backend {@link CommandFailure}.
+ *
+ * @param err - A rejected `invoke` value.
+ * @returns The failure, or `null` for anything else.
+ */
+export function asCommandFailure(err: unknown): CommandFailure | null {
+  if (typeof err !== "object" || err === null) return null;
+  const { code, message } = err as Record<string, unknown>;
+  return typeof code === "string" && typeof message === "string" ? { code, message } : null;
 }
 
 const BROWSER_FALLBACK: AppInfo = { version: "dev", windowsBuild: 0, backdrop: "solid" };
@@ -114,5 +139,7 @@ export function errorMessage(err: unknown): string {
   if (err instanceof BackendUnavailableError) return err.reason;
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
+  const failure = asCommandFailure(err);
+  if (failure) return failure.message;
   return "Unexpected error";
 }

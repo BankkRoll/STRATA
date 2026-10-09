@@ -63,7 +63,7 @@ partial totals, and the gap appears in the volume's "Unaccounted / system reserv
 
 | Filesystem | Unelevated | Elevated | Live updates |
 |---|---|---|---|
-| NTFS (fixed or removable) | Standard scanner | MFT scanner | USN change journal (elevated) |
+| NTFS (fixed or removable) | Standard scanner | MFT scanner | USN change journal (elevated); folder watching after a standard scan |
 | ReFS, including Dev Drive | Standard scanner | Standard scanner | None; rescan a folder or volume to refresh it |
 | FAT32, exFAT | Standard scanner | Standard scanner | None; rescan a folder or volume to refresh it |
 | Network shares (SMB), opt-in | Standard scanner | Standard scanner | None; rescan a folder or volume to refresh it |

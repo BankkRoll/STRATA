@@ -1,4 +1,4 @@
-//! `ScanVolume`: raw MFT scan streamed as `ScanBatch` frames (SPEC §6.4).
+//! `ScanVolume`: raw MFT scan streamed as `ScanBatch` frames.
 //!
 //! Pipeline: the `strata-ntfs` scanner (its own I/O thread + rayon) hands
 //! batches to a sink on this worker thread, which pushes them into a

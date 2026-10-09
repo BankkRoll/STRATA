@@ -1,4 +1,4 @@
-//! `ReadRecords`: re-read MFT records after USN changes (SPEC §10.2).
+//! `ReadRecords`: re-read MFT records after USN changes.
 
 use strata_core::{FileRef, ScanRecord};
 use strata_ipc::protocol::Response;

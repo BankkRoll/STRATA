@@ -1,4 +1,4 @@
-//! `PrivilegedDelete` and `DeleteOnReboot` (SPEC §15.3, §15.7).
+//! `PrivilegedDelete` and `DeleteOnReboot`.
 //!
 //! The helper never trusts the client's path. Every request is checked
 //! against the never-list here first, independently of the app and of

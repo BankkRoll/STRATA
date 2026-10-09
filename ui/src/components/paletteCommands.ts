@@ -10,6 +10,8 @@ import { volumeName, type VolumeInfo } from "../lib/volumes";
 import type { Services } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
+import { useUpdates } from "../store/updates";
+import { restartToUpdate } from "../lib/settings";
 import { FEATURE_VIEWS } from "../views/featureViews";
 import { AREAS, VISUAL_VIEWS } from "../shell/areas";
 import { shortcutOf } from "../shell/keymap";
@@ -264,6 +266,19 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
       void services.volumes.elevate().catch(() => undefined);
     },
   });
+  if (useUpdates.getState().state === "ready") {
+    out.push({
+      id: "update.restart",
+      title: "Restart to update",
+      group: "Actions",
+      availability: need("updates_restart", "Updates are not part of this build."),
+      run: () => {
+        restartToUpdate().catch((err: unknown) => {
+          useApp.getState().notify(errorMessage(err));
+        });
+      },
+    });
+  }
   out.push({
     id: "recycle.empty",
     title: "Empty Recycle Bin",

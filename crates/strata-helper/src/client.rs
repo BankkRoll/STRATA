@@ -1,4 +1,4 @@
-//! The app's client for the helper (SPEC §4): launch → connect → handshake
+//! The app's client for the helper: launch → connect → handshake
 //! → typed requests.
 //!
 //! ```no_run
@@ -51,9 +51,9 @@ use strata_core::{FileRef, ScanRecord};
 use strata_ipc::IpcError;
 use strata_ipc::pipe::{ClientOptions, PipeClient};
 use strata_ipc::protocol::{
-    AuditEntry, DeleteRequest, DeleteSummary, ErrorCode, ErrorReply, HandshakeReject,
-    RebootDeleteRequest, Request, Response, ScanOptions, ScanProgress, ScanStats, UsnJournalInfo,
-    Welcome,
+    ActivityRow, ActivityWindow, AuditEntry, DeleteRequest, DeleteSummary, ErrorCode, ErrorReply,
+    EvidenceRow, HandshakeReject, LastWriteRow, RebootDeleteRequest, Request, Response,
+    ScanOptions, ScanProgress, ScanStats, UsnJournalInfo, Welcome, WriterRow,
 };
 use strata_ipc::security::{PeerVerifier, TrustError, session_pipe_name};
 use strata_win::process::{ElevatedChild, LaunchError, launch_elevated};
@@ -360,7 +360,11 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 fn is_terminal(r: &Response) -> bool {
     !matches!(
         r,
-        Response::ScanProgress(_) | Response::ScanBatch { .. } | Response::Audit(_)
+        Response::ScanProgress(_)
+            | Response::ScanBatch { .. }
+            | Response::Audit(_)
+            | Response::ActivityBatch { .. }
+            | Response::ActivityHealth { .. }
     )
 }
 
@@ -745,7 +749,9 @@ impl HelperClient {
     /// # Errors
     ///
     /// `Remote` with [`ErrorCode::JournalChanged`] or
-    /// [`ErrorCode::JournalWrapped`] means "rescan the volume".
+    /// [`ErrorCode::JournalWrapped`] means "rescan the volume";
+    /// [`ErrorCode::JournalNotActive`] means the journal must be created
+    /// again first.
     pub fn read_usn(&self, read: &UsnRead) -> Result<UsnChunk, ClientError> {
         let req = Request::ReadUsn {
             volume: read.volume.clone(),
@@ -825,6 +831,103 @@ impl HelperClient {
                 value: file_ref,
                 audit,
             }),
+            (r, _) => Err(unexpected(&r)),
+        }
+    }
+
+    /// Starts file-activity tracking and returns its event stream.
+    ///
+    /// `cpu_cap_percent` caps the tracker's CPU use, in percent of machine
+    /// capacity (sent in hundredths, clamped to 0.1..=100; 0 or less uses the
+    /// helper's default). Needs an elevated helper
+    /// (`welcome().capabilities.activity`).
+    ///
+    /// # Errors
+    ///
+    /// The request could not be sent. Refusals arrive through the stream:
+    /// `Remote` with [`ErrorCode::AccessDenied`] (helper not elevated) or
+    /// [`ErrorCode::Busy`] (tracking already runs).
+    pub fn start_activity(&self, cpu_cap_percent: f32) -> Result<ActivityStream, ClientError> {
+        let (id, rx) = self.inner.request(Request::StartActivity {
+            cpu_cap_centi_percent: cap_centi_percent(cpu_cap_percent),
+        })?;
+        Ok(ActivityStream {
+            inner: Arc::clone(&self.inner),
+            id,
+            rx,
+            done: false,
+        })
+    }
+
+    /// Stops this connection's tracking; returns once it has stopped. The
+    /// [`ActivityStream`] then ends with [`ActivityEvent::Stopped`].
+    /// Succeeds when nothing runs.
+    ///
+    /// # Errors
+    ///
+    /// Transport errors.
+    pub fn stop_activity(&self) -> Result<(), ClientError> {
+        match self
+            .inner
+            .call(Request::StopActivity, self.config.request_timeout)?
+        {
+            (Response::ActivityState { .. }, _) => Ok(()),
+            (r, _) => Err(unexpected(&r)),
+        }
+    }
+
+    /// Forgets the activity the helper holds in memory; returns whether
+    /// tracking is running.
+    ///
+    /// # Errors
+    ///
+    /// Transport errors.
+    pub fn clear_activity(&self) -> Result<bool, ClientError> {
+        match self
+            .inner
+            .call(Request::ClearActivity, self.config.request_timeout)?
+        {
+            (Response::ActivityState { running }, _) => Ok(running),
+            (r, _) => Err(unexpected(&r)),
+        }
+    }
+
+    /// Top writers over `window` from the helper's memory, most bytes
+    /// written first (empty when tracking is not running).
+    ///
+    /// # Errors
+    ///
+    /// Transport errors.
+    pub fn query_activity(
+        &self,
+        window: ActivityWindow,
+        limit: u32,
+    ) -> Result<Vec<WriterRow>, ClientError> {
+        match self.inner.call(
+            Request::QueryActivity { window, limit },
+            self.config.request_timeout,
+        )? {
+            (Response::ActivityTop { writers }, _) => Ok(writers),
+            (r, _) => Err(unexpected(&r)),
+        }
+    }
+
+    /// Attribution evidence since `since_unix` (Unix seconds), highest weight
+    /// first (empty when tracking is not running).
+    ///
+    /// # Errors
+    ///
+    /// Transport errors.
+    pub fn activity_evidence(
+        &self,
+        since_unix: i64,
+        limit: u32,
+    ) -> Result<Vec<EvidenceRow>, ClientError> {
+        match self.inner.call(
+            Request::ActivityEvidence { since_unix, limit },
+            self.config.request_timeout,
+        )? {
+            (Response::ActivityEvidence { evidence }, _) => Ok(evidence),
             (r, _) => Err(unexpected(&r)),
         }
     }
@@ -1050,5 +1153,203 @@ impl Drop for ScanStream {
                 request_id: self.id,
             });
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Activity streams
+// -----------------------------------------------------------------------------
+
+/// `percent` in hundredths, clamped to the range the helper accepts; 0 for
+/// non-positive or NaN input (the helper's default).
+fn cap_centi_percent(percent: f32) -> u32 {
+    let centi = (f64::from(percent) * 100.0).round();
+    if centi.is_nan() || centi <= 0.0 {
+        0
+    } else {
+        centi.clamp(10.0, 10_000.0) as u32
+    }
+}
+
+/// One event of file-activity tracking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivityEvent {
+    /// Activity to persist.
+    Batch {
+        /// Hourly rollup deltas.
+        rows: Vec<ActivityRow>,
+        /// Latest writers per file.
+        last_writes: Vec<LastWriteRow>,
+    },
+    /// Tracking overhead.
+    Health {
+        /// Tracker CPU, in hundredths of a percent of machine capacity.
+        cpu_centi_percent: u32,
+        /// Writes are sampled 1 in `sample_rate`.
+        sample_rate: u32,
+        /// Tracking costs more than the cap; suggest turning it off.
+        suggest_disable: bool,
+    },
+    /// Tracking ended. Always the last event.
+    Stopped {
+        /// Whether the app asked for it (`false`: the session ended on its
+        /// own, see `status`).
+        requested: bool,
+        /// Win32 status the session ended with when not requested.
+        status: u32,
+        /// Events the kernel dropped during the session.
+        events_lost: u64,
+    },
+}
+
+/// The events of one tracking session, as an iterator. Ends after
+/// [`ActivityEvent::Stopped`] or an error.
+///
+/// Dropping an unfinished stream stops tracking.
+#[derive(Debug)]
+pub struct ActivityStream {
+    inner: Arc<Inner>,
+    id: u32,
+    rx: Receiver<Response>,
+    done: bool,
+}
+
+impl ActivityStream {
+    /// The `StartActivity` request id.
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    /// Like `next`, but gives up after `timeout` (`None` then means "no
+    /// event yet", not "finished"; check [`ActivityStream::is_done`]).
+    pub fn next_timeout(
+        &mut self,
+        timeout: Duration,
+    ) -> Option<Result<ActivityEvent, ClientError>> {
+        if self.done {
+            return None;
+        }
+        match self.rx.recv_timeout(timeout) {
+            Ok(r) => Some(self.convert(r)),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => {
+                self.done = true;
+                Some(Err(ClientError::Disconnected))
+            }
+        }
+    }
+
+    /// Whether the stream has ended.
+    #[must_use]
+    pub fn is_done(&self) -> bool {
+        self.done
+    }
+
+    fn convert(&mut self, r: Response) -> Result<ActivityEvent, ClientError> {
+        match r {
+            Response::ActivityBatch { rows, last_writes } => {
+                Ok(ActivityEvent::Batch { rows, last_writes })
+            }
+            Response::ActivityHealth {
+                cpu_centi_percent,
+                sample_rate,
+                suggest_disable,
+            } => Ok(ActivityEvent::Health {
+                cpu_centi_percent,
+                sample_rate,
+                suggest_disable,
+            }),
+            Response::ActivityStopped {
+                requested,
+                status,
+                events_lost,
+            } => {
+                self.done = true;
+                Ok(ActivityEvent::Stopped {
+                    requested,
+                    status,
+                    events_lost,
+                })
+            }
+            Response::Error(e) => {
+                self.done = true;
+                Err(remote(e, Vec::new()))
+            }
+            other => {
+                self.done = true;
+                Err(unexpected(&other))
+            }
+        }
+    }
+}
+
+impl Iterator for ActivityStream {
+    type Item = Result<ActivityEvent, ClientError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        match self.rx.recv() {
+            Ok(r) => Some(self.convert(r)),
+            Err(_) => {
+                self.done = true;
+                Some(Err(ClientError::Disconnected))
+            }
+        }
+    }
+}
+
+impl Drop for ActivityStream {
+    fn drop(&mut self) {
+        self.inner.unregister(self.id);
+        if !self.done && self.inner.connected.load(Ordering::SeqCst) {
+            self.inner.fire(Request::StopActivity);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(dead_code)]
+    fn _assert_send_sync() {
+        fn f<T: Send + Sync>() {}
+        f::<HelperClient>();
+        f::<ActivityStream>();
+        f::<ScanStream>();
+    }
+
+    #[test]
+    fn cpu_cap_converts_to_centi_percent() {
+        assert_eq!(cap_centi_percent(2.0), 200);
+        assert_eq!(cap_centi_percent(0.375), 38);
+        assert_eq!(cap_centi_percent(0.01), 10);
+        assert_eq!(cap_centi_percent(500.0), 10_000);
+        assert_eq!(cap_centi_percent(0.0), 0);
+        assert_eq!(cap_centi_percent(-3.0), 0);
+        assert_eq!(cap_centi_percent(f32::NAN), 0);
+        assert_eq!(cap_centi_percent(f32::INFINITY), 10_000);
+    }
+
+    #[test]
+    fn activity_events_do_not_end_the_route() {
+        assert!(!is_terminal(&Response::ActivityBatch {
+            rows: Vec::new(),
+            last_writes: Vec::new(),
+        }));
+        assert!(!is_terminal(&Response::ActivityHealth {
+            cpu_centi_percent: 0,
+            sample_rate: 1,
+            suggest_disable: false,
+        }));
+        assert!(is_terminal(&Response::ActivityStopped {
+            requested: true,
+            status: 0,
+            events_lost: 0,
+        }));
+        assert!(is_terminal(&Response::ActivityState { running: false }));
     }
 }

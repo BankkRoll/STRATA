@@ -1,4 +1,4 @@
-//! USN change journal FSCTLs (SPEC §10.1).
+//! USN change journal FSCTLs.
 //!
 //! - `FSCTL_QUERY_USN_JOURNAL` → [`query_journal`] (`None` when inactive).
 //! - `FSCTL_READ_USN_JOURNAL` → [`read_journal`]: a blocking read with
@@ -100,15 +100,37 @@ fn win_error(context: &str, e: &windows::core::Error) -> HelperError {
             ErrorCode::JournalWrapped,
             "the requested USN is no longer in the journal",
         ),
-        ERROR_JOURNAL_NOT_ACTIVE | ERROR_JOURNAL_DELETE_IN_PROGRESS => {
-            HelperError::new(ErrorCode::JournalChanged, "the USN journal is not active")
+        ERROR_JOURNAL_NOT_ACTIVE => {
+            HelperError::new(ErrorCode::JournalNotActive, "the USN journal is not active")
         }
+        ERROR_JOURNAL_DELETE_IN_PROGRESS => HelperError::new(
+            ErrorCode::JournalChanged,
+            "the USN journal is being deleted",
+        ),
         c => HelperError::from_win32(c, format!("{context}: {}", e.message().trim_end())),
     }
 }
 
-/// `FSCTL_QUERY_USN_JOURNAL` on an open handle; `None` when inactive.
+/// `FSCTL_QUERY_USN_JOURNAL` on an open handle; `None` when inactive or
+/// being deleted.
 fn query_handle(h: &OwnedHandle) -> Result<Option<UsnJournalInfo>, HelperError> {
+    match query_raw(h) {
+        Ok(info) => Ok(Some(info)),
+        Err(e)
+            if matches!(
+                e.code,
+                ErrorCode::JournalNotActive | ErrorCode::JournalChanged
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// `FSCTL_QUERY_USN_JOURNAL` on an open handle, with the journal errors
+/// typed as [`win_error`] maps them.
+fn query_raw(h: &OwnedHandle) -> Result<UsnJournalInfo, HelperError> {
     let mut data = USN_JOURNAL_DATA_V0::default();
     let mut returned = 0u32;
     // SAFETY: `data` is a writable USN_JOURNAL_DATA_V0 of the size passed;
@@ -125,25 +147,16 @@ fn query_handle(h: &OwnedHandle) -> Result<Option<UsnJournalInfo>, HelperError> 
             None,
         )
     };
-    match r {
-        Ok(()) => Ok(Some(UsnJournalInfo {
-            journal_id: data.UsnJournalID,
-            first_usn: data.FirstUsn,
-            next_usn: data.NextUsn,
-            lowest_valid_usn: data.LowestValidUsn,
-            max_usn: data.MaxUsn,
-            maximum_size: data.MaximumSize,
-            allocation_delta: data.AllocationDelta,
-        })),
-        Err(e) => {
-            let err = win_error("FSCTL_QUERY_USN_JOURNAL", &e);
-            if err.code == ErrorCode::JournalChanged {
-                Ok(None)
-            } else {
-                Err(err)
-            }
-        }
-    }
+    r.map_err(|e| win_error("FSCTL_QUERY_USN_JOURNAL", &e))?;
+    Ok(UsnJournalInfo {
+        journal_id: data.UsnJournalID,
+        first_usn: data.FirstUsn,
+        next_usn: data.NextUsn,
+        lowest_valid_usn: data.LowestValidUsn,
+        max_usn: data.MaxUsn,
+        maximum_size: data.MaximumSize,
+        allocation_delta: data.AllocationDelta,
+    })
 }
 
 /// Queries the journal of `device`. `Ok(None)` when it is not active.
@@ -222,17 +235,16 @@ pub struct ReadParams {
 /// # Errors
 ///
 /// [`ErrorCode::JournalChanged`] when the journal id differs or the journal
-/// is gone, [`ErrorCode::JournalWrapped`] when `from` was purged, or an
-/// open/I/O error.
+/// is being deleted, [`ErrorCode::JournalNotActive`] when the volume has no
+/// active journal, [`ErrorCode::JournalWrapped`] when `from` was purged, or
+/// an open/I/O error.
 pub fn read_journal(
     device: &str,
     params: ReadParams,
     cancel: &Cancel,
 ) -> Result<(i64, Vec<u8>), HelperError> {
     let h = open_volume(device, false, true)?;
-    let info = query_handle(&h)?.ok_or_else(|| {
-        HelperError::new(ErrorCode::JournalChanged, "the USN journal is not active")
-    })?;
+    let info = query_raw(&h)?;
     if info.journal_id != params.journal_id {
         return Err(HelperError::new(
             ErrorCode::JournalChanged,
@@ -349,6 +361,8 @@ mod tests {
         let e = windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(1181));
         assert_eq!(win_error("x", &e).code, ErrorCode::JournalWrapped);
         let e = windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(1179));
+        assert_eq!(win_error("x", &e).code, ErrorCode::JournalNotActive);
+        let e = windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(1178));
         assert_eq!(win_error("x", &e).code, ErrorCode::JournalChanged);
         let e = windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(5));
         assert_eq!(win_error("x", &e).code, ErrorCode::AccessDenied);

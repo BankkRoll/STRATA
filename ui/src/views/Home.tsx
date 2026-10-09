@@ -9,7 +9,7 @@ import { BackendUnavailableError, errorMessage } from "../lib/backend";
 import { formatBytes, formatPercent, formatRelative } from "../lib/format";
 import { useDark } from "../lib/hooks";
 import { CATEGORIES } from "../lib/palette";
-import { volumeName, type ScanState, type SinceLastScan, type VolumeInfo } from "../lib/volumes";
+import { volumeName, watchHelper, type ScanState, type SinceLastScan, type VolumeInfo } from "../lib/volumes";
 import { useServices } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
@@ -221,9 +221,13 @@ export function useVolumeSync(): void {
     const unwatch = services.volumes.watch((v) => {
       store.setVolumes(v);
     });
+    const unwatchHelper = watchHelper((h) => {
+      store.setHelper(h);
+    });
     return () => {
       cancelled = true;
       unwatch();
+      unwatchHelper();
     };
   }, [services]);
 }

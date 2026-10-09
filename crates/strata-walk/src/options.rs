@@ -51,6 +51,10 @@ pub struct WalkOptions {
     pub batch_size: usize,
     /// Minimum interval between progress callbacks.
     pub progress_interval: Duration,
+    /// Directories this many levels below the root are reported but not
+    /// listed (`Some(1)`: the root's direct entries only). `None` walks the
+    /// whole tree. Used to rescan one folder after a change notification.
+    pub max_depth: Option<u32>,
 }
 
 impl Default for WalkOptions {
@@ -66,6 +70,7 @@ impl Default for WalkOptions {
             listing: ListingMethod::default(),
             batch_size: 4096,
             progress_interval: Duration::from_millis(100),
+            max_depth: None,
         }
     }
 }

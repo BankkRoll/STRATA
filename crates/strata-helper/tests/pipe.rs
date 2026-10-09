@@ -13,7 +13,8 @@ use strata_helper::client::{ClientError, HelperClient, ScanEvent};
 use strata_helper::server::ExitReason;
 use strata_helper::source::IMAGE_VOLUME;
 use strata_ipc::protocol::{
-    AuditOp, AuditPhase, ErrorCode, HandshakeReject, PROTOCOL_VERSION, ScanOptions, ScanStats,
+    ActivityWindow, AuditOp, AuditPhase, ErrorCode, HandshakeReject, PROTOCOL_VERSION, ScanOptions,
+    ScanStats,
 };
 use strata_ipc::rate::RateLimit;
 use strata_ntfs::NtfsVolume;
@@ -380,4 +381,85 @@ fn pipe_mode_reconnects_to_the_same_helper() {
     client.reconnect().unwrap();
     client.ping().unwrap();
     assert!(client.is_connected());
+}
+
+#[test]
+fn a_version_2_client_is_rejected() {
+    assert_eq!(PROTOCOL_VERSION, 3);
+    let helper = TestHelper::start(HelperSetup::default());
+    let mut config = helper.client_config();
+    config.options.protocol = 2;
+    let err = HelperClient::connect(config).unwrap_err();
+    assert_eq!(
+        err,
+        ClientError::Rejected(HandshakeReject::VersionMismatch {
+            helper: 3,
+            client: 2,
+        })
+    );
+    let client = helper.connect();
+    assert_eq!(client.welcome().protocol, 3);
+    assert!(!client.welcome().capabilities.activity, "unelevated helper");
+}
+
+#[test]
+fn activity_needs_an_elevated_helper() {
+    if strata_win::process::is_elevated().unwrap_or(false) {
+        return;
+    }
+    let helper = TestHelper::start(HelperSetup::default());
+    let client = helper.connect();
+    let mut stream = client.start_activity(2.0).unwrap();
+    let first = stream.next_timeout(Duration::from_secs(30));
+    match first {
+        Some(Err(ClientError::Remote(r))) => {
+            assert_eq!(r.code, ErrorCode::AccessDenied);
+            assert_eq!(r.message, "activity tracking needs an elevated helper");
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(stream.is_done());
+    assert!(stream.next().is_none());
+    // The slot is released: a second attempt is refused the same way, not
+    // with Busy.
+    let again: Vec<_> = client.start_activity(0.0).unwrap().collect();
+    assert!(
+        matches!(
+            again.as_slice(),
+            [Err(ClientError::Remote(r))] if r.code == ErrorCode::AccessDenied
+        ),
+        "{again:?}"
+    );
+    client.ping().unwrap();
+}
+
+#[test]
+fn activity_requests_without_tracking_are_empty() {
+    let helper = TestHelper::start(HelperSetup::default());
+    let client = helper.connect();
+    for window in [
+        ActivityWindow::Now,
+        ActivityWindow::LastHour,
+        ActivityWindow::Since { unix_secs: 0 },
+    ] {
+        assert!(client.query_activity(window, 10).unwrap().is_empty());
+    }
+    assert!(client.activity_evidence(0, 10).unwrap().is_empty());
+    client.stop_activity().unwrap();
+    assert!(!client.clear_activity().unwrap());
+    client.ping().unwrap();
+}
+
+#[test]
+fn dropping_a_refused_activity_stream_is_harmless() {
+    if strata_win::process::is_elevated().unwrap_or(false) {
+        return;
+    }
+    let helper = TestHelper::start(HelperSetup::default());
+    let client = helper.connect();
+    let stream = client.start_activity(1.0).unwrap();
+    drop(stream);
+    client.stop_activity().unwrap();
+    assert!(!client.clear_activity().unwrap());
+    client.ping().unwrap();
 }

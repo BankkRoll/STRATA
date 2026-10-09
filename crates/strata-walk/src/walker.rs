@@ -296,6 +296,7 @@ impl Walker {
             times,
             listed_id: None,
             follow: true,
+            depth: 0,
         })
     }
 }
@@ -443,6 +444,8 @@ struct DirTask {
     listed_id: Option<u128>,
     /// Follow a reparse point at this path (root only).
     follow: bool,
+    /// Levels below the root (the root is 0).
+    depth: u32,
 }
 
 impl DirTask {
@@ -663,7 +666,8 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
     for e in listing.entries {
         let kind = record::reparse_kind(e.attributes, e.reparse_tag);
         let wants_target = matches!(kind, ReparseKind::Symlink | ReparseKind::MountPoint);
-        if e.is_dir() && !kind.blocks_traversal() {
+        let descend = ctx.opts.max_depth.is_none_or(|m| task.depth + 1 < m);
+        if e.is_dir() && !kind.blocks_traversal() && descend {
             if e.attributes & RECALL_BITS != 0 {
                 // NOTE: listing a not-yet-populated cloud directory makes the
                 // provider fetch its contents. cfapi marks such directories
@@ -688,6 +692,7 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
                 times: e.times,
                 listed_id: e.file_id,
                 follow: false,
+                depth: task.depth + 1,
             };
             scope.spawn(move |s| process_dir(s, ctx, child));
         } else if e.is_dir() {

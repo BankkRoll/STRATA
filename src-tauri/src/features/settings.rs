@@ -1,16 +1,13 @@
-//! Settings commands (SPEC §19).
+//! Settings commands.
 //!
 //! The settings model, its validation, versioning and export format live in
 //! `strata-store`; this module adds the app-level checks, the file dialogs,
 //! the `settings://changed` event and the side effects of a change (launch
 //! at login, the tray icon, the low-space monitor).
 
-use std::path::Path;
-
 use serde::Serialize;
 use strata_store::{Settings, SettingsIssue, Store};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_dialog::DialogExt;
+use tauri::{AppHandle, Emitter, Runtime};
 
 use super::error::{ErrorKind, FeatureError, FeatureResult, blocking};
 
@@ -93,49 +90,34 @@ pub fn save(store: &Store, new: &Settings) -> FeatureResult<(Settings, Vec<Effec
     Ok((saved, fx))
 }
 
-/// Writes the export JSON to `path`.
+/// Validates and applies a settings export. Nothing is written when any
+/// value is invalid, including the app-level rules.
 ///
 /// # Errors
 ///
-/// Store or file errors.
-pub fn export_to(store: &Store, path: &Path) -> FeatureResult<()> {
-    let json = store.export_settings()?;
-    std::fs::write(path, json)
-        .map_err(|e| FeatureError::io("could not write the settings file", &e))
-}
-
-/// Reads, validates and applies a settings file. Nothing is written when
-/// any value is invalid.
-///
-/// # Errors
-///
-/// Unreadable, oversized, foreign or invalid files.
-pub fn import_from(store: &Store, path: &Path) -> FeatureResult<(Settings, Vec<Effect>)> {
-    let len = std::fs::metadata(path)
-        .map_err(|e| FeatureError::io("could not read the settings file", &e))?
-        .len();
-    if len > MAX_IMPORT_BYTES {
+/// Oversized, foreign or invalid exports (`invalid_settings` lists the
+/// issues in `detail`).
+pub fn import_json(store: &Store, json: &str) -> FeatureResult<(Settings, Vec<Effect>)> {
+    if json.len() as u64 > MAX_IMPORT_BYTES {
         return Err(FeatureError::invalid(
             "that file is too large to be a Strata settings export",
         ));
     }
-    let json = std::fs::read_to_string(path)
-        .map_err(|e| FeatureError::io("could not read the settings file", &e))?;
     let old = store.load_settings()?;
-    // Check the app-level rules on the decoded file before anything is
+    // Check the app-level rules on the decoded export before anything is
     // written: parse it into a scratch store first.
     let scratch = tempdir_store()?;
-    let candidate = scratch.0.import_settings(&json)?;
+    let candidate = scratch.0.import_settings(json)?;
     let issues = validate(&candidate);
     if !issues.is_empty() {
         return Err(FeatureError::settings(issues));
     }
-    let imported = store.import_settings(&json)?;
+    let imported = store.import_settings(json)?;
     let fx = effects(&old, &imported);
     Ok((imported, fx))
 }
 
-/// A throwaway store in a unique temp directory, removed on drop.
+// A throwaway store in a unique temp directory, removed on drop.
 struct ScratchStore(Store, std::path::PathBuf);
 
 impl Drop for ScratchStore {
@@ -152,8 +134,24 @@ fn tempdir_store() -> FeatureResult<ScratchStore> {
     Ok(ScratchStore(store, dir))
 }
 
+/// Applies the settings the running app reads continuously (the update
+/// policy). Called at startup and after every change.
+pub fn apply_runtime<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
+    crate::updater::set_policy(
+        app,
+        crate::updater::Policy {
+            channel: match settings.updates.channel {
+                strata_store::UpdateChannel::Stable => crate::updater::Channel::Stable,
+                strata_store::UpdateChannel::Beta => crate::updater::Channel::Beta,
+            },
+            auto_download: settings.updates.auto_download,
+        },
+    );
+}
+
 /// Applies effects and tells every window about the new settings.
 pub fn announce<R: Runtime>(app: &AppHandle<R>, settings: &Settings, fx: &[Effect]) {
+    apply_runtime(app, settings);
     for e in fx {
         match *e {
             Effect::LaunchAtLogin(on) => {
@@ -177,101 +175,82 @@ pub async fn settings_load<R: Runtime>(app: AppHandle<R>) -> FeatureResult<Setti
     blocking(move || Ok(store.load_settings()?)).await
 }
 
-/// Validation issues for a draft, without saving (empty = valid).
-#[tauri::command]
-pub fn settings_validate(settings: Settings) -> Vec<SettingsIssue> {
-    validate(&settings)
+/// Result of saving or importing (`SettingsResult` in the UI).
+#[derive(Debug, Clone, Serialize)]
+pub struct SettingsResult {
+    /// The settings as stored, or the current ones when nothing was written.
+    pub settings: Settings,
+    /// Validation issues; non-empty means nothing was written.
+    pub issues: Vec<SettingsIssue>,
 }
 
-/// Validates and saves; emits `settings://changed`.
+/// Validates and saves (`settings_save`); applies side effects and emits
+/// `settings://changed`. Invalid settings come back as `issues`, not as an
+/// error, and nothing is written.
 #[tauri::command]
 pub async fn settings_save<R: Runtime>(
     app: AppHandle<R>,
     settings: Settings,
-) -> FeatureResult<Settings> {
+) -> FeatureResult<SettingsResult> {
     let store = super::store::handle(&app)?;
+    let issues = validate(&settings);
+    if !issues.is_empty() {
+        let current = blocking(move || Ok(store.load_settings()?)).await?;
+        return Ok(SettingsResult {
+            settings: current,
+            issues,
+        });
+    }
     let (saved, fx) = blocking(move || save(&store, &settings)).await?;
     announce(&app, &saved, &fx);
-    Ok(saved)
+    Ok(SettingsResult {
+        settings: saved,
+        issues: Vec::new(),
+    })
 }
 
-/// Response of `settings_export` / `settings_import`.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SettingsFileResult {
-    /// The chosen file, or `null` when the user cancelled the dialog.
-    pub path: Option<String>,
-    /// The imported settings (import only).
-    pub settings: Option<Settings>,
-}
-
-/// Asks where to save and writes the settings export there.
+/// The settings as a `strata-settings` JSON export (`settings_export`).
 #[tauri::command]
-pub async fn settings_export<R: Runtime>(app: AppHandle<R>) -> FeatureResult<SettingsFileResult> {
+pub async fn settings_export<R: Runtime>(app: AppHandle<R>) -> FeatureResult<String> {
     let store = super::store::handle(&app)?;
-    blocking(move || {
-        let mut dialog = app
-            .dialog()
-            .file()
-            .add_filter("Strata settings", &["json"])
-            .set_file_name("strata-settings.json");
-        if let Some(w) = app.get_webview_window("main") {
-            dialog = dialog.set_parent(&w);
-        }
-        let Some(file) = dialog.blocking_save_file() else {
-            return Ok(SettingsFileResult {
-                path: None,
-                settings: None,
-            });
-        };
-        let path = file
-            .into_path()
-            .map_err(|e| FeatureError::new(ErrorKind::Io, format!("unusable file path: {e}")))?;
-        export_to(&store, &path)?;
-        Ok(SettingsFileResult {
-            path: Some(path.display().to_string()),
-            settings: None,
+    blocking(move || Ok(store.export_settings()?)).await
+}
+
+/// Validates then applies an export (`settings_import`); writes nothing
+/// when any value is invalid.
+#[tauri::command]
+pub async fn settings_import<R: Runtime>(
+    app: AppHandle<R>,
+    json: String,
+) -> FeatureResult<SettingsResult> {
+    let store = super::store::handle(&app)?;
+    let result = blocking(move || {
+        Ok(match import_json(&store, &json) {
+            Ok((settings, fx)) => (
+                SettingsResult {
+                    settings,
+                    issues: Vec::new(),
+                },
+                Some(fx),
+            ),
+            Err(e) if e.code == ErrorKind::InvalidSettings => (
+                SettingsResult {
+                    settings: store.load_settings()?,
+                    issues: e
+                        .detail
+                        .and_then(|d| serde_json::from_value(d).ok())
+                        .unwrap_or_default(),
+                },
+                None,
+            ),
+            Err(e) => return Err(e),
         })
     })
-    .await
-}
-
-/// Asks for a settings export and applies it; emits `settings://changed`.
-#[tauri::command]
-pub async fn settings_import<R: Runtime>(app: AppHandle<R>) -> FeatureResult<SettingsFileResult> {
-    let store = super::store::handle(&app)?;
-    let app2 = app.clone();
-    let result = blocking(move || {
-        let mut dialog = app2
-            .dialog()
-            .file()
-            .add_filter("Strata settings", &["json"]);
-        if let Some(w) = app2.get_webview_window("main") {
-            dialog = dialog.set_parent(&w);
-        }
-        let Some(file) = dialog.blocking_pick_file() else {
-            return Ok(None);
-        };
-        let path = file
-            .into_path()
-            .map_err(|e| FeatureError::new(ErrorKind::Io, format!("unusable file path: {e}")))?;
-        let (settings, fx) = import_from(&store, &path)?;
-        Ok(Some((path, settings, fx)))
-    })
     .await?;
-    Ok(match result {
-        None => SettingsFileResult {
-            path: None,
-            settings: None,
-        },
-        Some((path, settings, fx)) => {
-            announce(&app, &settings, &fx);
-            SettingsFileResult {
-                path: Some(path.display().to_string()),
-                settings: Some(settings),
-            }
-        }
-    })
+    if let (r, Some(fx)) = &result {
+        announce(&app, &r.settings, fx);
+    }
+    Ok(result.0)
 }
 
 #[cfg(test)]
@@ -303,7 +282,7 @@ mod tests {
         let mut bad = Settings::default();
         bad.history.retention_days = 1;
         let e = save(&store, &bad).unwrap_err();
-        assert_eq!(e.kind, ErrorKind::InvalidSettings);
+        assert_eq!(e.code, ErrorKind::InvalidSettings);
         assert_eq!(store.load_settings().unwrap(), Settings::default());
 
         let mut s = Settings::default();
@@ -325,50 +304,42 @@ mod tests {
     }
 
     #[test]
-    fn export_then_import_round_trips_through_a_file() {
+    fn export_then_import_round_trips() {
         let (_d, a) = store();
         let mut s = Settings::default();
         s.appearance.compact_density = true;
         s.tray.enabled = true;
         save(&a, &s).unwrap();
-        let file_dir = tempfile::tempdir().unwrap();
-        let file = file_dir.path().join("strata-settings.json");
-        export_to(&a, &file).unwrap();
+        let json = a.export_settings().unwrap();
 
         let (_d2, b) = store();
-        let (imported, fx) = import_from(&b, &file).unwrap();
+        let (imported, fx) = import_json(&b, &json).unwrap();
         assert_eq!(imported, s);
         assert_eq!(b.load_settings().unwrap(), s);
         assert_eq!(fx, [Effect::Tray(true)]);
     }
 
     #[test]
-    fn import_rejects_foreign_invalid_and_huge_files() {
+    fn import_rejects_foreign_invalid_and_huge_exports() {
         let (_d, store) = store();
-        let dir = tempfile::tempdir().unwrap();
-        let foreign = dir.path().join("x.json");
-        std::fs::write(&foreign, r#"{"format":"something-else"}"#).unwrap();
-        assert!(import_from(&store, &foreign).is_err());
+        assert!(import_json(&store, r#"{"format":"something-else"}"#).is_err());
 
         // A valid store export that breaks an app-level rule.
         let (_d2, other) = store_with(|s| {
             s.tray.low_space_threshold_bytes = 1;
         });
-        let file = dir.path().join("low.json");
-        std::fs::write(&file, other.export_settings().unwrap()).unwrap();
-        let e = import_from(&store, &file).unwrap_err();
-        assert_eq!(e.kind, ErrorKind::InvalidSettings);
+        let e = import_json(&store, &other.export_settings().unwrap()).unwrap_err();
+        assert_eq!(e.code, ErrorKind::InvalidSettings);
         assert_eq!(
             store.load_settings().unwrap(),
             Settings::default(),
             "nothing written"
         );
 
-        let huge = dir.path().join("huge.json");
-        std::fs::write(&huge, vec![b' '; (MAX_IMPORT_BYTES + 1) as usize]).unwrap();
+        let huge = " ".repeat(MAX_IMPORT_BYTES as usize + 1);
         assert_eq!(
-            import_from(&store, &huge).unwrap_err().kind,
-            ErrorKind::InvalidInput
+            import_json(&store, &huge).unwrap_err().code,
+            ErrorKind::BadRequest
         );
     }
 

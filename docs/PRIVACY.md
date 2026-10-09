@@ -10,6 +10,7 @@ Strata's data lives under `%LOCALAPPDATA%\app.strata.desktop\`, named after the 
 |---|---|---|
 | `state.db` | `store\` | Settings, and the undo/audit log of every cleanup (paths, sizes, method, time) that Recycle Bin restores depend on |
 | `history.db` | `store\` | Folder-size snapshots over time, activity tracking data (if enabled), the duplicate finder's hash cache |
+| `<volume serial>.idx` | `index\` | The last index of each scanned volume (the names, sizes and times of its files and folders), so it opens at once and catches up with changes at the next launch |
 | `update-state.json` | the folder itself | Version numbers of the last installed update, used to offer a rollback |
 | WebView2 profile | the folder itself | The embedded browser's own data. The UI is bundled with the app; no remote web content is loaded |
 | User rule packs | Your user rules folder (Settings → Rules) | Rule packs you write yourself |
@@ -48,7 +49,9 @@ network share you enable reads that share, as any file browser would.
 | Data | How |
 |---|---|
 | Old snapshots | Lower "Keep snapshots for" in Settings → Data & privacy; older snapshots are deleted at the next daily maintenance |
-| Activity data | Turn off activity tracking, or lower "Keep activity for" in Settings → Activity tracking |
+| Activity data | Settings → Data & privacy → clear activity data, or turn off activity tracking; it is also deleted after the retention period |
+| History | Settings → Data & privacy → clear history (snapshots and their folder sizes) |
+| Saved indexes and the duplicate hash cache | Settings → Data & privacy → clear caches |
 | Everything | Uninstall and tick **Delete the application data**, or delete `%LOCALAPPDATA%\app.strata.desktop\` while Strata is closed |
 
 Deleting `state.db` also deletes the undo log; items already in the Recycle Bin can then only be

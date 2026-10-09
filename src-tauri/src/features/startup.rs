@@ -1,4 +1,4 @@
-//! Startup behaviour (SPEC §19 "Startup", §21 multiple instances).
+//! Startup behaviour.
 //!
 //! - Launch at login through the autostart plugin (`HKCU\...\Run`), off by
 //!   default; the registry entry passes [`AUTOSTART_FLAG`] so a login start

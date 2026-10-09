@@ -3,11 +3,16 @@
 The elevated half of Strata. The unelevated app asks it, over a secured named pipe
 (`strata-ipc`), for the work that needs administrator rights: raw NTFS MFT scans streamed in
 batches, USN change-journal queries, blocking reads and creation, MFT record re-reads, and
-deletes that it re-verifies by file id against the never-delete list before acting. Every
+deletes that it re-verifies by file id against the never-delete list before acting. It also runs
+ETW file-activity tracking (which process wrote where), streaming hourly rollups and last writers
+to the app and answering top-writer and attribution-evidence queries from memory. Every
 privileged action produces audit records that the app stores.
 
 The library also holds `client::HelperClient`, which the app uses to launch, connect to and
-call the helper.
+call the helper. It is `Send + Sync` and can be shared across threads. `start_activity` returns
+an `ActivityStream` of `ActivityEvent`s (dropping it stops tracking); `stop_activity`,
+`clear_activity`, `query_activity` and `activity_evidence` act on the same connection's
+session. One tracking session runs per helper process, and only an elevated helper can start it.
 
 ## Modes
 

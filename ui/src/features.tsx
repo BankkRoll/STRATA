@@ -90,6 +90,8 @@ export type SettingsApi = Pick<
   | "uninstallHelperService"
   | "fetchLicenses"
   | "checkForUpdates"
+  | "restartToUpdate"
+  | "reportIssue"
 >;
 
 /** Everything the wave-2 views need from the backend. */

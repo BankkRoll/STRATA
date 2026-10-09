@@ -100,6 +100,10 @@ impl ReadAt for DynReader {
     fn alignment(&self) -> usize {
         self.0.alignment()
     }
+
+    fn queued(&self) -> Option<&strata_ntfs::QueuedReader> {
+        self.0.queued()
+    }
 }
 
 /// An opened NTFS volume.

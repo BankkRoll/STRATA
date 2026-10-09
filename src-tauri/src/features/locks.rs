@@ -1,11 +1,11 @@
-//! "Why can't I delete this?" (SPEC §15.3, §15.5).
+//! "Why can't I delete this?".
 //!
 //! `locks_query` names the processes holding a path (Restart Manager) and
 //! the running apps whose caches it is. Closing one is a two-step consent
-//! round trip: `locks_close_prepare` builds the prompt from a holder **the
+//! round trip: `cleanup_close_prompt` builds the prompt from a holder **the
 //! backend found itself** (the UI only names it by pid and start time, so it
 //! cannot dress up a critical process as an ordinary app), and
-//! `locks_close_politely` redeems the token. Closing is always polite
+//! `cleanup_close_app` redeems it (see [`super::queue`]). Closing is always polite
 //! (`WM_CLOSE` or a Restart Manager shutdown request); nothing is killed.
 
 use std::collections::HashMap;
@@ -16,11 +16,11 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use strata_clean::apps::{RunningAppWarning, running_app_warnings};
 use strata_clean::consent::{CloseApp, Prompt};
-use strata_clean::locks::{CloseOutcome, DEFAULT_MAX_FILES, LockHolder, close_politely, who_locks};
+use strata_clean::locks::{DEFAULT_MAX_FILES, LockHolder, who_locks};
 use tauri::{AppHandle, Manager, Runtime};
 
-use super::consent::{ConsentTicket, PendingConsents};
-use super::error::{ErrorKind, FeatureError, FeatureResult, blocking};
+use super::consent::PendingConsents;
+use super::error::{FeatureError, FeatureResult, blocking};
 
 /// How long a holder found by a query can be referenced by a close request.
 const HOLDER_TTL: Duration = Duration::from_secs(15 * 60);
@@ -62,8 +62,10 @@ impl KnownHolders {
 /// A close request waiting for the user's confirmation.
 #[derive(Debug)]
 pub struct PendingClose {
-    holder: LockHolder,
-    prompt: Prompt<CloseApp>,
+    /// The holder the backend found.
+    pub holder: LockHolder,
+    /// The prompt shown.
+    pub prompt: Prompt<CloseApp>,
 }
 
 /// Managed state: close prompts awaiting confirmation.
@@ -86,7 +88,7 @@ pub async fn locks_query<R: Runtime>(app: AppHandle<R>, path: String) -> Feature
     blocking(move || {
         let p = PathBuf::from(&path);
         let holders = who_locks(&p, DEFAULT_MAX_FILES)
-            .map_err(|e| FeatureError::io("Restart Manager could not check the file", &e))?;
+            .map_err(|e| FeatureError::io_err("Restart Manager could not check the file", &e))?;
         let running_apps = running_app_warnings(&p, &holders).unwrap_or_default();
         if let Some(k) = app.try_state::<KnownHolders>() {
             k.remember(holders.iter().cloned());
@@ -97,58 +99,6 @@ pub async fn locks_query<R: Runtime>(app: AppHandle<R>, path: String) -> Feature
         })
     })
     .await
-}
-
-/// Builds the "ask X to close" prompt for a holder found by `locks_query`
-/// or `cleanup_preflight`. Show `text`, then pass `token` to
-/// `locks_close_politely` when the user confirms.
-#[tauri::command]
-pub fn locks_close_prepare<R: Runtime>(
-    app: AppHandle<R>,
-    pid: u32,
-    start_time: u64,
-) -> FeatureResult<ConsentTicket> {
-    let holder = app
-        .try_state::<KnownHolders>()
-        .and_then(|k| k.get(pid, start_time))
-        .ok_or_else(|| {
-            FeatureError::new(
-                ErrorKind::NotFound,
-                "that program is not in a recent lock check; check the item again",
-            )
-        })?;
-    let prompt = Prompt::new(holder.close_request());
-    let text = prompt.text();
-    pending(&app)?.offer(PendingClose { holder, prompt }, text, Instant::now())
-}
-
-fn pending<R: Runtime>(app: &AppHandle<R>) -> FeatureResult<&PendingConsents<PendingClose>> {
-    app.try_state::<PendingCloses>()
-        .map(|s| &s.inner().0)
-        .ok_or_else(|| FeatureError::internal("lock state missing"))
-}
-
-/// The user confirmed the prompt behind `token`: ask the app to close.
-#[tauri::command]
-pub async fn locks_close_politely<R: Runtime>(
-    app: AppHandle<R>,
-    token: String,
-) -> FeatureResult<CloseOutcome> {
-    let PendingClose { holder, prompt } = pending(&app)?.take(&token, Instant::now())?;
-    blocking(move || {
-        // This handler is the user's confirmation click; the consent is
-        // minted and redeemed on this thread.
-        close_politely(&holder, prompt.confirm())
-            .map_err(|e| FeatureError::with_detail(ErrorKind::CloseApp, e.to_string(), &e))
-    })
-    .await
-}
-
-/// The user dismissed the prompt.
-#[tauri::command]
-pub fn locks_close_cancel<R: Runtime>(app: AppHandle<R>, token: String) -> FeatureResult<()> {
-    pending(&app)?.cancel(&token);
-    Ok(())
 }
 
 #[cfg(test)]

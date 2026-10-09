@@ -45,7 +45,7 @@ the CPU cap (2% by default).
 | DACL (SDDL) | `D:P(A;;0x120183;;;<user>)(A;;GA;;;SY)(A;;RC;;;OW)S:(ML;;NW;;;ME)`: the user gets read/write only (no create-instance, no `WRITE_DAC`); SYSTEM full; owner rights limited to `READ_CONTROL`. The SID is validated before it is formatted into the string |
 | Integrity label | Explicit medium label, no-write-up, so the medium-integrity app can connect to an elevated creator while low-integrity and AppContainer processes cannot |
 | Peer verification | Before any byte is parsed: client PID from the kernel, then image path, start time and Authenticode signer. The image must be the expected binary, and its signer's subject and issuer must equal the helper's own. The app verifies the helper the same way and connects with `SECURITY_IDENTIFICATION`, so an impostor server cannot impersonate it |
-| Handshake | `Hello { protocol, build, client_pid }` → `Welcome { protocol, helper_build, elevated, capabilities }` or `Reject`. The protocol version (2) must match exactly; `client_pid` must equal the kernel-reported PID |
+| Handshake | `Hello { protocol, build, client_pid }` → `Welcome { protocol, helper_build, elevated, capabilities }` or `Reject`. The protocol version (3) must match exactly; `client_pid` must equal the kernel-reported PID |
 | Rate limit | Token bucket per connection: bursts of 200, 100 requests/s sustained; excess requests get a `RateLimited` error |
 
 Signers are matched by subject and issuer, not leaf thumbprint, because signing services rotate
@@ -66,7 +66,11 @@ message type bumps the protocol version.
 
 Requests: `Ping`, `ListVolumes`, `ScanVolume` (streams `ScanProgress` and `ScanBatch`, then
 `ScanDone`), `Cancel`, `QueryUsnJournal`, `CreateUsnJournal`, `ReadUsn`, `ReadRecords`,
-`PrivilegedDelete`, `DeleteOnReboot`, `Shutdown`. Any request may receive a typed `Error`.
+`PrivilegedDelete`, `DeleteOnReboot`, `Shutdown`, and for activity tracking `StartActivity`
+(streams `ActivityBatch` and `ActivityHealth`, then `ActivityStopped`), `StopActivity`,
+`ClearActivity`, `QueryActivity` and `ActivityEvidence`. Each connection sees only its own
+tracking session. Any request may receive a typed `Error`; `ReadUsn` distinguishes an inactive,
+recreated and wrapped journal (`JournalNotActive`, `JournalChanged`, `JournalWrapped`).
 
 ## Data flow
 
@@ -94,8 +98,8 @@ never knows which scanner ran; scanner-specific gaps are flags (`ALLOC_ESTIMATED
 | Standard scanner | Work-stealing parallel walk (2 × logical CPUs, 4–64 threads) listing with `FileIdExtdDirectoryInfo`. An attribute-only pass per file fills hardlink counts, alternate streams and WOF allocation. All paths are `\\?\` form; opens use `NtCreateFile` with `FILE_OPEN_REPARSE_POINT` and `FILE_OPEN_NO_RECALL` |
 | Index | Struct-of-arrays columns addressed by `u32` entry ids, contiguous child lists, names in one WTF-8 buffer, sizes as `u32` with a spill map for larger values. Lookup by file reference is a binary search over a sorted column. Under 64 bytes per entry, names excluded |
 | Aggregates | Per folder, in both size modes: subtree logical and allocated bytes, file and folder counts, newest and oldest modification time, largest descendant. Built bottom-up in parallel; a live change updates the parent chain in O(depth) and returns a `ChangeSet` |
-| Live updates | The USN journal is tailed with blocking reads, coalesced per tick, refreshed by re-reading changed MFT records, and applied as deltas. An idle volume costs no CPU. A wrapped or recreated journal triggers a rescan. Journals with 128-bit file ids (ReFS) are not tailed |
-| Index cache | `STRATIDX` file per volume: a 128-byte header (format version, volume serial, USN journal id, last applied USN, counts, xxh3 checksum) and a section table with an xxh3 per section. A valid cache is loaded and caught up from the journal; any mismatch falls back to a scan |
+| Live updates | On volumes scanned through the helper, the USN journal is tailed with blocking reads through the helper, coalesced per tick, refreshed by re-reading changed MFT records, and applied as deltas. An idle volume costs no CPU. A wrapped or recreated journal shows a notice and, when "rescan on journal loss" is on, triggers a rescan. Journals with 128-bit file ids (ReFS) are not tailed. NTFS volumes the standard scanner indexed are watched with `ReadDirectoryChangesW`; changed folders are re-listed and folded into the index |
+| Index cache | `STRATIDX` file per volume in `%LOCALAPPDATA%\app.strata.desktop\index\<volume serial>.idx`: a 128-byte header (format version, volume serial, USN journal id, last applied USN, counts, xxh3 checksum) and a section table with an xxh3 per section. Saved every few minutes while the journal is tailed and when Strata exits. At launch a valid cache is shown at once and caught up from the journal when a helper connects; any mismatch falls back to a scan |
 | Search | One parallel pass over the name buffer with column filters checked first; results stream per chunk, and each keystroke cancels the previous query |
 
 Numbers for each stage are in [BENCHMARKS.md](BENCHMARKS.md).
@@ -186,6 +190,7 @@ Deletion is the only destructive operation, and every layer fails closed.
 |---|---|---|---|
 | `history.db` (SQLite, WAL) | `%LOCALAPPDATA%\app.strata.desktop\store\` | Folder-size snapshots (~12 bytes per folder), activity rollups, duplicate hash cache. All rebuildable | `synchronous=NORMAL` |
 | `state.db` (SQLite, WAL) | `%LOCALAPPDATA%\app.strata.desktop\store\` | Settings, undo/audit log | `synchronous=FULL` |
+| Index cache (`.idx`) | `%LOCALAPPDATA%\app.strata.desktop\index\` | The last index of each scanned volume, with its journal position. Rebuildable | Atomic replace (temporary file, flush, rename) |
 
 The databases are separate so that resetting a damaged history never loses settings or the undo
 log that Recycle Bin restores depend on, and so a long snapshot commit never delays a

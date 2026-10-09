@@ -1,5 +1,5 @@
 //! `strata_clean::audit::AuditLog` over `strata-store`'s undo log, and the
-//! crash-recovery pass for actions left in progress (SPEC §15.2 step 7, §21).
+//! crash-recovery pass for actions left in progress.
 //!
 //! # Write-ahead mapping
 //!

@@ -239,3 +239,16 @@ fn settings_drive_history_policy() {
     );
     assert_eq!(s.history.snapshot_options().min_dir_bytes, 64 * MIB);
 }
+
+#[test]
+fn retired_keys_from_older_stores_are_ignored() {
+    let (d, store, _c) = store_at(t0());
+    raw(d.path())
+        .execute(
+            "INSERT INTO settings (key, version, value, updated_at)
+             VALUES ('privacy.crash_reports_opt_in', 1, 'true', 0)",
+            [],
+        )
+        .unwrap();
+    assert_eq!(store.load_settings().unwrap(), Settings::default());
+}

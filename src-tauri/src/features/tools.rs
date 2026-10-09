@@ -1,15 +1,17 @@
-//! Built-in Windows tools and Recycle Bin facts (SPEC §15.6, §15.2 step 4).
+//! Built-in Windows tools and Recycle Bin facts (`ui/src/lib/tools.ts`).
 //!
 //! Every tool goes through a prepare/run round trip: `tools_prepare` builds
 //! the exact command (`strata_clean::tools::CommandSpec`) **on the backend**
-//! and returns it with a single-use token; the UI shows the command line and
-//! description; `tools_run` executes exactly the stored spec. The UI can
-//! never supply a program or arguments. Emptying the Recycle Bin is the same
-//! round trip, with the prompt built from the bin's current item count and
-//! size and redeemed as a `Consent`.
+//! and returns it with a single-use prompt id; the UI shows the command line
+//! and description; `tools_run` executes exactly the stored spec. The UI can
+//! never supply a program or arguments: uninstallers are named by catalog
+//! app id and their command comes from the catalog. Emptying the Recycle
+//! Bin is the same round trip, with the prompt built from the bin's current
+//! item count and size and redeemed as a `Consent`.
 //!
 //! Destructive tools (DISM component cleanup, emptying the bin) are written
-//! ahead to the undo/audit log as `tool` actions.
+//! ahead to the undo/audit log as `tool` actions. DISM runs through a UAC
+//! prompt with its output captured.
 
 use std::time::Instant;
 
@@ -23,22 +25,27 @@ use strata_core::{FileRef, FileTime, Safety};
 use strata_store::{
     ActionKind, ActionStatus, DeleteMethod, ItemOutcome, ItemResult, PlannedItem, Store, VolumeKey,
 };
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
-use super::consent::{ConsentTicket, PendingConsents};
+use super::consent::PendingConsents;
 use super::error::{ErrorKind, FeatureError, FeatureResult, blocking};
 
-/// A tool the UI may ask for. Uninstallers are not here: their command comes
-/// from the installed-apps catalog, so the backend prepares them with
-/// [`prepare_tool`] and never takes an uninstall string from the webview.
+/// A tool the UI may ask for (`ToolAction` in the UI).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolRequest {
+    /// Empty the Recycle Bin of one drive (`C`, `C:` or `C:\`) or of every
+    /// drive.
+    EmptyRecycleBin {
+        /// Drive; `None` for every drive.
+        drive: Option<String>,
+    },
     /// Windows Disk Cleanup, optionally for one drive letter.
     DiskCleanup {
         /// Drive letter.
-        drive: Option<char>,
+        drive: Option<String>,
     },
     /// Storage Sense settings page.
     StorageSenseSettings,
@@ -48,40 +55,28 @@ pub enum ToolRequest {
     SystemProtection,
     /// Hibernation file guidance (never executed).
     HibernationGuidance,
+    /// An app's own uninstaller, from the catalog.
+    Uninstall {
+        /// Catalog app id (`apps_footprint`).
+        #[serde(rename = "appId")]
+        app_id: String,
+    },
     /// `compact /compactos:query` (read-only).
     CompactOsStatus,
-    /// Empty the Recycle Bin of one drive root (`C:\`) or of every drive.
-    EmptyRecycleBin {
-        /// Drive root; `None` for every drive.
-        root: Option<String>,
-    },
 }
 
-impl ToolRequest {
-    fn action(&self) -> Option<ToolAction> {
-        Some(match self {
-            Self::DiskCleanup { drive } => ToolAction::DiskCleanup { drive: *drive },
-            Self::StorageSenseSettings => ToolAction::StorageSenseSettings,
-            Self::DismComponentCleanup => ToolAction::DismComponentCleanup,
-            Self::SystemProtection => ToolAction::SystemProtection,
-            Self::HibernationGuidance => ToolAction::HibernationGuidance,
-            Self::CompactOsStatus => ToolAction::CompactOsStatus,
-            Self::EmptyRecycleBin { .. } => return None,
-        })
-    }
-
-    /// Every tool in the order the UI lists them.
-    #[must_use]
-    pub fn all() -> Vec<Self> {
-        vec![
-            Self::EmptyRecycleBin { root: None },
-            Self::DiskCleanup { drive: None },
-            Self::StorageSenseSettings,
-            Self::DismComponentCleanup,
-            Self::SystemProtection,
-            Self::HibernationGuidance,
-            Self::CompactOsStatus,
-        ]
+fn drive_letter(d: Option<&str>) -> FeatureResult<Option<char>> {
+    match d.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(s) => {
+            let c = s.chars().next().unwrap_or(' ');
+            let rest = &s[c.len_utf8()..];
+            if c.is_ascii_alphabetic() && matches!(rest, "" | ":" | ":\\") {
+                Ok(Some(c.to_ascii_uppercase()))
+            } else {
+                Err(FeatureError::invalid(format!("{s} is not a drive")))
+            }
+        }
     }
 }
 
@@ -92,18 +87,20 @@ pub enum PreparedTool {
     Command(CommandSpec),
     /// Emptying the Recycle Bin, as shown.
     EmptyBin(Prompt<EmptyRecycleBin>),
+    /// Guidance only; nothing runs.
+    Guidance,
 }
 
 /// Managed state: prepared tools.
 #[derive(Debug, Default)]
 pub struct PendingTools(pub PendingConsents<PreparedTool>);
 
-/// One entry of `tools_list`.
+/// The confirmation the UI shows before running (`ToolPrompt` in the UI).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ToolInfo {
-    /// What to pass to `tools_prepare`.
-    pub request: ToolRequest,
+pub struct ToolPrompt {
+    /// Handle for `tools_run`.
+    pub prompt_id: u64,
     /// Title.
     pub title: String,
     /// What it does.
@@ -111,28 +108,32 @@ pub struct ToolInfo {
     /// The exact command line (empty for the Recycle Bin, which uses the
     /// Shell API).
     pub command_line: String,
-    /// How it starts: `process`, `shell_open`, `elevated`, `guidance_only`.
-    pub launch: Option<Launch>,
-    /// Whether output is captured and returned by `tools_run`.
+    /// How it starts.
+    pub launch: Launch,
+    /// Output is captured.
     pub captures_output: bool,
+    /// Silent options removed from an uninstall command.
+    pub removed_flags: Vec<String>,
+    /// Unix ms after which the prompt is void.
+    pub expires_ms: i64,
+    /// For the Recycle Bin: what the consent covers.
+    pub recycle_bin: Option<BinCounts>,
 }
 
-/// Response of `tools_prepare`.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreparedToolDto {
-    /// Token and confirmation text.
-    #[serde(flatten)]
-    pub ticket: ConsentTicket,
-    /// The exact command, for command tools.
-    pub spec: Option<CommandSpec>,
+/// Items and bytes in a Recycle Bin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct BinCounts {
+    /// Items.
+    pub items: u64,
+    /// Bytes.
+    pub bytes: u64,
 }
 
 fn context() -> FeatureResult<ToolContext> {
     let known = strata_win::known::known_folders()
         .map_err(|e| FeatureError::new(ErrorKind::Io, format!("known folders: {e}")))?;
     ToolContext::from_known(&known)
-        .ok_or_else(|| FeatureError::new(ErrorKind::Unsupported, "the Windows folder is unknown"))
+        .ok_or_else(|| FeatureError::unavailable("the Windows folder is unknown"))
 }
 
 fn tool_error(e: &ToolError) -> FeatureError {
@@ -152,128 +153,155 @@ const EMPTY_BIN_TITLE: &str = "Empty Recycle Bin";
 const EMPTY_BIN_DESCRIPTION: &str =
     "Permanently deletes everything in the Recycle Bin. This cannot be undone.";
 
-/// Every built-in tool with its exact command.
-#[tauri::command]
-pub async fn tools_list() -> FeatureResult<Vec<ToolInfo>> {
-    blocking(|| {
-        let ctx = context()?;
-        ToolRequest::all()
-            .into_iter()
-            .map(|request| match request.action() {
-                None => Ok(ToolInfo {
-                    request,
-                    title: EMPTY_BIN_TITLE.into(),
-                    description: EMPTY_BIN_DESCRIPTION.into(),
-                    command_line: String::new(),
-                    launch: None,
-                    captures_output: false,
-                }),
-                Some(action) => {
-                    let spec = tools::build(&ctx, &action).map_err(|e| tool_error(&e))?;
-                    Ok(ToolInfo {
-                        request,
-                        title: spec.title,
-                        description: spec.description,
-                        command_line: spec.command_line,
-                        launch: Some(spec.launch),
-                        captures_output: spec.captures_output,
-                    })
-                }
-            })
-            .collect()
-    })
-    .await
-}
-
 fn pending<R: Runtime>(app: &AppHandle<R>) -> FeatureResult<&PendingConsents<PreparedTool>> {
     app.try_state::<PendingTools>()
         .map(|s| &s.inner().0)
         .ok_or_else(|| FeatureError::internal("tool state missing"))
 }
 
-/// The confirmation text for a command: what it does, then the exact
-/// command line.
-#[must_use]
-pub fn command_text(spec: &CommandSpec) -> String {
-    let mut text = format!("{}\n\n{}", spec.description, spec.command_line);
-    if !spec.removed_flags.is_empty() {
-        text.push_str(&format!(
-            "\n\nRemoved silent options: {}",
-            spec.removed_flags.join(" ")
-        ));
-    }
-    text
-}
-
-/// Prepares any tool, including uninstallers from the apps catalog (for
-/// the backend track; the webview cannot reach this with its own strings).
-///
-/// # Errors
-///
-/// As [`build_spec`], or a guidance-only action (nothing to run).
-pub fn prepare_tool<R: Runtime>(
-    app: &AppHandle<R>,
-    action: &ToolAction,
-) -> FeatureResult<PreparedToolDto> {
-    let spec = build_spec(action)?;
-    if spec.launch == Launch::GuidanceOnly {
-        return Err(tool_error(&ToolError::NotRunnable));
-    }
-    let text = command_text(&spec);
-    let ticket = pending(app)?.offer(PreparedTool::Command(spec.clone()), text, Instant::now())?;
-    Ok(PreparedToolDto {
-        ticket,
-        spec: Some(spec),
+/// The catalog's uninstall command for app `app_id`.
+fn uninstall_action<R: Runtime>(app: &AppHandle<R>, app_id: &str) -> FeatureResult<ToolAction> {
+    let state = app
+        .try_state::<std::sync::Arc<crate::state::AppState>>()
+        .ok_or_else(|| FeatureError::internal("app state missing"))?;
+    let engine = state
+        .engine
+        .get()
+        .ok_or_else(|| FeatureError::unavailable("the app catalog is still loading"))?;
+    let catalog = engine
+        .catalog
+        .get()
+        .ok_or_else(|| FeatureError::unavailable("the app catalog is still loading"))?;
+    let entry = catalog
+        .apps()
+        .iter()
+        .find(|a| crate::insights::app_id(a) == app_id)
+        .ok_or_else(|| FeatureError::not_found("that app is no longer installed"))?;
+    let uninstall_string = entry
+        .uninstall_string
+        .clone()
+        .ok_or_else(|| FeatureError::unavailable("this app registered no uninstaller"))?;
+    Ok(ToolAction::Uninstall {
+        app_name: entry.name.clone(),
+        uninstall_string,
     })
 }
 
-/// Prepares a tool: returns the exact command and a token for `tools_run`.
+fn bin_root(drive: Option<&str>) -> FeatureResult<Option<String>> {
+    Ok(drive_letter(drive)?.map(|c| format!("{c}:\\")))
+}
+
+/// Builds the command and the consent prompt for a tool; nothing runs
+/// (`tools_prepare`).
 #[tauri::command]
 pub async fn tools_prepare<R: Runtime>(
     app: AppHandle<R>,
-    request: ToolRequest,
-) -> FeatureResult<PreparedToolDto> {
-    blocking(move || match &request {
-        ToolRequest::EmptyRecycleBin { root } => {
-            let root = root.as_deref().map(normalize_root).transpose()?;
-            let prompt = tools::empty_recycle_bin_prompt(root.as_deref())
-                .map_err(|e| FeatureError::io("the Recycle Bin could not be read", &e))?;
-            let text = prompt.text();
-            let ticket =
-                pending(&app)?.offer(PreparedTool::EmptyBin(prompt), text, Instant::now())?;
-            Ok(PreparedToolDto { ticket, spec: None })
-        }
-        other => {
-            let action = other
-                .action()
-                .ok_or_else(|| FeatureError::internal("no action"))?;
-            prepare_tool(&app, &action)
-        }
+    action: ToolRequest,
+) -> FeatureResult<ToolPrompt> {
+    blocking(move || {
+        let now = Instant::now();
+        let (prepared, prompt) = match &action {
+            ToolRequest::EmptyRecycleBin { drive } => {
+                let root = bin_root(drive.as_deref())?;
+                let p = tools::empty_recycle_bin_prompt(root.as_deref())
+                    .map_err(|e| FeatureError::io_err("the Recycle Bin could not be read", &e))?;
+                let counts = BinCounts {
+                    items: p.action().items,
+                    bytes: p.action().bytes,
+                };
+                let description = p.text();
+                (
+                    PreparedTool::EmptyBin(p),
+                    ToolPrompt {
+                        prompt_id: 0,
+                        title: EMPTY_BIN_TITLE.into(),
+                        description: format!("{EMPTY_BIN_DESCRIPTION}\n\n{description}"),
+                        command_line: String::new(),
+                        launch: Launch::ShellOpen,
+                        captures_output: false,
+                        removed_flags: Vec::new(),
+                        expires_ms: 0,
+                        recycle_bin: Some(counts),
+                    },
+                )
+            }
+            other => {
+                let action = match other {
+                    ToolRequest::DiskCleanup { drive } => ToolAction::DiskCleanup {
+                        drive: drive_letter(drive.as_deref())?,
+                    },
+                    ToolRequest::StorageSenseSettings => ToolAction::StorageSenseSettings,
+                    ToolRequest::DismComponentCleanup => ToolAction::DismComponentCleanup,
+                    ToolRequest::SystemProtection => ToolAction::SystemProtection,
+                    ToolRequest::HibernationGuidance => ToolAction::HibernationGuidance,
+                    ToolRequest::CompactOsStatus => ToolAction::CompactOsStatus,
+                    ToolRequest::Uninstall { app_id } => uninstall_action(&app, app_id)?,
+                    ToolRequest::EmptyRecycleBin { .. } => unreachable!("handled above"),
+                };
+                let spec = build_spec(&action)?;
+                let prompt = ToolPrompt {
+                    prompt_id: 0,
+                    title: spec.title.clone(),
+                    description: spec.description.clone(),
+                    command_line: spec.command_line.clone(),
+                    launch: spec.launch,
+                    captures_output: spec.captures_output,
+                    removed_flags: spec.removed_flags.clone(),
+                    expires_ms: 0,
+                    recycle_bin: None,
+                };
+                let prepared = if spec.launch == Launch::GuidanceOnly {
+                    PreparedTool::Guidance
+                } else {
+                    PreparedTool::Command(spec)
+                };
+                (prepared, prompt)
+            }
+        };
+        let (prompt_id, expires_ms) = pending(&app)?.offer_numbered(prepared, now)?;
+        Ok(ToolPrompt {
+            prompt_id,
+            expires_ms,
+            ..prompt
+        })
     })
     .await
 }
 
-/// Drive roots only (`C:\`); anything else is refused.
-fn normalize_root(root: &str) -> FeatureResult<String> {
-    let mut chars = root.chars();
-    match (chars.next(), chars.next(), chars.as_str()) {
-        (Some(d), Some(':'), "" | "\\" | "/") if d.is_ascii_alphabetic() => {
-            Ok(format!("{}:\\", d.to_ascii_uppercase()))
-        }
-        _ => Err(FeatureError::invalid(format!("{root} is not a drive root"))),
-    }
+/// A line of captured output.
+#[derive(Debug, Clone, Serialize)]
+pub struct OutputLine {
+    /// `stdout` or `stderr`.
+    pub stream: &'static str,
+    /// The line.
+    pub line: String,
 }
 
-/// Runs a prepared tool the user confirmed. Returns captured output for
-/// tools that capture it.
+/// Result of running a tool (`ToolRunResult` in the UI).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRunResult {
+    /// Exit code, when the app waited for the process.
+    pub exit_code: Option<i64>,
+    /// Captured output ("" when not captured).
+    pub output: String,
+}
+
+/// Runs a prepared tool the user confirmed (`tools_run`), sending captured
+/// output lines over `on_output` when it finishes.
 #[tauri::command]
-pub async fn tools_run<R: Runtime>(app: AppHandle<R>, token: String) -> FeatureResult<ToolOutput> {
-    let prepared = pending(&app)?.take(&token, Instant::now())?;
+pub async fn tools_run<R: Runtime>(
+    app: AppHandle<R>,
+    prompt_id: u64,
+    on_output: Channel<OutputLine>,
+) -> FeatureResult<ToolRunResult> {
+    let prepared = pending(&app)?.take_numbered(prompt_id, Instant::now())?;
     let store = super::store::handle(&app)?;
     let helper = app
         .try_state::<super::cleanup::CleanupState>()
         .and_then(|s| s.service().privileged());
-    blocking(move || match prepared {
+    let out: ToolOutput = blocking(move || match prepared {
+        PreparedTool::Guidance => Err(tool_error(&ToolError::NotRunnable)),
         PreparedTool::EmptyBin(prompt) => {
             let action = prompt.action().clone();
             logged(&store, &bin_log_item(&action), || {
@@ -302,14 +330,125 @@ pub async fn tools_run<R: Runtime>(app: AppHandle<R>, token: String) -> FeatureR
             }
         }
     })
-    .await
+    .await?;
+    let output = out.output.unwrap_or_default();
+    for line in output.lines() {
+        let _ = on_output.send(OutputLine {
+            stream: "stdout",
+            line: line.to_owned(),
+        });
+    }
+    Ok(ToolRunResult {
+        exit_code: out.exit_code,
+        output,
+    })
 }
 
-/// The user dismissed the confirmation.
+/// Read-only status next to each tool (`ToolsStatus` in the UI).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolsStatus {
+    /// Recycle Bin contents per drive.
+    pub recycle_bins: Vec<DriveBin>,
+    /// `compact`, `not_compact` or `unknown`.
+    pub compact_os: &'static str,
+    /// Hibernation state.
+    pub hibernation: Hibernation,
+    /// Shadow-copy storage in use on the system volume.
+    pub shadow_storage_bytes: Option<u64>,
+}
+
+/// One drive's Recycle Bin.
+#[derive(Debug, Clone, Serialize)]
+pub struct DriveBin {
+    /// Drive (`C:`).
+    pub drive: String,
+    /// Items.
+    pub items: u64,
+    /// Bytes.
+    pub bytes: u64,
+}
+
+/// Hibernation facts.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hibernation {
+    /// `hiberfil.sys` exists on the system drive.
+    pub enabled: Option<bool>,
+    /// Its size.
+    pub hiberfil_bytes: Option<u64>,
+}
+
+fn system_drive() -> String {
+    std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())
+}
+
+/// Recycle Bin bytes and items over every drive.
+#[must_use]
+pub fn recycle_bin_totals() -> (u64, u64) {
+    tools::empty_recycle_bin_prompt(None)
+        .map(|p| (p.action().bytes, p.action().items))
+        .unwrap_or((0, 0))
+}
+
+/// Recycle Bin contents per drive, hibernation file and shadow storage
+/// (`tools_status`). Read-only.
 #[tauri::command]
-pub fn tools_cancel<R: Runtime>(app: AppHandle<R>, token: String) -> FeatureResult<()> {
-    pending(&app)?.cancel(&token);
-    Ok(())
+pub async fn tools_status() -> FeatureResult<ToolsStatus> {
+    blocking(|| {
+        let opts = strata_win::volume::DiscoveryOptions {
+            include_network: false,
+            query_bitlocker: false,
+        };
+        let vols = strata_win::volume::discover_volumes(opts).unwrap_or_default();
+        let mut recycle_bins = Vec::new();
+        let mut shadow = None;
+        let sys = system_drive().to_ascii_uppercase();
+        let report = strata_win::shadow::shadow_storage();
+        for v in vols.iter().filter(|v| v.ready) {
+            let Some(root) = v.root_path().map(|p| p.display().to_string()) else {
+                continue;
+            };
+            let drive = root.trim_end_matches('\\').to_owned();
+            if drive.len() == 2
+                && let Ok(p) = tools::empty_recycle_bin_prompt(Some(&root))
+            {
+                recycle_bins.push(DriveBin {
+                    drive: drive.clone(),
+                    items: p.action().items,
+                    bytes: p.action().bytes,
+                });
+            }
+            if drive.eq_ignore_ascii_case(&sys)
+                && let Some(g) = v.guid_path.as_deref()
+            {
+                shadow = report.for_volume(g).map(|s| s.used_bytes);
+            }
+        }
+        // NOTE: `hiberfil.sys` is a hidden system file; reading its metadata
+        // needs no access to its contents.
+        let hiber = std::fs::metadata(format!("{sys}\\hiberfil.sys"));
+        Ok(ToolsStatus {
+            recycle_bins,
+            compact_os: "unknown",
+            hibernation: match hiber {
+                Ok(m) => Hibernation {
+                    enabled: Some(true),
+                    hiberfil_bytes: Some(m.len()),
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Hibernation {
+                    enabled: Some(false),
+                    hiberfil_bytes: None,
+                },
+                Err(_) => Hibernation {
+                    enabled: None,
+                    hiberfil_bytes: None,
+                },
+            },
+            shadow_storage_bytes: shadow,
+        })
+    })
+    .await
 }
 
 /// Empties the Recycle Bin of every drive after the backend's **own native
@@ -320,7 +459,7 @@ pub async fn recycle_bin_empty<R: Runtime>(app: AppHandle<R>) -> FeatureResult<b
     let store = super::store::handle(&app)?;
     blocking(move || {
         let prompt = tools::empty_recycle_bin_prompt(None)
-            .map_err(|e| FeatureError::io("the Recycle Bin could not be read", &e))?;
+            .map_err(|e| FeatureError::io_err("the Recycle Bin could not be read", &e))?;
         if prompt.action().items == 0 {
             return Ok(false);
         }
@@ -527,48 +666,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn requests_map_to_tool_actions_with_absolute_commands() {
-        let ctx = ToolContext {
-            windir: r"C:\Windows".into(),
-        };
-        let spec =
-            tools::build(&ctx, &ToolRequest::DismComponentCleanup.action().unwrap()).unwrap();
-        assert_eq!(
-            spec.command_line,
-            r"C:\Windows\System32\Dism.exe /Online /Cleanup-Image /StartComponentCleanup"
-        );
-        assert_eq!(spec.launch, Launch::Elevated);
-        let text = command_text(&spec);
-        assert!(text.ends_with(&spec.command_line), "{text}");
-        let spec = tools::build(
-            &ctx,
-            &ToolRequest::DiskCleanup { drive: Some('d') }
-                .action()
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(spec.command_line, r"C:\Windows\System32\cleanmgr.exe /d D");
-        assert!(
-            ToolRequest::EmptyRecycleBin { root: None }
-                .action()
-                .is_none()
-        );
-        assert_eq!(ToolRequest::all().len(), 7);
-    }
-
-    #[test]
     fn requests_deserialize_from_the_ui_shape() {
         let r: ToolRequest =
-            serde_json::from_str(r#"{"kind":"empty_recycle_bin","root":"C:\\"}"#).unwrap();
+            serde_json::from_str(r#"{"kind":"empty_recycle_bin","drive":null}"#).unwrap();
+        assert_eq!(r, ToolRequest::EmptyRecycleBin { drive: None });
+        let r: ToolRequest =
+            serde_json::from_str(r#"{"kind":"disk_cleanup","drive":"C:"}"#).unwrap();
         assert_eq!(
             r,
-            ToolRequest::EmptyRecycleBin {
-                root: Some(r"C:\".into())
+            ToolRequest::DiskCleanup {
+                drive: Some("C:".into())
             }
         );
         let r: ToolRequest =
-            serde_json::from_str(r#"{"kind":"disk_cleanup","drive":"C"}"#).unwrap();
-        assert_eq!(r, ToolRequest::DiskCleanup { drive: Some('C') });
+            serde_json::from_str(r#"{"kind":"uninstall","appId":"Example"}"#).unwrap();
+        assert_eq!(
+            r,
+            ToolRequest::Uninstall {
+                app_id: "Example".into()
+            }
+        );
+        // The webview can never hand over its own command.
         assert!(
             serde_json::from_str::<ToolRequest>(
                 r#"{"kind":"uninstall","app_name":"x","uninstall_string":"evil.exe"}"#
@@ -578,10 +696,26 @@ mod tests {
     }
 
     #[test]
-    fn removed_silent_flags_are_shown() {
+    fn only_drives_are_accepted() {
+        assert_eq!(drive_letter(Some("c")).unwrap(), Some('C'));
+        assert_eq!(drive_letter(Some(r"d:\")).unwrap(), Some('D'));
+        assert_eq!(drive_letter(None).unwrap(), None);
+        assert!(drive_letter(Some(r"C:\Windows")).is_err());
+        assert!(drive_letter(Some(r"\\srv\share")).is_err());
+        assert_eq!(bin_root(Some("e:")).unwrap().as_deref(), Some(r"E:\"));
+    }
+
+    #[test]
+    fn commands_are_absolute_and_flags_shown() {
         let ctx = ToolContext {
             windir: r"C:\Windows".into(),
         };
+        let spec = tools::build(&ctx, &ToolAction::DismComponentCleanup).unwrap();
+        assert_eq!(
+            spec.command_line,
+            r"C:\Windows\System32\Dism.exe /Online /Cleanup-Image /StartComponentCleanup"
+        );
+        assert_eq!(spec.launch, Launch::Elevated);
         let spec = tools::build(
             &ctx,
             &ToolAction::Uninstall {
@@ -590,15 +724,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(command_text(&spec).contains("Removed silent options: /S"));
-    }
-
-    #[test]
-    fn only_drive_roots_are_accepted() {
-        assert_eq!(normalize_root("c:").unwrap(), r"C:\");
-        assert_eq!(normalize_root(r"D:\").unwrap(), r"D:\");
-        assert!(normalize_root(r"C:\Windows").is_err());
-        assert!(normalize_root(r"\\srv\share").is_err());
+        assert_eq!(spec.removed_flags, ["/S"]);
     }
 
     #[test]

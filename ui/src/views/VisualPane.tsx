@@ -15,6 +15,7 @@ import type { VisualView } from "../lib/types";
 import { loadRenderer, rendererLoaded } from "../render/registry";
 import { ViewController, type ContextMenuRequest } from "../render/ViewController";
 import { useServices } from "../services";
+import { useVolumes } from "../store/volumes";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
 import { Tooltip } from "../components/Tooltip";
@@ -231,6 +232,12 @@ export function VisualPane({ volumeId, view, onContextMenu }: VisualPaneProps) {
     };
   }, [services, provider]);
 
+  // A rescan or live updates change the index under the same root: refetch.
+  const revision = useVolumes((s) => {
+    const v = s.volumes?.find((x) => x.id === volumeId);
+    return v ? `${v.scan.rootId ?? ""}:${v.scan.lastScanMs ?? ""}:${v.scan.changedMs ?? ""}` : "";
+  });
+
   useEffect(() => {
     const c = controllerRef.current;
     if (!c || !rendererReady) return;
@@ -241,6 +248,7 @@ export function VisualPane({ volumeId, view, onContextMenu }: VisualPaneProps) {
       c.update({
         volumeId,
         root,
+        revision,
         view,
         sizeMode: s.sizeMode,
         style: s.treemapStyle,
@@ -256,7 +264,7 @@ export function VisualPane({ volumeId, view, onContextMenu }: VisualPaneProps) {
     };
     push();
     return useApp.subscribe(push);
-  }, [volumeId, view, patterns, dark, units, reducedMotion, rendererReady, services, provider]);
+  }, [volumeId, revision, view, patterns, dark, units, reducedMotion, rendererReady, services, provider]);
 
   const loading = frame === null || frame.view !== VIEW_KIND[view];
 

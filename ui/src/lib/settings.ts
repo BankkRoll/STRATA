@@ -9,6 +9,7 @@
  * validates again on save and import and its issues win.
  */
 import { call } from "./backend";
+import { listenEvent } from "./bridge";
 import type { Safety, SizeMode } from "./types";
 
 // -----------------------------------------------------------------------------
@@ -274,4 +275,45 @@ export interface UpdateCheck {
 /** Checks for an update on the configured channel (`updates_check`). */
 export function checkForUpdates(): Promise<UpdateCheck> {
   return call<UpdateCheck>("updates_check");
+}
+
+/** Installs the downloaded update and restarts into it (`updates_restart`). */
+export function restartToUpdate(): Promise<null> {
+  return call<null>("updates_restart");
+}
+
+/** An update the backend found (`strata://update-ready` / `strata://update-available`). */
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+}
+
+/**
+ * Follows the updater: `ready` when an update was downloaded and installs
+ * on restart (offer "Restart now"), `available` when it only was found
+ * (automatic download is off).
+ *
+ * @param onUpdate - Receives the state and the version.
+ * @returns Unsubscribe.
+ */
+export function watchUpdates(onUpdate: (state: "ready" | "available", info: UpdateInfo) => void): () => void {
+  const offReady = listenEvent<UpdateInfo>("strata://update-ready", (i) => {
+    onUpdate("ready", i);
+  });
+  const offAvailable = listenEvent<UpdateInfo>("strata://update-available", (i) => {
+    onUpdate("available", i);
+  });
+  return () => {
+    offReady();
+    offAvailable();
+  };
+}
+
+/**
+ * Opens the bug report form in the browser (`report_issue`). The backend
+ * pre-fills only the app version and the Windows build; never paths, file
+ * names, user names or scan data.
+ */
+export function reportIssue(): Promise<null> {
+  return call<null>("report_issue");
 }

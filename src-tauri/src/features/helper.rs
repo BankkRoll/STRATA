@@ -1,4 +1,4 @@
-//! Helper service mode from settings (SPEC §4, §19 "Helper").
+//! Helper service mode from settings.
 //!
 //! `helper_service_install` / `helper_service_uninstall` start
 //! `strata-helper.exe --install-service` / `--uninstall-service` through UAC
@@ -21,7 +21,7 @@ use super::error::{ErrorKind, FeatureError, FeatureResult, blocking};
 /// Helper executable name, installed next to the app.
 pub const HELPER_EXE: &str = "strata-helper.exe";
 
-/// Service name the helper registers (agreed with the helper track).
+/// Service name the helper registers.
 pub const HELPER_SERVICE_NAME: &str = "StrataHelper";
 
 /// How long to wait for the elevated helper to finish (after the UAC
@@ -155,6 +155,10 @@ fn query_service() -> ServiceState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelperServiceStatus {
+    /// The service is installed.
+    pub installed: bool,
+    /// The service is running.
+    pub running: bool,
     /// Whether `strata-helper.exe` is installed next to the app.
     pub helper_present: bool,
     /// Service state.
@@ -170,9 +174,12 @@ fn status<R: Runtime>(
     exit_code: Option<u32>,
 ) -> FeatureResult<HelperServiceStatus> {
     let mode = super::store::handle(app)?.load_settings()?.helper.mode;
+    let service = query_service();
     Ok(HelperServiceStatus {
+        installed: !matches!(service, ServiceState::NotInstalled | ServiceState::Unknown),
+        running: service == ServiceState::Running,
         helper_present: app_dir()?.join(HELPER_EXE).is_file(),
-        service: query_service(),
+        service,
         mode,
         exit_code,
     })
@@ -191,13 +198,13 @@ fn run<R: Runtime>(
     let cmd = helper_command(&app_dir()?, action);
     if !cmd.exe.is_file() {
         return Err(FeatureError::new(
-            ErrorKind::HelperMissing,
+            ErrorKind::Unavailable,
             format!("{HELPER_EXE} is not installed next to Strata; reinstall Strata to add it"),
         ));
     }
     let child = launch_elevated(&cmd.exe, &cmd.args).map_err(|e| match e {
         LaunchError::Declined => FeatureError::new(
-            ErrorKind::HelperDeclined,
+            ErrorKind::Declined,
             "Administrator permission was not given; nothing changed",
         ),
         LaunchError::Failed(w) => {

@@ -8,8 +8,8 @@
 ; Every step is best effort. A missing service, session or value must never
 ; block an install or an uninstall, so exit codes are popped and ignored.
 
-; IMPORTANT: contract with the strata-helper track. The helper must register its
-; service under this name and support `--uninstall-service`.
+; IMPORTANT: these names must match strata-helper, which registers its
+; service under this name and supports `--uninstall-service`.
 !define STRATA_HELPER_EXE "strata-helper.exe"
 !define STRATA_SERVICE_NAME "StrataHelper"
 !define STRATA_ETW_SESSION "Strata-FileActivity"

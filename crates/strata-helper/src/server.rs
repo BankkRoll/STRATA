@@ -1,5 +1,5 @@
 //! The helper's pipe server: accept loop and per-connection request loop
-//! (SPEC §4).
+//!.
 //!
 //! Concurrency: one client per pipe at a time (the pipe has a single
 //! instance). For each connection the calling thread is the *reader*: it
@@ -11,7 +11,7 @@
 //! the next client is accepted.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -30,6 +30,8 @@ use crate::watch::ProcessWatch;
 const POLL: Duration = Duration::from_millis(250);
 /// How long a client gets to read `ShuttingDown` before the pipe closes.
 const SHUTDOWN_LINGER: Duration = Duration::from_secs(2);
+/// Source of per-process connection ids.
+static NEXT_CONNECTION: AtomicU64 = AtomicU64::new(1);
 
 /// Activity shared across the pipes of one process (service idle exit).
 #[derive(Debug)]
@@ -214,6 +216,7 @@ enum ConnEnd {
 }
 
 struct Connection<'a> {
+    id: u64,
     conn: &'a ServerConnection,
     config: &'a HelperConfig,
     shared: &'a Shared,
@@ -224,6 +227,7 @@ struct Connection<'a> {
 impl<'a> Connection<'a> {
     fn new(conn: &'a ServerConnection, config: &'a HelperConfig, shared: &'a Shared) -> Self {
         Self {
+            id: NEXT_CONNECTION.fetch_add(1, Ordering::Relaxed),
             conn,
             config,
             shared,
@@ -343,6 +347,7 @@ impl<'a> Connection<'a> {
                 let ctx = RequestCtx {
                     id,
                     conn: self.conn,
+                    connection: self.id,
                     cancel,
                     client_pid: self.conn.peer().pid,
                     shared: self.shared,

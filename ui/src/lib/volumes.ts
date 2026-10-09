@@ -61,6 +61,12 @@ export interface VolumeInfo {
     scanner: "mft" | "walker" | null;
     /** Root entry id once an index exists. */
     rootId: number | null;
+    /** Unix ms of the last change applied after the scan (live updates, cleanup), or `null`. */
+    changedMs?: number | null;
+    /** Why live updates stopped (journal lost or turned off), until the next scan. */
+    notice?: string | null;
+    /** Changes left to replay while catching up with the change journal. */
+    catchingUp?: number | null;
   };
   /** Allocated bytes per category id once scanned, else `null`. */
   categoryBytes: Record<string, number> | null;
@@ -71,6 +77,12 @@ export interface HelperStatus {
   /** An elevated helper is connected (fast MFT scans available). */
   elevated: boolean;
   mode: "none" | "on_demand" | "service";
+  /** Connection state; `disconnected` after a crash (offer to reconnect). */
+  state?: "none" | "connected" | "declined" | "disconnected";
+  /** The helper ships with this build; when false, hide "Enable fast scan". */
+  available?: boolean;
+  /** Last problem, for the banner. */
+  message?: string | null;
 }
 
 /** "Since last scan" summary (SPEC §18), or `null` when there is no history. */
@@ -122,6 +134,24 @@ export function elevateHelper(): Promise<HelperStatus> {
 export function watchVolumes(onChange: (volumes: VolumeInfo[]) => void): () => void {
   if (!inTauri()) return () => undefined;
   const un = listen<VolumeInfo[]>("volumes://changed", (e) => {
+    onChange(e.payload);
+  });
+  return () => {
+    void un.then((f) => {
+      f();
+    });
+  };
+}
+
+/**
+ * Subscribes to `helper://changed` (connect, disconnect, crash).
+ *
+ * @param onChange - Receives the new status.
+ * @returns Unsubscribe function (no-op outside Tauri).
+ */
+export function watchHelper(onChange: (status: HelperStatus) => void): () => void {
+  if (!inTauri()) return () => undefined;
+  const un = listen<HelperStatus>("helper://changed", (e) => {
     onChange(e.payload);
   });
   return () => {

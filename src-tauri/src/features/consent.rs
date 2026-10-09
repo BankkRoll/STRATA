@@ -1,5 +1,5 @@
 //! The confirmation round trip that turns a user's click into a
-//! `strata_clean::consent::Consent` (SPEC §15.3, §15.6).
+//! `strata_clean::consent::Consent`.
 //!
 //! The backend never mints consent on its own:
 //!
@@ -154,6 +154,36 @@ impl<T> PendingConsents<T> {
             return Err(ConsentFailure::TooFast);
         }
         Ok(p.value)
+    }
+
+    /// Like [`offer`](Self::offer), but keyed by a random number below 2^53
+    /// (exact in JavaScript), for prompts the UI refers to by number.
+    /// Returns the id and the Unix ms at which the prompt expires.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::Internal`] if the OS random source fails.
+    pub fn offer_numbered(&self, value: T, now: Instant) -> Result<(u64, i64), FeatureError> {
+        let mut b = [0u8; 8];
+        getrandom::fill(&mut b)
+            .map_err(|e| FeatureError::internal(format!("no randomness: {e}")))?;
+        let id = (u64::from_le_bytes(b) & ((1 << 53) - 1)).max(1);
+        let mut map = self.lock();
+        let ttl = self.ttl;
+        map.retain(|_, p| now.saturating_duration_since(p.issued) <= ttl);
+        map.insert(id.to_string(), Pending { value, issued: now });
+        let expires = crate::model::unix_ms()
+            .saturating_add(i64::try_from(self.ttl.as_millis()).unwrap_or(i64::MAX));
+        Ok((id, expires))
+    }
+
+    /// [`take`](Self::take) for a numbered prompt.
+    ///
+    /// # Errors
+    ///
+    /// See [`ConsentFailure`].
+    pub fn take_numbered(&self, id: u64, now: Instant) -> Result<T, ConsentFailure> {
+        self.take(&id.to_string(), now)
     }
 
     /// Drops a pending action without confirming it (the user cancelled).

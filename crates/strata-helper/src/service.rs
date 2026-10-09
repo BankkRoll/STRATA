@@ -1,4 +1,4 @@
-//! Service mode (SPEC §4, §19): the helper as an on-demand Windows service,
+//! Service mode: the helper as an on-demand Windows service,
 //! so administrators get fast scans without a UAC prompt per launch.
 //!
 //! Trust model:
@@ -360,6 +360,7 @@ fn host(client_image: &Path, stop: &Arc<AtomicBool>) -> Result<(), ServiceError>
     let activity = Arc::new(Activity::default());
     let policy: Arc<dyn strata_ipc::security::PeerVerifier> = Arc::new(trust_policy(client_image)?);
     let elevated = strata_win::process::is_elevated().unwrap_or(true);
+    crate::run::recover_activity_session();
     std::thread::scope(|s| {
         let mut servers: HashMap<String, std::thread::ScopedJoinHandle<'_, ()>> = HashMap::new();
         while !stop.load(Ordering::SeqCst) {

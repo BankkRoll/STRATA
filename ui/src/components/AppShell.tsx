@@ -36,6 +36,7 @@ import { useWindowChrome } from "../shell/window";
 import { isVisualView, useApp } from "../store/app";
 import { useAppearanceSync } from "../store/prefs";
 import { useQueueSync } from "../store/queue";
+import { useUpdateSync } from "../store/updates";
 import { DetailPanel } from "../views/DetailPanel";
 import { Home, useVolumeSync } from "../views/Home";
 import { ListPane } from "../views/ListPane";
@@ -233,6 +234,7 @@ export function AppShell() {
   const services = useServices();
   useVolumeSync();
   useQueueSync();
+  useUpdateSync();
   useAppearanceSync();
   useLayoutPersistence();
   useTabSync();

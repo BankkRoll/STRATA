@@ -183,6 +183,38 @@ fn current_version<R: Runtime>(app: &AppHandle<R>) -> String {
     app.package_info().version.to_string()
 }
 
+/// Whether update checks are enabled for this build (a release build with a
+/// real updater public key).
+pub fn configured<R: Runtime>(app: &AppHandle<R>) -> bool {
+    feed(app).is_some()
+}
+
+/// Whether a downloaded update is waiting to be installed.
+pub fn is_ready<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<UpdaterState>()
+        .and_then(|s| s.ready.lock().ok().map(|r| r.is_some()))
+        .unwrap_or(false)
+}
+
+/// The policy in effect.
+pub fn policy<R: Runtime>(app: &AppHandle<R>) -> Policy {
+    app.try_state::<UpdaterState>()
+        .and_then(|s| s.policy.lock().ok().map(|p| *p))
+        .unwrap_or_default()
+}
+
+/// Checks the configured channel now. With auto-download on, a newer
+/// version is downloaded and [`UPDATE_READY_EVENT`] follows; otherwise
+/// [`UPDATE_AVAILABLE_EVENT`] is emitted. Returns the newer version, if any.
+///
+/// # Errors
+///
+/// Updates are not configured in this build, or the feed could not be read.
+pub async fn check_now<R: Runtime>(app: &AppHandle<R>) -> Result<Option<UpdateInfo>, String> {
+    let base = feed(app).ok_or_else(|| "updates are not configured in this build".to_owned())?;
+    check_once(app, &base).await.map_err(|e| e.to_string())
+}
+
 /// Replaces the update policy, e.g. after the settings store loads or changes.
 /// Takes effect at the next check.
 pub fn set_policy<R: Runtime>(app: &AppHandle<R>, policy: Policy) {
@@ -232,7 +264,7 @@ fn install_ready<R: Runtime>(
 async fn check_once<R: Runtime>(
     app: &AppHandle<R>,
     base: &str,
-) -> tauri_plugin_updater::Result<()> {
+) -> tauri_plugin_updater::Result<Option<UpdateInfo>> {
     let policy = app
         .try_state::<UpdaterState>()
         .and_then(|s| s.policy.lock().ok().map(|p| *p))
@@ -245,15 +277,15 @@ async fn check_once<R: Runtime>(
         .check()
         .await?
     else {
-        return Ok(());
+        return Ok(None);
     };
     let info = UpdateInfo {
         version: update.version.clone(),
         notes: update.body.clone(),
     };
     if !policy.auto_download {
-        let _ = app.emit(UPDATE_AVAILABLE_EVENT, info);
-        return Ok(());
+        let _ = app.emit(UPDATE_AVAILABLE_EVENT, &info);
+        return Ok(Some(info));
     }
     let bytes = update.download(|_, _| {}, || {}).await?;
     if let Some(state) = app.try_state::<UpdaterState>()
@@ -261,8 +293,8 @@ async fn check_once<R: Runtime>(
     {
         *ready = Some((update, bytes));
     }
-    let _ = app.emit(UPDATE_READY_EVENT, info);
-    Ok(())
+    let _ = app.emit(UPDATE_READY_EVENT, &info);
+    Ok(Some(info))
 }
 
 fn spawn_checks<R: Runtime>(app: AppHandle<R>, base: String) {

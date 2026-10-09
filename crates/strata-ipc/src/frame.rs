@@ -320,6 +320,103 @@ mod tests {
                 message: "slow down".into(),
                 retry_after_ms: Some(10),
             })),
+            Message::Request(Request::StartActivity {
+                cpu_cap_centi_percent: 200,
+            }),
+            Message::Request(Request::StopActivity),
+            Message::Request(Request::ClearActivity),
+            Message::Request(Request::QueryActivity {
+                window: ActivityWindow::Since {
+                    unix_secs: 1_791_500_000,
+                },
+                limit: 20,
+            }),
+            Message::Request(Request::QueryActivity {
+                window: ActivityWindow::LastHour,
+                limit: 0,
+            }),
+            Message::Request(Request::ActivityEvidence {
+                since_unix: -5,
+                limit: 100,
+            }),
+            Message::Response(Response::ActivityBatch {
+                rows: vec![ActivityRow {
+                    hour: 1_791_500_400,
+                    image: r"C:\Program Files\Tool\tool.exe".into(),
+                    dir_hash: u64::MAX,
+                    bytes_written: 1 << 40,
+                    files_created: 3,
+                    files_deleted: 0,
+                }],
+                last_writes: vec![
+                    LastWriteRow {
+                        path_hash: 7,
+                        image: "a.exe".into(),
+                        pid: Some(4242),
+                        at: 1_791_500_401,
+                    },
+                    LastWriteRow {
+                        path_hash: 8,
+                        image: String::new(),
+                        pid: None,
+                        at: 0,
+                    },
+                ],
+            }),
+            Message::Response(Response::ActivityHealth {
+                cpu_centi_percent: 37,
+                sample_rate: 4,
+                suggest_disable: true,
+            }),
+            Message::Response(Response::ActivityStopped {
+                requested: false,
+                status: 1223,
+                events_lost: u64::MAX,
+            }),
+            Message::Response(Response::ActivityTop {
+                writers: vec![WriterRow {
+                    image: "b.exe".into(),
+                    bytes_written: 9,
+                    files_created: 1,
+                    files_deleted: 2,
+                    dirs: 2,
+                    top_dirs: vec![
+                        DirBytes {
+                            dir: r"C:\d\one".into(),
+                            bytes_written: 8,
+                        },
+                        DirBytes {
+                            dir: r"C:\d\two".into(),
+                            bytes_written: 1,
+                        },
+                    ],
+                }],
+            }),
+            Message::Response(Response::ActivityEvidence {
+                evidence: vec![EvidenceRow {
+                    prefix: r"C:\d\one".into(),
+                    app: "b.exe".into(),
+                    image: r"C:\p\b.exe".into(),
+                    weight_milli: 1000,
+                    share_milli: 750,
+                }],
+            }),
+            Message::Response(Response::ActivityState { running: true }),
+            Message::Response(Response::Error(ErrorReply {
+                code: ErrorCode::JournalNotActive,
+                message: "inactive".into(),
+                retry_after_ms: None,
+            })),
+            Message::Welcome(Welcome {
+                protocol: PROTOCOL_VERSION,
+                helper_build: "h".into(),
+                elevated: true,
+                capabilities: Capabilities {
+                    activity: true,
+                    usn_journal: true,
+                    ..Default::default()
+                },
+            }),
         ];
         msgs.into_iter()
             .enumerate()
@@ -343,6 +440,45 @@ mod tests {
             at += used;
         }
         assert_eq!(at, buf.len());
+    }
+
+    #[test]
+    fn protocol_v3_appends_without_renumbering() {
+        assert_eq!(PROTOCOL_VERSION, 3);
+        let payload = |m: &Message| {
+            let mut buf = Vec::new();
+            encode_frame(
+                &Envelope {
+                    request_id: 1,
+                    message: m.clone(),
+                },
+                &mut buf,
+            )
+            .unwrap();
+            buf[9..].to_vec()
+        };
+        // Postcard tags variants by position: earlier variants keep their
+        // indices, the activity messages come after them.
+        assert_eq!(payload(&Message::Request(Request::Ping)), [0]);
+        assert_eq!(
+            payload(&Message::Request(Request::StopActivity)),
+            [12],
+            "StopActivity"
+        );
+        assert_eq!(
+            payload(&Message::Response(Response::ActivityState {
+                running: true
+            })),
+            [19, 1]
+        );
+        assert_eq!(
+            payload(&Message::Response(Response::Error(ErrorReply {
+                code: ErrorCode::JournalNotActive,
+                message: String::new(),
+                retry_after_ms: None,
+            }))),
+            [11, 14, 0, 0]
+        );
     }
 
     #[test]

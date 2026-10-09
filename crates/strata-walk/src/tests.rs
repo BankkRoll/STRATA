@@ -887,6 +887,39 @@ fn wide_tree(tag: &str, dirs: usize, files: usize) -> TempTree {
 }
 
 #[test]
+fn max_depth_lists_only_the_requested_levels() {
+    let t = wide_tree("depth", 3, 4);
+    t.file(r"d000\deeper\x.txt", 1);
+    let (recs, _) = walk(
+        &t.plain,
+        WalkOptions {
+            max_depth: Some(1),
+            ..opts(ListingMethod::DirectoryInfo, true)
+        },
+    );
+    let v = View::new(&recs);
+    assert_eq!(
+        v.children(v.root.id).len(),
+        3,
+        "the root's folders are reported"
+    );
+    assert_eq!(
+        recs.len(),
+        4,
+        "the root plus its direct entries, nothing below"
+    );
+    let (recs, _) = walk(
+        &t.plain,
+        WalkOptions {
+            max_depth: Some(2),
+            ..opts(ListingMethod::DirectoryInfo, true)
+        },
+    );
+    // Root, 3 folders, their 12 files and `deeper` (not listed).
+    assert_eq!(recs.len(), 1 + 3 + 12 + 1);
+}
+
+#[test]
 fn cancellation_flags_partial_and_keeps_structure() {
     let t = wide_tree("cancel", 60, 20);
     for method in [ListingMethod::DirectoryInfo, ListingMethod::FindFirstFile] {

@@ -1,4 +1,4 @@
-//! Store lifecycle (SPEC §18, §21).
+//! Store lifecycle.
 //!
 //! Responsibilities:
 //! - Open `strata-store` in the per-user app data directory at startup and
@@ -6,7 +6,7 @@
 //! - Report database health and offer the two resets.
 //! - Daily maintenance: snapshot retention and activity pruning.
 //!
-//! Every other track should reach the store through [`handle`] rather than
+//! Everything else reaches the store through [`handle`] rather than
 //! opening a second one.
 
 use std::path::{Path, PathBuf};
@@ -56,12 +56,12 @@ impl AppStore {
     ///
     /// # Errors
     ///
-    /// [`ErrorKind::StoreUnavailable`] when the store directory could not be
+    /// [`ErrorKind::Unavailable`] when the store directory could not be
     /// created.
     pub fn get(&self) -> FeatureResult<Store> {
         self.store.clone().map_err(|e| {
             FeatureError::new(
-                ErrorKind::StoreUnavailable,
+                ErrorKind::Unavailable,
                 format!("Strata's data folder could not be opened: {e}"),
             )
         })
@@ -78,10 +78,10 @@ impl AppStore {
 ///
 /// # Errors
 ///
-/// [`ErrorKind::StoreUnavailable`] when the store is not open.
+/// [`ErrorKind::Unavailable`] when the store is not open.
 pub fn handle<R: Runtime>(app: &AppHandle<R>) -> FeatureResult<Store> {
     app.try_state::<AppStore>()
-        .ok_or_else(|| FeatureError::new(ErrorKind::StoreUnavailable, "the store is not open"))?
+        .ok_or_else(|| FeatureError::new(ErrorKind::Unavailable, "the store is not open"))?
         .get()
 }
 
@@ -285,6 +285,41 @@ pub async fn store_reset_state<R: Runtime>(app: AppHandle<R>) -> FeatureResult<R
             moved_to: report.moved_to.map(|p| p.display().to_string()),
             health: health_dto(&app),
         })
+    })
+    .await
+}
+
+/// Strata's own data that Settings > Data can clear. Never user files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClearableData {
+    /// Snapshots and their folder sizes.
+    History,
+    /// File-activity rollups and last writers.
+    Activity,
+    /// The duplicate finder's hash cache and the saved indexes.
+    Caches,
+}
+
+/// Clears Strata's own data (`data_clear`).
+#[tauri::command]
+pub async fn data_clear<R: Runtime>(app: AppHandle<R>, what: ClearableData) -> FeatureResult<()> {
+    let store = handle(&app)?;
+    blocking(move || {
+        match what {
+            ClearableData::History => store.clear_history()?,
+            ClearableData::Activity => {
+                store.clear_activity()?;
+                if let Some(st) = app.try_state::<std::sync::Arc<crate::state::AppState>>() {
+                    crate::activity::clear_helper(&st);
+                }
+            }
+            ClearableData::Caches => {
+                store.clear_hash_cache()?;
+                crate::live::clear_caches(&app);
+            }
+        }
+        Ok(())
     })
     .await
 }

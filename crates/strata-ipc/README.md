@@ -7,7 +7,9 @@ the scanners. The pipe carries 3.2 million scan records per second.
 ## Responsibilities
 
 - `protocol`: versioned messages (`Envelope`, `Request`, `Response`, handshake `Hello` /
-  `Welcome`, streamed scan events), each tagged with a request id.
+  `Welcome`, streamed scan and file-activity events), each tagged with a request id. The
+  current version is 3; the handshake accepts only an exact version match, and new variants
+  and fields are only ever appended.
 - `frame`: length-prefixed binary framing with postcard payloads (`encode_frame`,
   `decode_frame`), strictly bounds-checked against hostile input.
 - `pipe`: overlapped transport: `PipeServer` for the helper, `PipeClient` for the app, with

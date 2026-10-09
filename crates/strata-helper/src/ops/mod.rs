@@ -9,7 +9,9 @@
 //! - [`records`] handles `ReadRecords`.
 //! - [`usn`] wraps the USN journal FSCTLs.
 //! - [`delete`] handles `PrivilegedDelete` and `DeleteOnReboot`.
+//! - [`activity`] handles file-activity tracking and its queries.
 
+pub mod activity;
 pub mod delete;
 pub mod records;
 pub mod scan;
@@ -37,6 +39,8 @@ pub struct Shared {
     /// MFT bytes per scanner read (a multiple of the record size; the
     /// default is `strata_ntfs::DEFAULT_CHUNK_BYTES`).
     pub scan_chunk_bytes: usize,
+    /// The process-wide file-activity tracking session.
+    pub activity: activity::ActivityHub,
 }
 
 impl Shared {
@@ -48,6 +52,7 @@ impl Shared {
             audit: AuditTrail::new(),
             deletes: delete::DeleteGuard::default(),
             scan_chunk_bytes: strata_ntfs::DEFAULT_CHUNK_BYTES,
+            activity: activity::ActivityHub::default(),
         }
     }
 }
@@ -59,6 +64,8 @@ pub struct RequestCtx<'a> {
     pub id: u32,
     /// The connection to answer on.
     pub conn: &'a ServerConnection,
+    /// Identifies the connection within this helper process.
+    pub connection: u64,
     /// This request's cancellation.
     pub cancel: Cancel,
     /// Verified client process id (for audit records).
@@ -163,6 +170,15 @@ pub fn handle(ctx: &RequestCtx<'_>, request: Request) -> Result<(), HelperError>
         }
         Request::PrivilegedDelete(req) => delete::privileged_delete(ctx, req),
         Request::DeleteOnReboot(req) => delete::delete_on_reboot(ctx, req),
+        Request::StartActivity {
+            cpu_cap_centi_percent,
+        } => activity::start_activity(ctx, cpu_cap_centi_percent),
+        Request::StopActivity => activity::stop_activity(ctx),
+        Request::ClearActivity => activity::clear_activity(ctx),
+        Request::QueryActivity { window, limit } => activity::query_activity(ctx, window, limit),
+        Request::ActivityEvidence { since_unix, limit } => {
+            activity::activity_evidence(ctx, since_unix, limit)
+        }
         Request::Ping | Request::Cancel { .. } | Request::Shutdown => {
             Err(HelperError::internal("control request routed to a worker"))
         }

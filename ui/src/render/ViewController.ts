@@ -34,6 +34,11 @@ import type { DrawState, ViewRenderer } from "./renderer";
 export interface ViewSettings {
   volumeId: string;
   root: number;
+  /**
+   * Changes whenever the volume's index changes (a new scan, a rescan or
+   * live updates); a new value re-requests the layout.
+   */
+  revision?: string;
   view: VisualView;
   sizeMode: SizeMode;
   style: TreemapStyle;
@@ -202,7 +207,9 @@ export class ViewController {
       prev.view !== next.view ||
       prev.sizeMode !== next.sizeMode ||
       prev.style !== next.style ||
-      prev.filters !== next.filters;
+      prev.filters !== next.filters ||
+      // The first known revision describes the index the layout came from.
+      (!!prev.revision && prev.revision !== next.revision);
     if (rootChanged || prev.view !== next.view) this.desired = IDENTITY_TRANSFORM;
     if (layoutChanged) {
       const animate = !!prev && prev.volumeId === next.volumeId && prev.view === next.view && rootChanged;

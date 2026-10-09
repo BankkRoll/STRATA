@@ -1,4 +1,4 @@
-//! Cleanup commands over `strata-clean`'s flow (SPEC Â§15.2-Â§15.7).
+//! The cleanup engine of the app over `strata-clean`'s flow.
 //!
 //! Responsibilities:
 //! - [`CleanupService`]: plans kept on the backend (the UI refers to them by
@@ -8,12 +8,15 @@
 //!   on the way out (pre-flight and execute), independently of the flow.
 //! - [`PrivilegedBackend`]: the hook the helper client satisfies so items
 //!   that need elevation are deleted by the helper, by file id.
-//! - Undo history and Restore over the store.
+//! - Restore over the store.
+//!
+//! The queue, review and execution commands the UI calls are in
+//! [`super::queue`].
 //!
 //! Cleanup stays disabled ([`Readiness::Recovering`]) until crash recovery
 //! of the undo log has finished at startup.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -33,21 +36,20 @@ use strata_clean::recycle::{self, RestoreTicket};
 use strata_clean::tools::{CommandSpec, ToolError, ToolOutput};
 use strata_clean::{CancelToken, CleanError, GuardConfig, SafetyGuard};
 use strata_core::{FileTime, Safety};
-use strata_store::{ActionId, ActionRecord, ActionSummary, ItemId, ItemRecord, Store, Timestamp};
-use tauri::ipc::Channel;
+use strata_store::{ActionId, ItemId, ItemRecord, Store};
 use tauri::{AppHandle, Manager, Runtime};
 
 use super::audit::StoreAuditLog;
-use super::error::{ErrorKind, FeatureError, FeatureResult, blocking};
+use super::error::{ErrorKind, FeatureError, FeatureResult};
 
 // -----------------------------------------------------------------------------
 // Privileged hook
 // -----------------------------------------------------------------------------
 
-/// What the elevated helper offers the app. The helper client (backend
-/// track) implements this and installs it with [`set_privileged_backend`].
+/// What the elevated helper offers the app. [`crate::helper::HelperBackend`]
+/// implements this and is installed with [`set_privileged_backend`].
 ///
-/// The helper re-validates everything itself (SPEC Â§15.7); this layer has
+/// The helper re-validates everything itself; this layer has
 /// already checked the never-list and the user's confirmations.
 pub trait PrivilegedBackend: Send + Sync {
     /// Deletes one item by file id, permanently, in the helper.
@@ -63,6 +65,17 @@ pub trait PrivilegedBackend: Send + Sync {
     fn run_tool(&self, spec: &CommandSpec) -> Option<Result<ToolOutput, ToolError>> {
         let _ = spec;
         None
+    }
+
+    /// Schedules a plain file for deletion at the next restart.
+    ///
+    /// # Errors
+    ///
+    /// The helper's refusal; by default the backend cannot.
+    fn delete_on_reboot(&self, request: &PrivilegedDeleteRequest) -> Result<(), CleanError> {
+        Err(CleanError::AccessDenied {
+            path: request.expected_path.clone(),
+        })
     }
 }
 
@@ -82,7 +95,7 @@ pub fn set_privileged_backend<R: Runtime>(
 // -----------------------------------------------------------------------------
 
 /// Pre-flight results are trusted for this long before execute needs a new
-/// one (SPEC Â§15.2 step 5: "right before acting").
+/// one.
 pub const PREFLIGHT_MAX_AGE: Duration = Duration::from_secs(10 * 60);
 
 /// Plans nobody touched for this long are dropped.
@@ -107,10 +120,33 @@ pub enum Readiness {
 /// while the app runs, so each plan and pre-flight gets a new one).
 pub type GuardFactory = Box<dyn Fn() -> FeatureResult<SafetyGuard> + Send + Sync>;
 
+/// A pre-flight run: when, with which guard, over which items.
+struct Preflight {
+    at: Instant,
+    guard: Arc<SafetyGuard>,
+    items: BTreeSet<u64>,
+}
+
+/// `plan` without the items in `skip`.
+fn without(plan: &Plan, skip: &BTreeSet<u64>) -> Plan {
+    if skip.is_empty() {
+        return plan.clone();
+    }
+    Plan {
+        items: plan
+            .items
+            .iter()
+            .filter(|i| !skip.contains(&i.id))
+            .cloned()
+            .collect(),
+        ..plan.clone()
+    }
+}
+
 struct PlanEntry {
     plan: Plan,
     touched: Instant,
-    preflight: Option<(Instant, Arc<SafetyGuard>)>,
+    preflight: Option<Preflight>,
     cancel: Option<CancelToken>,
     report: Option<ExecutionReport>,
 }
@@ -385,28 +421,51 @@ impl CleanupService {
         plan_id: u64,
         acks: &Acknowledgements,
         cfg: &CleanupConfig,
+        skip: &BTreeSet<u64>,
     ) -> FeatureResult<Vec<ItemVerdict>> {
         let plan = lock(&self.plans)
             .get(&plan_id)
-            .map(|e| e.plan.clone())
+            .map(|e| without(&e.plan, skip))
             .ok_or_else(|| Self::unknown(plan_id))?;
         let guard = Arc::new((self.guards)()?);
         check_plan_against(&guard, &plan)?;
         let verdicts = flow::preflight(&guard, &plan, acks, cfg);
         if let Some(e) = lock(&self.plans).get_mut(&plan_id) {
             e.touched = Instant::now();
-            e.preflight = Some((Instant::now(), guard));
+            e.preflight = Some(Preflight {
+                at: Instant::now(),
+                guard,
+                items: plan.items.iter().map(|i| i.id).collect(),
+            });
         }
         Ok(verdicts)
     }
 
-    fn begin_run(&self, plan_id: u64) -> FeatureResult<(Plan, Arc<SafetyGuard>, CancelToken)> {
+    /// The stored plan (for the review layer).
+    #[must_use]
+    pub fn plan_of(&self, plan_id: u64) -> Option<Plan> {
+        lock(&self.plans).get(&plan_id).map(|e| e.plan.clone())
+    }
+
+    fn begin_run(
+        &self,
+        plan_id: u64,
+        skip: &BTreeSet<u64>,
+    ) -> FeatureResult<(Plan, Arc<SafetyGuard>, CancelToken)> {
         let mut plans = lock(&self.plans);
         let entry = plans
             .get_mut(&plan_id)
             .ok_or_else(|| Self::unknown(plan_id))?;
+        let plan = without(&entry.plan, skip);
+        // Every item about to act must have been pre-flighted recently;
+        // skipping more items than at pre-flight is fine, adding back is not.
         let guard = match &entry.preflight {
-            Some((at, g)) if at.elapsed() <= PREFLIGHT_MAX_AGE => g.clone(),
+            Some(p)
+                if p.at.elapsed() <= PREFLIGHT_MAX_AGE
+                    && plan.items.iter().all(|i| p.items.contains(&i.id)) =>
+            {
+                p.guard.clone()
+            }
             _ => {
                 return Err(FeatureError::new(
                     ErrorKind::PreflightRequired,
@@ -417,7 +476,7 @@ impl CleanupService {
         let cancel = CancelToken::new();
         entry.cancel = Some(cancel.clone());
         entry.touched = Instant::now();
-        Ok((entry.plan.clone(), guard, cancel))
+        Ok((plan, guard, cancel))
     }
 
     fn end_run(&self, plan_id: u64, report: &ExecutionReport) {
@@ -455,11 +514,12 @@ impl CleanupService {
         decision: &Decision,
         cfg: &CleanupConfig,
         store: &Store,
+        skip: &BTreeSet<u64>,
         progress: &mut dyn FnMut(Progress),
     ) -> FeatureResult<ExecutionReport> {
         self.require_ready()?;
         let _run = self.claim_runner()?;
-        let (plan, guard, cancel) = self.begin_run(plan_id)?;
+        let (plan, guard, cancel) = self.begin_run(plan_id, skip)?;
         let result = check_plan_against(&guard, &plan).map(|()| {
             if plan.items.is_empty() {
                 return ExecutionReport {
@@ -489,7 +549,7 @@ impl CleanupService {
     ///
     /// # Errors
     ///
-    /// As [`execute`](Self::execute), plus [`ErrorKind::Unsupported`] when no
+    /// As [`execute`](Self::execute), plus [`ErrorKind::Unavailable`] when no
     /// helper is connected or the decision is not a confirmed permanent
     /// delete.
     pub fn execute_elevated(
@@ -498,12 +558,13 @@ impl CleanupService {
         decision: &Decision,
         cfg: &CleanupConfig,
         store: &Store,
+        skip: &BTreeSet<u64>,
         progress: &mut dyn FnMut(Progress),
     ) -> FeatureResult<ExecutionReport> {
         self.require_ready()?;
         let helper = self.privileged().ok_or_else(|| {
             FeatureError::new(
-                ErrorKind::Unsupported,
+                ErrorKind::Unavailable,
                 "the elevated helper is not running; enable fast scan first",
             )
         })?;
@@ -513,7 +574,7 @@ impl CleanupService {
             ));
         }
         let _run = self.claim_runner()?;
-        let (plan, guard, cancel) = self.begin_run(plan_id)?;
+        let (plan, guard, cancel) = self.begin_run(plan_id, skip)?;
         if let Err(e) = check_plan_against(&guard, &plan) {
             if let Some(entry) = lock(&self.plans).get_mut(&plan_id) {
                 entry.cancel = None;
@@ -727,123 +788,13 @@ pub fn restore_item(store: &Store, action: i64, item: i64) -> FeatureResult<Path
     Ok(path)
 }
 
-fn is_restorable(i: &ItemRecord) -> bool {
+/// Whether `cleanup_restore` can bring the item back.
+#[must_use]
+pub fn is_restorable(i: &ItemRecord) -> bool {
     i.planned.method == strata_store::DeleteMethod::Recycle
         && i.result == strata_store::ItemResult::Done
         && i.restored_at.is_none()
         && i.restore.as_ref().is_some_and(|r| !r.blob.is_empty())
-}
-
-fn ms(t: Timestamp) -> i64 {
-    t.0.saturating_mul(1000)
-}
-
-/// One action in the cleanup history.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActionDto {
-    /// Action id.
-    pub id: i64,
-    /// `cleanup`, `duplicates` or `tool`.
-    pub kind: strata_store::ActionKind,
-    /// `in_progress`, `completed`, `partial`, `failed`, `cancelled`, `interrupted`.
-    pub status: strata_store::ActionStatus,
-    /// Unix ms.
-    pub started_ms: i64,
-    /// Unix ms.
-    pub finished_ms: Option<i64>,
-    /// Items planned.
-    pub item_count: u64,
-    /// Items removed.
-    pub done_count: u64,
-    /// Items failed.
-    pub failed_count: u64,
-    /// Bytes removed.
-    pub bytes_done: u64,
-}
-
-impl From<&ActionSummary> for ActionDto {
-    fn from(s: &ActionSummary) -> Self {
-        Self {
-            id: s.id.0,
-            kind: s.kind,
-            status: s.status,
-            started_ms: ms(s.started_at),
-            finished_ms: s.finished_at.map(ms),
-            item_count: s.item_count,
-            done_count: s.done_count,
-            failed_count: s.failed_count,
-            bytes_done: s.bytes_done,
-        }
-    }
-}
-
-/// One logged item.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActionItemDto {
-    /// Item id (for `cleanup_restore`).
-    pub id: i64,
-    /// Owning action id.
-    pub action_id: i64,
-    /// Position in the action.
-    pub seq: u32,
-    /// Path at the time.
-    pub path: String,
-    /// Bytes.
-    pub size: u64,
-    /// `recycle`, `permanent`, `reboot_delete` or `tool`.
-    pub method: strata_store::DeleteMethod,
-    /// Safety tier.
-    pub tier: Safety,
-    /// `pending`, `done`, `failed` or `skipped`.
-    pub result: strata_store::ItemResult,
-    /// Failure or skip reason.
-    pub error: Option<String>,
-    /// Unix ms.
-    pub completed_ms: Option<i64>,
-    /// Whether `cleanup_restore` can bring it back.
-    pub restorable: bool,
-    /// Unix ms, when restored.
-    pub restored_ms: Option<i64>,
-}
-
-impl From<&ItemRecord> for ActionItemDto {
-    fn from(i: &ItemRecord) -> Self {
-        Self {
-            id: i.id.0,
-            action_id: i.action.0,
-            seq: i.seq,
-            path: i.planned.path.clone(),
-            size: i.planned.size,
-            method: i.planned.method,
-            tier: i.planned.tier,
-            result: i.result,
-            error: i.error.clone(),
-            completed_ms: i.completed_at.map(ms),
-            restorable: is_restorable(i),
-            restored_ms: i.restored_at.map(ms),
-        }
-    }
-}
-
-/// An action with its items.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActionDetailDto {
-    /// Summary.
-    pub action: ActionDto,
-    /// Items in plan order.
-    pub items: Vec<ActionItemDto>,
-}
-
-impl From<&ActionRecord> for ActionDetailDto {
-    fn from(r: &ActionRecord) -> Self {
-        Self {
-            action: (&r.summary).into(),
-            items: r.items.iter().map(Into::into).collect(),
-        }
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -899,7 +850,7 @@ pub fn machine_guard(extra_protected: &[PathBuf]) -> FeatureResult<SafetyGuard> 
     })
 }
 
-fn service<R: Runtime>(app: &AppHandle<R>) -> FeatureResult<Arc<CleanupService>> {
+pub(crate) fn service<R: Runtime>(app: &AppHandle<R>) -> FeatureResult<Arc<CleanupService>> {
     app.try_state::<CleanupState>()
         .map(|s| s.service())
         .ok_or_else(|| FeatureError::new(ErrorKind::NotReady, "cleanup is not initialized"))
@@ -936,166 +887,6 @@ pub fn cleanup_status<R: Runtime>(app: AppHandle<R>) -> FeatureResult<CleanupSta
         readiness: s.readiness(),
         elevated_route: s.privileged().is_some(),
     })
-}
-
-/// Builds and stores the review plan.
-#[tauri::command]
-pub async fn cleanup_plan<R: Runtime>(
-    app: AppHandle<R>,
-    items: Vec<QueueItem>,
-) -> FeatureResult<PlanResponse> {
-    let s = service(&app)?;
-    blocking(move || s.plan(items)).await
-}
-
-/// Pre-flight (TOCTOU, locks, Recycle Bin fit) right before acting.
-#[tauri::command]
-pub async fn cleanup_preflight<R: Runtime>(
-    app: AppHandle<R>,
-    plan_id: u64,
-    acks: Acknowledgements,
-) -> FeatureResult<Vec<ItemVerdict>> {
-    let s = service(&app)?;
-    let store = super::store::handle(&app)?;
-    let app2 = app.clone();
-    blocking(move || {
-        let cfg = config_from(&store)?;
-        let verdicts = s.preflight(plan_id, &acks, &cfg)?;
-        if let Some(h) = app2.try_state::<super::locks::KnownHolders>() {
-            h.remember(verdicts.iter().flat_map(|v| v.holders.iter().cloned()));
-        }
-        Ok(verdicts)
-    })
-    .await
-}
-
-/// Executes a pre-flighted plan; progress streams over `on_progress`.
-#[tauri::command]
-pub async fn cleanup_execute<R: Runtime>(
-    app: AppHandle<R>,
-    plan_id: u64,
-    decision: Decision,
-    on_progress: Channel<Progress>,
-) -> FeatureResult<ExecutionReport> {
-    let s = service(&app)?;
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        let cfg = config_from(&store)?;
-        s.execute(plan_id, &decision, &cfg, &store, &mut |p| {
-            let _ = on_progress.send(p);
-        })
-    })
-    .await
-}
-
-/// Executes a pre-flighted plan through the elevated helper (permanent
-/// deletes by file id).
-#[tauri::command]
-pub async fn cleanup_execute_elevated<R: Runtime>(
-    app: AppHandle<R>,
-    plan_id: u64,
-    decision: Decision,
-    on_progress: Channel<Progress>,
-) -> FeatureResult<ExecutionReport> {
-    let s = service(&app)?;
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        let cfg = config_from(&store)?;
-        s.execute_elevated(plan_id, &decision, &cfg, &store, &mut |p| {
-            let _ = on_progress.send(p);
-        })
-    })
-    .await
-}
-
-/// Cancels a running plan.
-#[tauri::command]
-pub fn cleanup_cancel<R: Runtime>(app: AppHandle<R>, plan_id: u64) -> FeatureResult<()> {
-    service(&app)?.cancel(plan_id);
-    Ok(())
-}
-
-/// A new plan of the retryable items of the last run.
-#[tauri::command]
-pub async fn cleanup_retry<R: Runtime>(
-    app: AppHandle<R>,
-    plan_id: u64,
-) -> FeatureResult<PlanResponse> {
-    let s = service(&app)?;
-    blocking(move || s.retry(plan_id)).await
-}
-
-/// Forgets a plan.
-#[tauri::command]
-pub fn cleanup_discard<R: Runtime>(app: AppHandle<R>, plan_id: u64) -> FeatureResult<()> {
-    service(&app)?.discard(plan_id);
-    Ok(())
-}
-
-/// Undo history, newest first. Pass the last id of a page as `before`.
-#[tauri::command]
-pub async fn cleanup_history<R: Runtime>(
-    app: AppHandle<R>,
-    limit: Option<usize>,
-    before: Option<i64>,
-) -> FeatureResult<Vec<ActionDto>> {
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        let rows = store.action_history(limit.unwrap_or(50).min(500), before.map(ActionId))?;
-        Ok(rows.iter().map(Into::into).collect())
-    })
-    .await
-}
-
-/// One action with its items.
-#[tauri::command]
-pub async fn cleanup_action<R: Runtime>(
-    app: AppHandle<R>,
-    action_id: i64,
-) -> FeatureResult<ActionDetailDto> {
-    let store = super::store::handle(&app)?;
-    blocking(move || Ok((&store.action(ActionId(action_id))?).into())).await
-}
-
-/// Recycled items that can still be restored, newest first.
-#[tauri::command]
-pub async fn cleanup_restorable<R: Runtime>(
-    app: AppHandle<R>,
-    limit: Option<usize>,
-) -> FeatureResult<Vec<ActionItemDto>> {
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        Ok(store
-            .restorable_items(limit.unwrap_or(100).min(1000))?
-            .iter()
-            .map(Into::into)
-            .collect())
-    })
-    .await
-}
-
-/// Response of `cleanup_restore`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RestoredDto {
-    /// Where the item is now.
-    pub path: String,
-}
-
-/// Restores one recycled item to where it was (never overwrites).
-#[tauri::command]
-pub async fn cleanup_restore<R: Runtime>(
-    app: AppHandle<R>,
-    action_id: i64,
-    item_id: i64,
-) -> FeatureResult<RestoredDto> {
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        restore_item(&store, action_id, item_id).map(|p| RestoredDto {
-            path: p.display().to_string(),
-        })
-    })
-    .await
 }
 
 #[cfg(test)]
@@ -1173,13 +964,20 @@ mod tests {
         assert_eq!(planned.plan.items.len(), 2);
         let decision = Decision::recycle();
         assert_eq!(
-            svc.execute(planned.plan_id, &decision, &cfg, &store, &mut |_| {})
-                .unwrap_err()
-                .kind,
+            svc.execute(
+                planned.plan_id,
+                &decision,
+                &cfg,
+                &store,
+                &BTreeSet::new(),
+                &mut |_| {}
+            )
+            .unwrap_err()
+            .code,
             ErrorKind::PreflightRequired
         );
         let verdicts = svc
-            .preflight(planned.plan_id, &decision.acks, &cfg)
+            .preflight(planned.plan_id, &decision.acks, &cfg, &BTreeSet::new())
             .unwrap();
         assert!(
             verdicts
@@ -1190,9 +988,14 @@ mod tests {
 
         let mut events = Vec::new();
         let report = svc
-            .execute(planned.plan_id, &decision, &cfg, &store, &mut |p| {
-                events.push(p)
-            })
+            .execute(
+                planned.plan_id,
+                &decision,
+                &cfg,
+                &store,
+                &BTreeSet::new(),
+                &mut |p| events.push(p),
+            )
             .unwrap();
         let tickets: Vec<RestoreTicket> = report
             .results
@@ -1229,13 +1032,20 @@ mod tests {
         assert_eq!(std::fs::read(&b).unwrap(), b"bravo bravo");
         assert!(store.restorable_items(10).unwrap().is_empty());
         let again = restore_item(&store, record.summary.id.0, record.items[0].id.0);
-        assert_eq!(again.unwrap_err().kind, ErrorKind::InvalidInput);
+        assert_eq!(again.unwrap_err().code, ErrorKind::BadRequest);
 
         // The plan needs a fresh pre-flight to run again.
         assert_eq!(
-            svc.execute(planned.plan_id, &decision, &cfg, &store, &mut |_| {})
-                .unwrap_err()
-                .kind,
+            svc.execute(
+                planned.plan_id,
+                &decision,
+                &cfg,
+                &store,
+                &BTreeSet::new(),
+                &mut |_| {}
+            )
+            .unwrap_err()
+            .code,
             ErrorKind::PreflightRequired
         );
     }
@@ -1294,10 +1104,11 @@ mod tests {
                 &Decision::recycle(),
                 &CleanupConfig::default(),
                 &store,
+                &BTreeSet::new(),
                 &mut |_| {},
             )
             .unwrap_err();
-        assert_eq!(err.kind, ErrorKind::NotReady);
+        assert_eq!(err.code, ErrorKind::NotReady);
         svc.set_unavailable("state.db is damaged".into());
         assert!(matches!(svc.readiness(), Readiness::Unavailable { .. }));
     }
@@ -1306,12 +1117,17 @@ mod tests {
     fn unknown_plans_are_rejected() {
         let svc = service();
         assert_eq!(
-            svc.preflight(99, &Acknowledgements::default(), &CleanupConfig::default())
-                .unwrap_err()
-                .kind,
+            svc.preflight(
+                99,
+                &Acknowledgements::default(),
+                &CleanupConfig::default(),
+                &BTreeSet::new()
+            )
+            .unwrap_err()
+            .code,
             ErrorKind::UnknownPlan
         );
-        assert_eq!(svc.retry(99).unwrap_err().kind, ErrorKind::UnknownPlan);
+        assert_eq!(svc.retry(99).unwrap_err().code, ErrorKind::UnknownPlan);
     }
 
     #[test]
@@ -1389,10 +1205,17 @@ mod tests {
             },
         };
         assert_eq!(
-            svc.execute_elevated(planned.plan_id, &decision, &cfg, &store, &mut |_| {})
-                .unwrap_err()
-                .kind,
-            ErrorKind::Unsupported,
+            svc.execute_elevated(
+                planned.plan_id,
+                &decision,
+                &cfg,
+                &store,
+                &BTreeSet::new(),
+                &mut |_| {}
+            )
+            .unwrap_err()
+            .code,
+            ErrorKind::Unavailable,
             "no helper connected"
         );
         let helper = Arc::new(RecordingHelper(Mutex::new(Vec::new())));
@@ -1403,17 +1226,25 @@ mod tests {
                 &Decision::recycle(),
                 &cfg,
                 &store,
+                &BTreeSet::new(),
                 &mut |_| {}
             )
             .unwrap_err()
-            .kind,
-            ErrorKind::InvalidInput,
+            .code,
+            ErrorKind::BadRequest,
             "the helper never recycles"
         );
-        svc.preflight(planned.plan_id, &decision.acks, &cfg)
+        svc.preflight(planned.plan_id, &decision.acks, &cfg, &BTreeSet::new())
             .unwrap();
         let report = svc
-            .execute_elevated(planned.plan_id, &decision, &cfg, &store, &mut |_| {})
+            .execute_elevated(
+                planned.plan_id,
+                &decision,
+                &cfg,
+                &store,
+                &BTreeSet::new(),
+                &mut |_| {},
+            )
             .unwrap();
         assert_eq!(report.summary.failed, 1);
         let sent = lock(&helper.0);

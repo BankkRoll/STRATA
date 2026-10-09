@@ -32,6 +32,19 @@ pub fn capabilities(elevated: bool, has_image: bool) -> Capabilities {
         usn_journal: elevated,
         read_records: elevated || has_image,
         privileged_delete: true,
+        activity: elevated,
+    }
+}
+
+/// Stops an activity-tracking session left running by a helper that
+/// crashed, so the next `StartActivity` can take the session name.
+///
+/// Failures are ignored: an unelevated helper cannot see the session (and
+/// cannot start one either), and a session that refuses to stop is taken
+/// over when tracking starts.
+pub fn recover_activity_session() {
+    if let Ok(true) = strata_etw::recover_orphaned_session() {
+        diag!("stopped an orphaned activity session");
     }
 }
 
@@ -80,7 +93,7 @@ fn report(r: Result<(), crate::service::ServiceError>) -> i32 {
     }
 }
 
-/// Removes every token privilege the helper never uses (SPEC §4).
+/// Removes every token privilege the helper never uses.
 fn harden() -> Result<(), ()> {
     match drop_privileges(KEPT_PRIVILEGES) {
         Ok(_) => Ok(()),
@@ -117,6 +130,7 @@ fn on_demand(args: OnDemandArgs) -> i32 {
         }
     };
     let elevated = is_elevated().unwrap_or(false);
+    recover_activity_session();
     let volumes = image_volumes(args.image);
     let verifier = Arc::new(LaunchedClientVerifier::new(
         Arc::new(policy),

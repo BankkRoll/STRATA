@@ -1,21 +1,25 @@
-//! History, snapshots and diffs for the UI (SPEC Â§18).
+//! History, snapshots and diffs for the UI (`ui/src/lib/history.ts`).
 //!
 //! Volumes are named by the UI's `volumeId` (the volume GUID path from
 //! `list_volumes`). The store keys snapshots by `(serial, GUID path)`, so a
 //! volume id resolves to the most recently used key with that GUID path;
 //! the serial only differs after a reformat, and then the newest history is
-//! the one that matters. Times are Unix milliseconds; 64-bit path hashes
-//! are strings (they exceed JavaScript's exact integer range).
+//! the one that matters. Times are Unix milliseconds.
 
-use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+use serde::Serialize;
 use strata_core::SizeMode;
+use strata_index::EntryId;
 use strata_store::{
-    DiffOptions, DirChange, DirPoint, DirSizes, ScannerKind, SinceLastScan, SnapshotDiff,
-    SnapshotId, SnapshotInfo, Store, Timestamp, UsagePoint, VolumeKey, VolumeSummary, path_hash,
+    DiffOptions, DirChange, DirSizes, ScannerKind, SinceLastScan, SnapshotDiff, SnapshotId,
+    SnapshotInfo, Store, Timestamp, VolumeKey, VolumeSummary, path_hash,
 };
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
-use super::error::{FeatureResult, blocking};
+use super::error::{FeatureError, FeatureResult, blocking};
+use crate::model::VolumeData;
+use crate::state::{AppState, read};
 
 fn ms(t: Timestamp) -> i64 {
     t.0.saturating_mul(1000)
@@ -47,23 +51,86 @@ fn key(store: &Store, volume_id: &str) -> FeatureResult<Option<VolumeKey>> {
     Ok(resolve_volume(&store.volumes()?, volume_id))
 }
 
-/// One volume with history.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryVolume {
-    /// Volume id (GUID path).
-    pub volume_id: String,
-    /// Volume serial, as a string.
-    pub serial: String,
-    /// Snapshots stored.
-    pub snapshot_count: u64,
-    /// Oldest snapshot, Unix ms.
-    pub first_ms: Option<i64>,
-    /// Newest snapshot, Unix ms.
-    pub last_ms: Option<i64>,
+fn app_state<R: Runtime>(app: &AppHandle<R>) -> Option<Arc<AppState>> {
+    app.try_state::<Arc<AppState>>().map(|s| s.inner().clone())
 }
 
-/// A usage point.
+/// Runs `f` with the published index of the volume whose GUID path is
+/// `guid_path`, if one is indexed.
+fn with_index<T>(state: &AppState, guid_path: &str, f: impl FnOnce(&VolumeData) -> T) -> Option<T> {
+    let ids: Vec<String> = crate::state::lock(&state.sessions)
+        .keys()
+        .cloned()
+        .collect();
+    let id = ids.into_iter().find(|i| same_volume_id(i, guid_path))?;
+    let s = state.existing_session(&id)?;
+    let g = read(&s.data);
+    g.as_ref().map(f)
+}
+
+/// The entry at `path` in `data`, matching names case-insensitively.
+#[must_use]
+pub fn find_path(data: &VolumeData, path: &str) -> Option<EntryId> {
+    let ix = &data.index;
+    let root = data.root_path.trim_end_matches('\\');
+    let rest = path
+        .get(..root.len())
+        .filter(|p| p.eq_ignore_ascii_case(root))
+        .map(|_| &path[root.len()..])?;
+    let mut cur = ix.root();
+    for part in rest.split('\\').filter(|p| !p.is_empty()) {
+        cur = ix
+            .children(cur)
+            .find(|&k| ix.name_lossy(k).eq_ignore_ascii_case(part))?;
+    }
+    Some(cur)
+}
+
+/// One stored snapshot (`SnapshotInfo` in the UI).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotDto {
+    /// Snapshot id.
+    pub id: i64,
+    /// Unix ms.
+    pub taken_ms: i64,
+    /// Capacity.
+    pub total_bytes: u64,
+    /// Used.
+    pub used_bytes: u64,
+    /// Free.
+    pub free_bytes: u64,
+    /// Sum of allocated sizes scanned.
+    pub allocated_sum: u64,
+    /// Sum of logical sizes scanned.
+    pub logical_sum: u64,
+    /// Files.
+    pub files: u64,
+    /// Directories.
+    pub dirs: u64,
+    /// `mft` or `walker`.
+    pub scanner: ScannerKind,
+}
+
+impl From<&SnapshotInfo> for SnapshotDto {
+    fn from(s: &SnapshotInfo) -> Self {
+        let t = &s.totals;
+        Self {
+            id: s.id.0,
+            taken_ms: ms(s.taken_at),
+            total_bytes: t.total_bytes,
+            used_bytes: t.total_bytes.saturating_sub(t.free_bytes),
+            free_bytes: t.free_bytes,
+            allocated_sum: t.allocated_sum,
+            logical_sum: t.logical_sum,
+            files: t.file_count,
+            dirs: t.dir_count,
+            scanner: t.scanner,
+        }
+    }
+}
+
+/// A usage point (`UsagePoint` in the UI).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsagePointDto {
@@ -77,98 +144,25 @@ pub struct UsagePointDto {
     pub used_bytes: u64,
     /// Free.
     pub free_bytes: u64,
-    /// Î£ allocated of scanned files.
-    pub allocated_sum: u64,
-    /// Î£ logical of scanned files.
-    pub logical_sum: u64,
 }
 
-impl From<&UsagePoint> for UsagePointDto {
-    fn from(p: &UsagePoint) -> Self {
-        Self {
-            snapshot_id: p.snapshot.0,
-            at_ms: ms(p.at),
-            total_bytes: p.total_bytes,
-            used_bytes: p.used_bytes,
-            free_bytes: p.free_bytes,
-            allocated_sum: p.allocated_sum,
-            logical_sum: p.logical_sum,
-        }
-    }
-}
-
-/// Snapshot metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SnapshotDto {
-    /// Snapshot id.
-    pub id: i64,
-    /// Unix ms.
-    pub at_ms: i64,
-    /// Capacity.
-    pub total_bytes: u64,
-    /// Free.
-    pub free_bytes: u64,
-    /// Î£ allocated.
-    pub allocated_sum: u64,
-    /// Î£ logical.
-    pub logical_sum: u64,
-    /// Files.
-    pub file_count: u64,
-    /// Directories.
-    pub dir_count: u64,
-    /// `mft` or `walker`.
-    pub scanner: ScannerKind,
-    /// Directory rows stored.
-    pub stored_dirs: u64,
-}
-
-impl From<&SnapshotInfo> for SnapshotDto {
-    fn from(s: &SnapshotInfo) -> Self {
-        Self {
-            id: s.id.0,
-            at_ms: ms(s.taken_at),
-            total_bytes: s.totals.total_bytes,
-            free_bytes: s.totals.free_bytes,
-            allocated_sum: s.totals.allocated_sum,
-            logical_sum: s.totals.logical_sum,
-            file_count: s.totals.file_count,
-            dir_count: s.totals.dir_count,
-            scanner: s.totals.scanner,
-            stored_dirs: s.stored_dirs,
-        }
-    }
-}
-
-/// One directory in a diff.
+/// One directory in a diff (`DirChange` in the UI).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirChangeDto {
-    /// `path_hash` as a decimal string.
-    pub path_hash: String,
     /// Display path.
     pub path: String,
-    /// Sizes before (`allocated`, `logical`, `files`).
+    /// Sizes before.
     pub before: Option<DirSizes>,
     /// Sizes after.
     pub after: Option<DirSizes>,
     /// Change in the requested size mode.
-    pub delta_bytes: i64,
+    pub delta: i64,
+    /// Wire id in the current index, when the folder still exists.
+    pub entry_id: Option<u32>,
 }
 
-impl From<&DirChange> for DirChangeDto {
-    fn from(c: &DirChange) -> Self {
-        Self {
-            path_hash: c.path_hash.to_string(),
-            path: c.path.clone(),
-            before: c.before,
-            after: c.after,
-            delta_bytes: c.delta,
-        }
-    }
-}
-
-/// "What changed" between two snapshots.
+/// "What changed" between two snapshots (`SnapshotDiff` in the UI).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffDto {
@@ -190,71 +184,40 @@ pub struct DiffDto {
     pub deleted_large: Vec<DirChangeDto>,
 }
 
-impl From<&SnapshotDiff> for DiffDto {
-    fn from(d: &SnapshotDiff) -> Self {
-        let list = |v: &[DirChange]| v.iter().map(Into::into).collect();
-        Self {
-            from: (&d.from).into(),
-            to: (&d.to).into(),
-            used_delta: d.used_delta,
-            scanned_delta: d.scanned_delta,
-            grown: list(&d.grown),
-            shrunk: list(&d.shrunk),
-            new_large: list(&d.new_large),
-            deleted_large: list(&d.deleted_large),
-        }
+fn diff_dto(d: &SnapshotDiff, data: Option<&VolumeData>) -> DiffDto {
+    let list = |v: &[DirChange]| {
+        v.iter()
+            .map(|c| DirChangeDto {
+                path: c.path.clone(),
+                before: c.before,
+                after: c.after,
+                delta: c.delta,
+                entry_id: data.and_then(|d| find_path(d, &c.path).map(|e| d.wire(e))),
+            })
+            .collect()
+    };
+    DiffDto {
+        from: (&d.from).into(),
+        to: (&d.to).into(),
+        used_delta: d.used_delta,
+        scanned_delta: d.scanned_delta,
+        grown: list(&d.grown),
+        shrunk: list(&d.shrunk),
+        new_large: list(&d.new_large),
+        deleted_large: list(&d.deleted_large),
     }
 }
 
-/// Diff tuning from the UI; omitted fields use the defaults.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiffRequest {
-    /// `allocated` or `logical`; default from settings.
-    pub size_mode: Option<SizeMode>,
-    /// Rows per list (max 200).
-    pub top_n: Option<usize>,
-    /// Smallest change in bytes.
-    pub min_change: Option<u64>,
-    /// Smallest size for new/deleted lists.
-    pub large_threshold: Option<u64>,
-}
-
-impl DiffRequest {
-    /// Store options, falling back to `default_mode`.
-    #[must_use]
-    pub fn options(&self, default_mode: SizeMode) -> DiffOptions {
-        let d = DiffOptions::default();
-        DiffOptions {
-            size_mode: self.size_mode.unwrap_or(default_mode),
-            top_n: self.top_n.unwrap_or(d.top_n).clamp(1, 200),
-            min_change: self.min_change.unwrap_or(d.min_change),
-            large_threshold: self.large_threshold.unwrap_or(d.large_threshold),
-            ..d
-        }
-    }
-}
-
-/// A sparkline point.
+/// A directory's size at one snapshot (`DirPoint` in the UI).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DirPointDto {
-    /// Snapshot id.
-    pub snapshot_id: i64,
     /// Unix ms.
+    #[serde(rename = "atMs")]
     pub at_ms: i64,
-    /// Sizes, or `null` when absent or below that snapshot's threshold.
-    pub sizes: Option<DirSizes>,
-}
-
-impl From<&DirPoint> for DirPointDto {
-    fn from(p: &DirPoint) -> Self {
-        Self {
-            snapshot_id: p.snapshot.0,
-            at_ms: ms(p.at),
-            sizes: p.sizes,
-        }
-    }
+    /// Allocated bytes, `null` when absent or below the snapshot's minimum.
+    pub allocated: Option<u64>,
+    /// Logical bytes.
+    pub logical: Option<u64>,
 }
 
 /// The home-screen banner, in the UI's `SinceLastScan` shape.
@@ -299,29 +262,27 @@ fn default_mode(store: &Store) -> SizeMode {
         .unwrap_or_default()
 }
 
-/// Volumes that have history.
+/// Snapshots of a volume, oldest first (`history_snapshots`).
 #[tauri::command]
-pub async fn history_volumes<R: Runtime>(app: AppHandle<R>) -> FeatureResult<Vec<HistoryVolume>> {
+pub async fn history_snapshots<R: Runtime>(
+    app: AppHandle<R>,
+    volume_id: String,
+) -> FeatureResult<Vec<SnapshotDto>> {
     let store = super::store::handle(&app)?;
     blocking(move || {
-        Ok(store
-            .volumes()?
-            .iter()
-            .map(|v| HistoryVolume {
-                volume_id: v.key.guid_path.clone(),
-                serial: v.key.serial.to_string(),
-                snapshot_count: v.snapshot_count,
-                first_ms: v.first_at.map(ms),
-                last_ms: v.last_at.map(ms),
-            })
-            .collect())
+        let Some(k) = key(&store, &volume_id)? else {
+            return Ok(Vec::new());
+        };
+        let mut v: Vec<SnapshotDto> = store.snapshots(&k)?.iter().map(Into::into).collect();
+        v.sort_by_key(|s| s.taken_ms);
+        Ok(v)
     })
     .await
 }
 
-/// Volume usage over time (line chart). `fromMs`/`toMs` bound the range.
+/// Volume usage over time (`history_usage`); `null` bounds are open.
 #[tauri::command]
-pub async fn history_series<R: Runtime>(
+pub async fn history_usage<R: Runtime>(
     app: AppHandle<R>,
     volume_id: String,
     from_ms: Option<i64>,
@@ -335,68 +296,87 @@ pub async fn history_series<R: Runtime>(
         Ok(store
             .usage_series(&k, from_ms.map(ts_from_ms), to_ms.map(ts_from_ms))?
             .iter()
-            .map(Into::into)
+            .map(|p| UsagePointDto {
+                snapshot_id: p.snapshot.0,
+                at_ms: ms(p.at),
+                total_bytes: p.total_bytes,
+                used_bytes: p.used_bytes,
+                free_bytes: p.free_bytes,
+            })
             .collect())
     })
     .await
 }
 
-/// Snapshots of a volume, oldest first.
-#[tauri::command]
-pub async fn history_snapshots<R: Runtime>(
-    app: AppHandle<R>,
-    volume_id: String,
-) -> FeatureResult<Vec<SnapshotDto>> {
-    let store = super::store::handle(&app)?;
-    blocking(move || {
-        let Some(k) = key(&store, &volume_id)? else {
-            return Ok(Vec::new());
-        };
-        Ok(store.snapshots(&k)?.iter().map(Into::into).collect())
-    })
-    .await
-}
-
-/// "What changed" between two snapshots of one volume.
+/// "What changed" between two snapshots of one volume (`history_diff`).
 #[tauri::command]
 pub async fn history_diff<R: Runtime>(
     app: AppHandle<R>,
-    from: i64,
-    to: i64,
-    options: Option<DiffRequest>,
+    from_id: i64,
+    to_id: i64,
+    size_mode: Option<SizeMode>,
+    top_n: Option<usize>,
 ) -> FeatureResult<DiffDto> {
     let store = super::store::handle(&app)?;
+    let state = app_state(&app);
     blocking(move || {
-        let opts = options.unwrap_or_default().options(default_mode(&store));
-        Ok((&store.diff(SnapshotId(from), SnapshotId(to), &opts)?).into())
+        let d = DiffOptions::default();
+        let opts = DiffOptions {
+            size_mode: size_mode.unwrap_or_else(|| default_mode(&store)),
+            top_n: top_n.unwrap_or(d.top_n).clamp(1, 200),
+            ..d
+        };
+        let diff = store.diff(SnapshotId(from_id), SnapshotId(to_id), &opts)?;
+        let dto = state
+            .as_deref()
+            .and_then(|st| {
+                with_index(st, &diff.to.volume.guid_path, |data| {
+                    diff_dto(&diff, Some(data))
+                })
+            })
+            .unwrap_or_else(|| diff_dto(&diff, None));
+        Ok(dto)
     })
     .await
 }
 
-/// Sizes of one directory over the last `lastN` snapshots (sparkline).
+/// Sizes of one folder over the last `lastN` snapshots, oldest first
+/// (`history_dir_series`).
 #[tauri::command]
 pub async fn history_dir_series<R: Runtime>(
     app: AppHandle<R>,
     volume_id: String,
-    path: String,
+    id: u32,
     last_n: Option<usize>,
 ) -> FeatureResult<Vec<DirPointDto>> {
     let store = super::store::handle(&app)?;
+    let state = app_state(&app).ok_or_else(|| FeatureError::internal("app state missing"))?;
     blocking(move || {
+        let path = crate::commands::with_data(&state, &volume_id, |d| {
+            d.resolve(id)
+                .map(|e| d.path(e))
+                .ok_or_else(|| FeatureError::not_found("that folder is no longer in the index"))
+        })?;
         let Some(k) = key(&store, &volume_id)? else {
             return Ok(Vec::new());
         };
-        Ok(store
+        let mut points: Vec<DirPointDto> = store
             .dir_series(&k, path_hash(&path), last_n.unwrap_or(30).clamp(1, 365))?
             .iter()
-            .map(Into::into)
-            .collect())
+            .map(|p| DirPointDto {
+                at_ms: ms(p.at),
+                allocated: p.sizes.map(|s| s.allocated),
+                logical: p.sizes.map(|s| s.logical),
+            })
+            .collect();
+        points.sort_by_key(|p| p.at_ms);
+        Ok(points)
     })
     .await
 }
 
 /// The home-screen "since last scan" banner, or `null` with fewer than two
-/// snapshots.
+/// snapshots (`history_since_last_scan`).
 #[tauri::command]
 pub async fn history_since_last_scan<R: Runtime>(
     app: AppHandle<R>,
@@ -464,34 +444,23 @@ mod tests {
         let dto = SinceLastScanDto::from(&since);
         assert_eq!(dto.delta_bytes, i64::try_from(10 * gib).unwrap());
         assert_eq!(dto.biggest.unwrap().path, r"C:\Models");
-        let v = serde_json::to_value(SinceLastScanDto::from(&since)).unwrap();
-        assert!(v.get("sinceMs").is_some() && v.get("deltaBytes").is_some());
+
+        let snaps = store.snapshots(&k).unwrap();
+        let s = SnapshotDto::from(&snaps[0]);
+        assert_eq!(s.used_bytes, s.total_bytes - s.free_bytes);
+        let v = serde_json::to_value(&s).unwrap();
+        assert!(v.get("takenMs").is_some() && v.get("files").is_some());
+        let diff = store
+            .diff(snaps[0].id, snaps[1].id, &DiffOptions::default())
+            .unwrap();
+        let d = diff_dto(&diff, None);
+        assert_eq!(d.grown[0].path, r"C:\Models");
+        assert_eq!(d.grown[0].entry_id, None);
     }
 
     #[test]
-    fn diff_request_defaults_and_clamps() {
-        let o = DiffRequest {
-            top_n: Some(10_000),
-            ..DiffRequest::default()
-        }
-        .options(SizeMode::Logical);
-        assert_eq!(o.top_n, 200);
-        assert_eq!(o.size_mode, SizeMode::Logical);
-        assert_eq!(o.min_change, DiffOptions::default().min_change);
+    fn ms_conversion_floors() {
         assert_eq!(ts_from_ms(1_999), Timestamp(1));
         assert_eq!(ts_from_ms(-1), Timestamp(-1));
-    }
-
-    #[test]
-    fn path_hashes_are_strings() {
-        let c = DirChange {
-            path_hash: u64::MAX,
-            path: "x".into(),
-            before: None,
-            after: None,
-            delta: 1,
-        };
-        let v = serde_json::to_value(DirChangeDto::from(&c)).unwrap();
-        assert_eq!(v["pathHash"], u64::MAX.to_string());
     }
 }

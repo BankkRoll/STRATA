@@ -21,6 +21,8 @@ strata-win = { path = "../strata-win" }
 strata-ipc = { path = "../strata-ipc" }
 strata-ntfs = { path = "../strata-ntfs" }
 strata-clean = { path = "../strata-clean" }
+strata-etw = { path = "../strata-etw" }
+strata-store = { path = "../strata-store" }
 crossbeam-channel = { workspace = true }
 thiserror = { workspace = true }
 windows-service = "0.8.1"

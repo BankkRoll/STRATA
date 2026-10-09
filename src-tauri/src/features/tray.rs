@@ -1,4 +1,4 @@
-//! Notification-area icon and low-space toasts (SPEC §19 "Tray icon").
+//! Notification-area icon and low-space toasts.
 //!
 //! - The tray icon is optional (`tray.enabled`). Its menu shows a free-space
 //!   glance per fixed volume, "Quick scan", "Open Strata" and "Quit".

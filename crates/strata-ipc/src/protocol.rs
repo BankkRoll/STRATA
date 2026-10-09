@@ -1,4 +1,4 @@
-//! Protocol messages (SPEC §4, §6.4, §10, §15.7).
+//! Protocol messages.
 //!
 //! Every frame carries a request id in its header (see [`crate::frame`]).
 //! The client picks ids for its requests (non-zero); every response and event
@@ -15,7 +15,7 @@ use strata_core::{FileRef, FileTime, ScanRecord};
 use strata_win::volume::VolumeInfo;
 
 /// The wire protocol version. Both sides must match exactly.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// Request id reserved for the handshake and unsolicited messages.
 pub const HANDSHAKE_ID: u32 = 0;
@@ -43,6 +43,9 @@ pub struct Capabilities {
     pub read_records: bool,
     /// Validated privileged deletes.
     pub privileged_delete: bool,
+    /// ETW file-activity tracking (`StartActivity`); needs an elevated
+    /// helper.
+    pub activity: bool,
 }
 
 /// The helper's reply to a valid [`Hello`].
@@ -102,7 +105,7 @@ impl Default for ScanOptions {
     }
 }
 
-/// A delete request, validated by the helper before acting (SPEC §15.7).
+/// A delete request, validated by the helper before acting.
 ///
 /// The helper reopens the file by id with `FILE_FLAG_OPEN_REPARSE_POINT`,
 /// and refuses unless the path, size and modification time all still match.
@@ -122,7 +125,7 @@ pub struct DeleteRequest {
     pub is_dir: bool,
 }
 
-/// A delete-on-next-restart request (SPEC §15.3), validated like
+/// A delete-on-next-restart request, validated like
 /// [`DeleteRequest`]. Windows deletes by path at boot, so the helper only
 /// accepts plain files with a single name.
 ///
@@ -194,7 +197,7 @@ pub enum Request {
     /// Ask the helper to exit.
     Shutdown,
     /// Create (or resize) the USN journal (`FSCTL_CREATE_USN_JOURNAL`).
-    /// Sent only after the user confirmed enabling live updates (SPEC §10.1).
+    /// Sent only after the user confirmed enabling live updates.
     /// Answered with `UsnJournal(Some(..))`.
     CreateUsnJournal {
         /// Volume GUID path.
@@ -206,6 +209,132 @@ pub enum Request {
     },
     /// Schedule a file for deletion at the next restart (elevated only).
     DeleteOnReboot(RebootDeleteRequest),
+    /// Start ETW file-activity tracking for this connection (elevated only).
+    ///
+    /// The request stays open: the helper streams
+    /// [`Response::ActivityBatch`] and [`Response::ActivityHealth`] with this
+    /// request's id and ends the stream with [`Response::ActivityStopped`].
+    /// One tracking session runs per helper process; a second start gets
+    /// [`ErrorCode::Busy`]. An unelevated helper answers
+    /// [`ErrorCode::AccessDenied`].
+    StartActivity {
+        /// Consumer CPU cap in hundredths of a percent of machine capacity
+        /// (`200` = 2 %); 0 uses the helper's default.
+        cpu_cap_centi_percent: u32,
+    },
+    /// Stop this connection's tracking. Answered with
+    /// [`Response::ActivityState`] once tracking has stopped; the open
+    /// `StartActivity` stream then ends with `ActivityStopped { requested:
+    /// true, .. }`.
+    StopActivity,
+    /// Forget the activity held in the helper's memory. Answered with
+    /// [`Response::ActivityState`].
+    ClearActivity,
+    /// Top writers over a window, from the helper's memory. Answered with
+    /// [`Response::ActivityTop`] (empty when nothing runs).
+    QueryActivity {
+        /// The window.
+        window: ActivityWindow,
+        /// Maximum writers to return.
+        limit: u32,
+    },
+    /// Attribution evidence since an instant. Answered with
+    /// [`Response::ActivityEvidence`] (empty when nothing runs).
+    ActivityEvidence {
+        /// Start of the evidence period, Unix seconds (the helper keeps at
+        /// most 48 hours).
+        since_unix: i64,
+        /// Maximum rows to return, highest weight first.
+        limit: u32,
+    },
+}
+
+/// A view window for [`Request::QueryActivity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActivityWindow {
+    /// The current and the previous minute.
+    Now,
+    /// The last 60 minutes.
+    LastHour,
+    /// Every hour starting at or after this instant (rounded down to the
+    /// hour), up to 48 hours back.
+    Since {
+        /// Unix seconds (UTC).
+        unix_secs: i64,
+    },
+}
+
+/// One hourly rollup delta: what one image did in one directory during one
+/// hour. Repeated rows for the same key add up.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityRow {
+    /// Unix seconds of any instant inside the hour.
+    pub hour: i64,
+    /// Full image path of the writing process.
+    pub image: String,
+    /// Hash of the normalized directory path.
+    pub dir_hash: u64,
+    /// Bytes written (scaled up while writes are sampled).
+    pub bytes_written: u64,
+    /// Files created.
+    pub files_created: u64,
+    /// Files deleted.
+    pub files_deleted: u64,
+}
+
+/// The latest known writer of one file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LastWriteRow {
+    /// Hash of the normalized file path.
+    pub path_hash: u64,
+    /// Full image path of the writing process.
+    pub image: String,
+    /// Process id of the writer, when known.
+    pub pid: Option<u32>,
+    /// When the write happened, Unix seconds.
+    pub at: i64,
+}
+
+/// Bytes one image wrote into one directory.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DirBytes {
+    /// Directory (DOS path).
+    pub dir: String,
+    /// Bytes written.
+    pub bytes_written: u64,
+}
+
+/// Totals for one process image over a window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriterRow {
+    /// Full image path.
+    pub image: String,
+    /// Bytes written, summed over all directories.
+    pub bytes_written: u64,
+    /// Files created.
+    pub files_created: u64,
+    /// Files deleted.
+    pub files_deleted: u64,
+    /// Distinct directories touched.
+    pub dirs: u32,
+    /// Up to 5 directories with the most bytes written, largest first.
+    pub top_dirs: Vec<DirBytes>,
+}
+
+/// "This directory is written by this app" evidence for the classifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceRow {
+    /// Directory prefix.
+    pub prefix: String,
+    /// Attribution label: the image file name (`app.exe`).
+    pub app: String,
+    /// Full image path, for display.
+    pub image: String,
+    /// Weight in thousandths, `0..=1000`.
+    pub weight_milli: u32,
+    /// The dominant writer's share of the directory's activity, in
+    /// thousandths.
+    pub share_milli: u32,
 }
 
 /// Scan progress.
@@ -279,11 +408,14 @@ pub enum ErrorCode {
     /// Helper bug or unexpected state.
     Internal,
     /// `ReadUsn`: the journal was deleted and recreated (its id changed);
-    /// the client must rescan the volume (SPEC §10.3).
+    /// the client must rescan the volume.
     JournalChanged,
     /// `ReadUsn`: `from` is older than the journal's first USN, so changes
-    /// were lost; the client must rescan the volume (SPEC §10.3).
+    /// were lost; the client must rescan the volume.
     JournalWrapped,
+    /// `ReadUsn`: the volume has no active USN journal (it was never
+    /// created, or was disabled); live updates need it created again.
+    JournalNotActive,
 }
 
 /// What a privileged action did.
@@ -312,7 +444,7 @@ pub enum AuditPhase {
     Failed,
 }
 
-/// One helper audit record (SPEC §15.7: every privileged action is logged).
+/// One helper audit record; every privileged action is logged.
 ///
 /// The helper has no database: it sends these as [`Response::Audit`] events
 /// with the request's id, and the app stores them in its undo/audit log.
@@ -426,6 +558,49 @@ pub enum Response {
     RebootScheduled {
         /// The file that Windows deletes at the next restart.
         file_ref: FileRef,
+    },
+    /// Activity to persist, streamed on a [`Request::StartActivity`].
+    ActivityBatch {
+        /// Hourly rollup deltas.
+        rows: Vec<ActivityRow>,
+        /// Latest writers per file.
+        last_writes: Vec<LastWriteRow>,
+    },
+    /// Tracking overhead, streamed on a [`Request::StartActivity`].
+    ActivityHealth {
+        /// Consumer CPU over the last interval, in hundredths of a percent of
+        /// machine capacity.
+        cpu_centi_percent: u32,
+        /// Writes are sampled 1 in `sample_rate` (1 = every write).
+        sample_rate: u32,
+        /// Tracking costs more than the cap; suggest turning it off.
+        suggest_disable: bool,
+    },
+    /// Tracking ended; the last event of a [`Request::StartActivity`].
+    ActivityStopped {
+        /// Whether the client asked to stop (`StopActivity`, `Cancel`,
+        /// disconnect or shutdown); `false` when the session ended on its own.
+        requested: bool,
+        /// Win32 status the session ended with when not requested; 0
+        /// otherwise.
+        status: u32,
+        /// Events the kernel dropped during the session.
+        events_lost: u64,
+    },
+    /// Reply to [`Request::QueryActivity`].
+    ActivityTop {
+        /// Writers, most bytes written first.
+        writers: Vec<WriterRow>,
+    },
+    /// Reply to [`Request::ActivityEvidence`].
+    ActivityEvidence {
+        /// Evidence rows, highest weight first.
+        evidence: Vec<EvidenceRow>,
+    },
+    /// Reply to [`Request::StopActivity`] and [`Request::ClearActivity`].
+    ActivityState {
+        /// Whether this connection's tracking is running.
+        running: bool,
     },
 }
 

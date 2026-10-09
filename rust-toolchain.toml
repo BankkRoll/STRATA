@@ -1,0 +1,5 @@
+# Pinned so local builds, CI and release installers use the same compiler and
+# lints; bump deliberately and fix new lints in the same change.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

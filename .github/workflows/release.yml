@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
-          toolchain: stable
+          toolchain: 1.96.0
           targets: ${{ matrix.target }}
       # SECURITY: no build cache here. Release binaries are compiled from
       # scratch so a poisoned cache entry can never reach users.

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { AppShell } from "./components/AppShell";
-import { getAppInfo, type AppInfo } from "./lib/backend";
+import { getAppInfo } from "./lib/backend";
 import { applyBackdrop, applyTheme } from "./lib/theme";
 import { ServicesContext, type Services } from "./services";
 import { useSettings } from "./store/settings";
@@ -14,7 +14,6 @@ export interface AppProps {
 /** Root component: wires theme/backdrop to the document and renders the shell. */
 export function App({ services }: AppProps) {
   const theme = useSettings((s) => s.theme);
-  const [info, setInfo] = useState<AppInfo | null>(null);
 
   useEffect(() => {
     applyTheme(document.documentElement, theme);
@@ -26,7 +25,6 @@ export function App({ services }: AppProps) {
       .then((next) => {
         if (cancelled) return;
         applyBackdrop(document.documentElement, next.backdrop);
-        setInfo(next);
       })
       .catch((err: unknown) => {
         console.error("app_info failed", err);
@@ -39,7 +37,7 @@ export function App({ services }: AppProps) {
 
   return (
     <ServicesContext value={services}>
-      <AppShell info={info} />
+      <AppShell />
     </ServicesContext>
   );
 }

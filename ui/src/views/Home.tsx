@@ -102,13 +102,20 @@ function VolumeCard({ v }: { v: VolumeInfo }) {
       )}
       <div className="volume__actions">
         {state === "scanning" ? (
-          <button type="button" className="btn" disabled={busy} onClick={() => { run(services.volumes.cancelScan(v.id)); }}>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={busy}
+            onClick={() => {
+              run(services.volumes.cancelScan(v.id));
+            }}
+          >
             Cancel scan
           </button>
         ) : (
           <button
             type="button"
-            className={canOpen ? "btn" : "btn btn--primary btn--big"}
+            className="btn btn--sm"
             disabled={busy || locked || !v.present}
             onClick={() => {
               run(services.volumes.startScan(v.id, "auto"));
@@ -120,7 +127,7 @@ function VolumeCard({ v }: { v: VolumeInfo }) {
         {canOpen && (
           <button
             type="button"
-            className="btn btn--primary"
+            className="btn btn--sm btn--primary"
             onClick={() => {
               if (v.scan.rootId !== null) openVolume(v.id, v.scan.rootId);
             }}
@@ -221,6 +228,55 @@ export function useVolumeSync(): void {
   }, [services]);
 }
 
+/** First-run introduction: nothing has been scanned yet. */
+function Welcome({ volumes }: { volumes: readonly VolumeInfo[] }) {
+  const services = useServices();
+  const notify = useApp((s) => s.notify);
+  const [busy, setBusy] = useState(false);
+  const target = volumes.find((v) => v.isSystem && v.present && v.bitlocker !== "locked") ?? volumes.find((v) => v.present && v.bitlocker !== "locked");
+  return (
+    <section className="welcome" aria-labelledby="welcome-title">
+      <svg className="welcome__mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="6" y="10" width="52" height="10" rx="3" />
+        <rect x="6" y="27" width="34" height="10" rx="3" />
+        <rect x="6" y="44" width="20" height="10" rx="3" />
+      </svg>
+      <div className="welcome__body">
+        <h2 id="welcome-title" className="welcome__title">
+          Start with a scan
+        </h2>
+        <p>
+          Strata maps what is using each drive, explains what every item is and which app put it there, and helps you clean up safely. Scanning only reads; nothing on
+          disk changes.
+        </p>
+        {target && (
+          <div className="welcome__actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                services.volumes
+                  .startScan(target.id, "auto")
+                  .catch((err: unknown) => {
+                    notify(errorMessage(err));
+                  })
+                  .finally(() => {
+                    setBusy(false);
+                  });
+              }}
+            >
+              Scan {volumeName(target)}
+            </button>
+            <span className="detail__muted">Or pick any drive below.</span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Volumes overview. */
 export function Home() {
   const services = useServices();
@@ -230,66 +286,81 @@ export function Home() {
   const notify = useApp((s) => s.notify);
   const unavailable = useVolumes((s) => s.unavailable);
 
+  const units = useSettings((s) => s.units);
   const scanned = volumes?.find((v) => v.scan.lastScanMs !== null && v.isSystem) ?? volumes?.find((v) => v.scan.lastScanMs !== null);
+  const firstRun = volumes !== null && volumes.length > 0 && volumes.every((v) => v.scan.rootId === null && v.scan.state !== "scanning");
+  const total = volumes?.reduce((a, v) => a + v.totalBytes, 0) ?? 0;
+  const free = volumes?.reduce((a, v) => a + v.freeBytes, 0) ?? 0;
 
   return (
-    <main className="home" aria-labelledby="home-title">
-      <h1 id="home-title" className={volumes && volumes.length > 0 ? "home__title" : "visually-hidden"}>
-        Volumes
-      </h1>
-      {helper && !helper.elevated && volumes && volumes.length > 0 && (
-        <p className="banner banner--info" role="note">
-          Standard scan — some system folders hidden.{" "}
-          <button
-            type="button"
-            className="linkish"
-            onClick={() => {
-              services.volumes.elevate().then(useVolumes.getState().setHelper, (err: unknown) => {
-                notify(errorMessage(err));
-              });
-            }}
-          >
-            Enable fast scan
-          </button>
-        </p>
-      )}
-      {scanned && <SinceLastScanBanner volume={scanned} />}
-      {volumes === null && !error && (
-        <div className="state state--quiet" role="status">
-          <span className="spinner" aria-hidden="true" />
-          <p>Finding volumes…</p>
-        </div>
-      )}
-      {error && (
-        <section className="empty-state">
-          <svg className="empty-state__mark" viewBox="0 0 64 64" aria-hidden="true">
-            <rect x="6" y="10" width="52" height="10" rx="3" />
-            <rect x="6" y="27" width="34" height="10" rx="3" />
-            <rect x="6" y="44" width="20" height="10" rx="3" />
-          </svg>
-          <h2 className="empty-state__title">See everything on your drives</h2>
-          <p>
-            Strata maps what is using your disk, explains what each item is and which app put it there, and helps you
-            clean up safely.
+    <section className="home" aria-labelledby="home-title">
+      <div className="home__inner">
+        <header className={volumes && volumes.length > 0 ? "home__head" : "visually-hidden"}>
+          <h1 id="home-title" className="home__title">
+            Volumes
+          </h1>
+          {volumes && volumes.length > 0 && (
+            <p className="home__summary">
+              {volumes.length === 1 ? "1 drive" : `${volumes.length} drives`} · {formatBytes(free, { units })} free of {formatBytes(total, { units })}
+            </p>
+          )}
+        </header>
+        {firstRun && <Welcome volumes={volumes} />}
+        {helper && !helper.elevated && volumes && volumes.length > 0 && (
+          <p className="banner banner--info" role="note">
+            <Icon name="shield" size={14} />
+            Standard scan — some system folders hidden.{" "}
+            <button
+              type="button"
+              className="linkish"
+              onClick={() => {
+                services.volumes.elevate().then(useVolumes.getState().setHelper, (err: unknown) => {
+                  notify(errorMessage(err));
+                });
+              }}
+            >
+              Enable fast scan
+            </button>
           </p>
-          <p className="empty-state__hint" role={unavailable ? undefined : "alert"}>
-            {unavailable ? "Drive scanning is not connected in this build yet." : `Couldn’t list volumes: ${error}`}
-          </p>
-        </section>
-      )}
-      {volumes && volumes.length === 0 && (
-        <div className="state state--quiet">
-          <h2>No volumes found</h2>
-          <p>Strata lists fixed and removable drives. Network drives can be added in Settings.</p>
-        </div>
-      )}
-      {volumes && volumes.length > 0 && (
-        <ul className="volumes">
-          {volumes.map((v) => (
-            <VolumeCard key={v.id} v={v} />
-          ))}
-        </ul>
-      )}
-    </main>
+        )}
+        {scanned && <SinceLastScanBanner volume={scanned} />}
+        {volumes === null && !error && (
+          <div className="state state--quiet" role="status">
+            <span className="spinner" aria-hidden="true" />
+            <p>Finding volumes…</p>
+          </div>
+        )}
+        {error && (
+          <section className="empty-state">
+            <svg className="empty-state__mark" viewBox="0 0 64 64" aria-hidden="true">
+              <rect x="6" y="10" width="52" height="10" rx="3" />
+              <rect x="6" y="27" width="34" height="10" rx="3" />
+              <rect x="6" y="44" width="20" height="10" rx="3" />
+            </svg>
+            <h2 className="empty-state__title">See everything on your drives</h2>
+            <p>
+              Strata maps what is using your disk, explains what each item is and which app put it there, and helps you
+              clean up safely.
+            </p>
+            <p className="empty-state__hint" role={unavailable ? undefined : "alert"}>
+              {unavailable ? "Drive scanning is not connected in this build yet." : `Couldn’t list volumes: ${error}`}
+            </p>
+          </section>
+        )}
+        {volumes && volumes.length === 0 && (
+          <div className="state state--quiet">
+            <h2>No volumes found</h2>
+            <p>Strata lists fixed and removable drives. Network drives can be added in Settings.</p>
+          </div>
+        )}
+        {volumes && volumes.length > 0 && (
+          <ul className="volumes">
+            {volumes.map((v) => (
+              <VolumeCard key={v.id} v={v} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }

@@ -9,6 +9,8 @@ import type { DrawState, ViewRenderer } from "../render/renderer";
 import type { Services } from "../services";
 import { useApp, INITIAL_APP_STATE } from "../store/app";
 import { useVolumes } from "../store/volumes";
+import { resetLayout } from "../shell/layout";
+import { resetTabs } from "../shell/tabs";
 import { fixtureBytes, fixtureFrame, fixtureTree } from "./fixtures";
 
 /** Loads the small fixture set synchronously from disk. */
@@ -62,8 +64,15 @@ export function testServices(overrides: Partial<Services> = {}): Services {
   return { ...base, createRenderer: () => new FakeRenderer(), ...overrides };
 }
 
-/** Resets the shared stores between tests. */
+/** Resets the shared stores, the shell layout and its storage between tests. */
 export function resetStores(): void {
+  try {
+    window.localStorage.clear();
+  } catch {
+    // Node-environment tests have no storage.
+  }
+  resetLayout();
+  resetTabs();
   useApp.setState({ ...INITIAL_APP_STATE });
   useVolumes.setState({ volumes: null, helper: null, error: null, unavailable: false });
 }

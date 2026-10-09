@@ -37,7 +37,28 @@ export type IconName =
   | "tag"
   | "sparkle"
   | "largest"
-  | "check";
+  | "check"
+  | "drive"
+  | "plus"
+  | "filter"
+  | "keyboard"
+  | "minimize"
+  | "maximize"
+  | "restore"
+  | "up"
+  | "reset"
+  | "copy"
+  | "external"
+  | "braces"
+  | "download"
+  | "upload"
+  | "bug"
+  | "refresh"
+  | "folderOpen"
+  | "split"
+  | "panelBottom"
+  | "dots"
+  | "stop";
 
 // Drawn on a 20×20 grid as 1.5px strokes; coordinates sit on half pixels so
 // lines stay crisp at 16 and 20 px.
@@ -145,6 +166,64 @@ const PATHS: Record<IconName, ReactElement> = {
   sparkle: <path d="M10 2.75 11.6 8.4l5.65 1.6-5.65 1.6L10 17.25 8.4 11.6 2.75 10 8.4 8.4z" />,
   largest: <path d="M3.75 4.75h12.5M3.75 10h8.5M3.75 15.25h5" />,
   check: <path d="m4 10.5 3.75 3.75L16 6" />,
+  drive: (
+    <>
+      <rect x="2.75" y="6.25" width="14.5" height="7.5" rx="1.25" />
+      <path d="M5.75 10h4.5M14 10h.25" />
+    </>
+  ),
+  plus: <path d="M10 4.25v11.5M4.25 10h11.5" />,
+  filter: <path d="M3.25 4.25h13.5l-5.25 6.25v5.25l-3-1.5v-3.75z" />,
+  keyboard: (
+    <>
+      <rect x="2.25" y="5.25" width="15.5" height="9.5" rx="1.25" />
+      <path d="M5.25 8.25h.5M8.25 8.25h.5M11.25 8.25h.5M14.25 8.25h.5M6.75 11.75h6.5" />
+    </>
+  ),
+  minimize: <path d="M5 10h10" />,
+  maximize: <rect x="5.25" y="5.25" width="9.5" height="9.5" rx="1" />,
+  restore: (
+    <>
+      <rect x="5.25" y="7.25" width="7.5" height="7.5" rx="1" />
+      <path d="M7.25 5.25h6.5a1 1 0 0 1 1 1v6.5" />
+    </>
+  ),
+  up: <path d="M10 15.75V4.75M5.25 9.5 10 4.75l4.75 4.75" />,
+  reset: <path d="M4.25 8.75a6 6 0 1 1 .9 4.5M4 4.25v4.5h4.5" />,
+  copy: (
+    <>
+      <rect x="6.75" y="6.75" width="9.5" height="9.5" rx="1" />
+      <path d="M13.25 6.75v-2.5a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2.5" />
+    </>
+  ),
+  external: <path d="M11.25 3.75h5v5M16.25 3.75 9.5 10.5M14.25 11.75v3.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-8.5a1 1 0 0 1 1-1h3.5" />,
+  braces: (
+    <path d="M7.25 3.75H6.5A1.75 1.75 0 0 0 4.75 5.5v2.75L3.25 10l1.5 1.75v2.75a1.75 1.75 0 0 0 1.75 1.75h.75M12.75 3.75h.75a1.75 1.75 0 0 1 1.75 1.75v2.75L16.75 10l-1.5 1.75v2.75a1.75 1.75 0 0 1-1.75 1.75h-.75" />
+  ),
+  download: <path d="M10 3.75v9M6 9l4 4 4-4M4 16.25h12" />,
+  upload: <path d="M10 13V4M6 8l4-4 4 4M4 16.25h12" />,
+  bug: (
+    <>
+      <rect x="6.25" y="6.25" width="7.5" height="10" rx="3.75" />
+      <path d="M7.75 6.25a2.25 2.25 0 0 1 4.5 0M3.75 10.75h2.5M13.75 10.75h2.5M4.25 7.25l2 1M15.75 7.25l-2 1M4.25 15.25l2-1.25M15.75 15.25l-2-1.25M10 9.5v6" />
+    </>
+  ),
+  refresh: <path d="M16 9.25A6.25 6.25 0 0 0 4.75 6.5M4 10.75a6.25 6.25 0 0 0 11.25 2.75M4.5 3.25v3.5H8M15.5 16.75v-3.5H12" />,
+  folderOpen: <path d="M2.75 15.5V5.5a.75.75 0 0 1 .75-.75h4.25l2 2h5.75a.75.75 0 0 1 .75.75v1.75M2.75 15.5l2.25-6.25h12.25L15 15.5z" />,
+  split: (
+    <>
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M3.25 11.25h13.5" />
+    </>
+  ),
+  panelBottom: (
+    <>
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1" />
+      <path d="M3.25 12.25h13.5M3.25 14.5h13.5" />
+    </>
+  ),
+  dots: <path d="M5 10h.25M10 10h.25M15 10h.25" />,
+  stop: <rect x="5.25" y="5.25" width="9.5" height="9.5" rx="1" />,
   lock: (
     <>
       <rect x="4.25" y="8.75" width="11.5" height="8.5" rx="1" />

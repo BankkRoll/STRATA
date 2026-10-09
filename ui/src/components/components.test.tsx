@@ -78,22 +78,26 @@ describe("App shell", () => {
     useApp.getState().openVolume("fixture", 0);
     render(<App services={services} />);
     expect(screen.getByRole("banner")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Views" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Areas" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Explore sidebar" })).toBeTruthy();
+    expect(screen.getByRole("main", { name: "Workspace" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Details" })).toBeTruthy();
+    expect(screen.getByRole("contentinfo", { name: "Status" })).toBeTruthy();
     expect(screen.getByRole("application")).toBeTruthy();
     act(() => {
       useApp.getState().select([5], 5);
     });
-    fireEvent.click(screen.getByRole("button", { name: /Sunburst/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Sunburst" }));
     await waitFor(() => {
       expect(useApp.getState().view).toBe("sunburst");
     });
     expect(useApp.getState().selection).toEqual([5]);
-    expect(screen.getByRole("button", { name: /Sunburst/ }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("radio", { name: "Sunburst" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("switches size mode with an accessible radio group", () => {
+    useApp.getState().openVolume("fixture", 0);
     render(<App services={testServices()} />);
     const logical = screen.getByRole("radio", { name: "Logical" });
     fireEvent.click(logical);

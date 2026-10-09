@@ -1,797 +1,271 @@
 /**
- * Settings (SPEC §19): every persisted setting with its control, validated
- * as you type (mirror of the store's rules) and saved through
- * `settings_save` (whose issues win); rules tooling (built-in rules
- * read-only, user rules folder, reload, path tester); data clearing;
- * export/import; helper service mode; About (version, licenses, updates).
+ * Settings: a searchable page of every persisted setting, driven by the
+ * settings registry (`settings/registry.ts`), plus rules tooling, helper and
+ * elevation, updates, data and privacy, and About.
+ *
+ * - Changes save automatically once valid (`settings_save`); invalid values
+ *   stay local with their message and are never sent. The backend validates
+ *   again and its issues win.
+ * - Every setting shows its default, a modified marker and a reset button.
+ * - Search matches titles, descriptions, keys, categories and keywords, and
+ *   highlights the matches; `@modified` lists changed settings.
+ * - The JSON view shows the effective settings read-only, with copy, export
+ *   and import (`settings_export` / `settings_import`).
  */
-import { useId, useMemo, useState, type ReactNode } from "react";
-import { ConfirmDialog, LoadState, SafetyBadge, Unavailable, ViewFrame, useCapability, useLoad } from "../components/feature";
-import { ExplanationView } from "../components/Explanation";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { LoadState, useCapability, useLoad } from "../components/feature";
+import { Icon } from "../components/icons";
 import { useFeatures } from "../features";
-import { errorMessage, getAppInfo } from "../lib/backend";
+import { errorMessage } from "../lib/backend";
 import { formatCount } from "../lib/format";
-import { categoryInfo } from "../lib/palette";
-import { changedKeys, validateSettings, type ClearableData, type Explanation, type Settings, type SettingsIssue } from "../lib/settings";
-import { useApp } from "../store/app";
+import type { Settings, SettingsIssue } from "../lib/settings";
+import { Highlight, SettingRow } from "../settings/controls";
+import { AboutPanels, DataPanels, HelperPanels, Panel, RulesPanels, UpdateCheck, missingReason } from "../settings/panels";
+import {
+  SETTINGS,
+  SETTINGS_CATEGORIES,
+  UNLISTED_KEYS,
+  getSetting,
+  isModified,
+  matchesQuery,
+  parseQuery,
+  sameValue,
+  validateAll,
+  withSetting,
+  type CategoryId,
+  type SettingDef,
+  type SettingKey,
+  type SettingsQuery,
+} from "../settings/registry";
+import { useLayout } from "../shell/layout";
 import { applyAppearance } from "../store/prefs";
-import { useSettings } from "../store/settings";
+import "../settings/settings.css";
 
-const GB = 2 ** 30;
-const MB = 2 ** 20;
+const SAVE_DELAY_MS = 500;
+
+/** Search terms for the non-setting panels of each category. */
+const PANEL_TERMS: Partial<Record<CategoryId, string>> = {
+  rules: "rule packs built-in read-only reload open folder why is this classified test path explain precedence",
+  helper: "status elevation fast scan standard scan service install uninstall administrator uac",
+  updates: "check for updates version",
+  privacy: "clear history activity caches data report an issue bug github telemetry privacy crash",
+  about: "version licenses third-party github documentation links mit",
+};
 
 // -----------------------------------------------------------------------------
-// Field primitives
+// Save state
 // -----------------------------------------------------------------------------
 
-type Section = keyof Settings;
+type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "failed"; message: string };
 
-interface FieldCtx {
+interface Editor {
   draft: Settings;
-  issues: readonly SettingsIssue[];
-  set: <S extends Section, K extends keyof Settings[S]>(section: S, key: K, value: Settings[S][K]) => void;
+  /** Last settings the store confirmed. */
+  saved: Settings;
+  /** Messages by key: the backend's for unchanged values, else the registry's. */
+  issues: Map<SettingKey, string>;
+  save: SaveState;
+  /** Bumps when values change from outside the editors (reset, import), remounting them. */
+  revision: number;
+  set: (key: SettingKey, value: unknown) => void;
+  reset: (key: SettingKey) => void;
+  replace: (s: Settings) => void;
 }
 
-function issueFor(ctx: FieldCtx, key: string): string | null {
-  return ctx.issues.find((i) => i.key === key)?.message ?? null;
-}
-
-function Toggle<S extends Section>({ ctx, section, field, label, hint }: { ctx: FieldCtx; section: S; field: keyof Settings[S] & string; label: string; hint?: string }) {
-  const id = useId();
-  const value = ctx.draft[section][field] as boolean;
-  return (
-    <div className="field field--toggle">
-      <input
-        id={id}
-        type="checkbox"
-        role="switch"
-        checked={value}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        onChange={(e) => {
-          ctx.set(section, field, e.target.checked as Settings[S][typeof field]);
-        }}
-      />
-      <label htmlFor={id}>{label}</label>
-      {hint && (
-        <p id={`${id}-hint`} className="field__hint">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function NumberField<S extends Section>({
-  ctx,
-  section,
-  field,
-  label,
-  unit,
-  scale = 1,
-  step = 1,
-  hint,
-}: {
-  ctx: FieldCtx;
-  section: S;
-  field: keyof Settings[S] & string;
-  label: string;
-  unit?: string;
-  /** Stored value = shown value × scale (e.g. GB → bytes). */
-  scale?: number;
-  step?: number;
-  hint?: string;
-}) {
-  const id = useId();
-  const key = `${section}.${field}`;
-  const err = issueFor(ctx, key);
-  const stored = ctx.draft[section][field] as number;
-  const [text, setText] = useState(String(stored / scale));
-  const [prevStored, setPrevStored] = useState(stored);
-  // Revert and import change the value from outside; re-derive the text then,
-  // but never while the user's own (possibly half-typed) text already matches.
-  if (!Object.is(prevStored, stored)) {
-    setPrevStored(stored);
-    if (Number.isFinite(stored) && Number(text) * scale !== stored) setText(String(stored / scale));
-  }
-  return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      <span className="field__input">
-        <input
-          id={id}
-          type="number"
-          className="input input--num"
-          step={step}
-          value={text}
-          aria-invalid={err !== null}
-          aria-describedby={[err ? `${id}-err` : "", hint ? `${id}-hint` : ""].filter(Boolean).join(" ") || undefined}
-          onChange={(e) => {
-            setText(e.target.value);
-            const n = e.target.value.trim() === "" ? Number.NaN : Number(e.target.value);
-            ctx.set(section, field, (Number.isFinite(n) ? Math.round(n * scale) : Number.NaN) as Settings[S][typeof field]);
-          }}
-        />
-        {unit && <span className="field__unit">{unit}</span>}
-      </span>
-      {hint && (
-        <p id={`${id}-hint`} className="field__hint">
-          {hint}
-        </p>
-      )}
-      {err && (
-        <p id={`${id}-err`} className="field__error" role="alert">
-          {err}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Choice<S extends Section>({
-  ctx,
-  section,
-  field,
-  label,
-  options,
-}: {
-  ctx: FieldCtx;
-  section: S;
-  field: keyof Settings[S] & string;
-  label: string;
-  options: readonly [string, string][];
-}) {
-  const name = useId();
-  const value = ctx.draft[section][field] as string;
-  return (
-    <fieldset className="field field--choice">
-      <legend>{label}</legend>
-      {options.map(([v, text]) => (
-        <label key={v}>
-          <input
-            type="radio"
-            name={name}
-            checked={value === v}
-            onChange={() => {
-              ctx.set(section, field, v as Settings[S][typeof field]);
-            }}
-          />
-          {text}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function Group({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section id={`set-${id}`} className="settings__group" aria-labelledby={`set-${id}-h`}>
-      <h2 id={`set-${id}-h`} className="section-title">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-const GROUPS: readonly [string, string][] = [
-  ["scan", "Scanning"],
-  ["live", "Live updates"],
-  ["activity", "Activity tracking"],
-  ["helper", "Helper"],
-  ["cleanup", "Cleanup"],
-  ["history", "History"],
-  ["appearance", "Appearance"],
-  ["rules", "Rules"],
-  ["data", "Data"],
-  ["startup", "Startup and tray"],
-  ["about", "About"],
-];
-
-// -----------------------------------------------------------------------------
-// View
-// -----------------------------------------------------------------------------
-
-/** Settings view. */
-export function SettingsView() {
-  const features = useFeatures();
-  const has = useCapability("settings_load", "settings_save");
-  const [load, reload] = useLoad(() => features.settings.loadSettings(), [features], has);
-  return (
-    <ViewFrame title="Settings">
-      <nav className="settings__toc" aria-label="Settings sections">
-        <ul>
-          {GROUPS.map(([id, t]) => (
-            <li key={id}>
-              <a href={`#set-${id}`}>{t}</a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {!has ? (
-        <>
-          <Unavailable feature="Saving settings" command="settings_load">
-            Theme, units and patterns still apply for this session from the top bar.
-          </Unavailable>
-          <AboutGroup />
-        </>
-      ) : (
-        <LoadState load={load} feature="Settings" command="settings_load" onRetry={reload}>
-          {(s) => <SettingsForm initial={s} />}
-        </LoadState>
-      )}
-    </ViewFrame>
-  );
-}
-
-/** Props for {@link SettingsForm}. */
-export interface SettingsFormProps {
-  initial: Settings;
-}
-
-/** The editable settings form with save / revert. */
-export function SettingsForm({ initial }: SettingsFormProps) {
+/**
+ * Draft, validation and debounced auto-save.
+ *
+ * @param initial - Settings as loaded.
+ * @param canSave - `settings_save` exists.
+ */
+function useSettingsEditor(initial: Settings | null, canSave: boolean): Editor | null {
   const features = useFeatures();
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const [serverIssues, setServerIssues] = useState<SettingsIssue[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const localIssues = useMemo(() => validateSettings(draft), [draft]);
-  const issues = serverIssues.length > 0 ? serverIssues : localIssues;
-  const dirty = changedKeys(saved, draft);
-  const ctx: FieldCtx = {
+  const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const [revision, setRevision] = useState(0);
+  const latest = useRef(draft);
+  useEffect(() => {
+    latest.current = draft;
+  }, [draft]);
+
+  const local = useMemo(() => (draft ? validateAll(draft) : new Map<SettingKey, string>()), [draft]);
+  const dirty = draft !== null && saved !== null && !sameValue(draft, saved);
+
+  useEffect(() => {
+    if (!draft || !dirty || local.size > 0 || !canSave || serverIssues.length > 0) return;
+    const t = setTimeout(() => {
+      setSave({ kind: "saving" });
+      features.settings.saveSettings(draft).then(
+        (r) => {
+          if (r.issues.length > 0) {
+            setServerIssues(r.issues);
+            setSave({ kind: "failed", message: `${formatCount(r.issues.length)} ${r.issues.length === 1 ? "setting was" : "settings were"} refused` });
+            return;
+          }
+          setSaved(r.settings);
+          // The store may normalize values; adopt them unless the user kept typing.
+          if (sameValue(latest.current, draft) && !sameValue(r.settings, draft)) {
+            setDraft(r.settings);
+            setRevision((n) => n + 1);
+          }
+          applyAppearance(r.settings);
+          setSave({ kind: "saved" });
+        },
+        (e: unknown) => {
+          setSave({ kind: "failed", message: errorMessage(e) });
+        },
+      );
+    }, SAVE_DELAY_MS);
+    return () => {
+      clearTimeout(t);
+    };
+  }, [draft, dirty, local, canSave, serverIssues, features]);
+
+  if (!draft || !saved) return null;
+  const issues = new Map(local);
+  for (const i of serverIssues) if (!issues.has(i.key as SettingKey)) issues.set(i.key as SettingKey, i.message);
+  return {
     draft,
+    saved,
     issues,
-    set(section, key, value) {
+    save,
+    revision,
+    set(key, value) {
       setServerIssues([]);
-      setDraft((d) => ({ ...d, [section]: { ...d[section], [key]: value } }));
+      setDraft((d) => (d ? withSetting(d, key, value) : d));
+    },
+    reset(key) {
+      const def = SETTINGS.find((s) => s.key === key);
+      if (!def) return;
+      setServerIssues([]);
+      setDraft((d) => (d ? withSetting(d, key, def.default) : d));
+      setRevision((n) => n + 1);
+    },
+    replace(s) {
+      setServerIssues([]);
+      setSaved(s);
+      setDraft(s);
+      setRevision((n) => n + 1);
+      applyAppearance(s);
     },
   };
+}
 
-  const save = () => {
-    setSaving(true);
-    features.settings.saveSettings(draft).then(
-      (r) => {
-        setSaving(false);
-        if (r.issues.length > 0) {
-          setServerIssues(r.issues);
-          setStatus("Not saved: fix the highlighted settings.");
-          return;
-        }
-        setSaved(r.settings);
-        setDraft(r.settings);
-        applyAppearance(r.settings);
-        setStatus("Settings saved.");
-      },
-      (e: unknown) => {
-        setSaving(false);
-        setStatus(`Not saved: ${errorMessage(e)}`);
-      },
-    );
-  };
+// -----------------------------------------------------------------------------
+// JSON view
+// -----------------------------------------------------------------------------
 
-  const imported = (s: Settings, problems: SettingsIssue[]) => {
-    if (problems.length > 0) {
-      setServerIssues(problems);
-      setStatus("Import refused: the file has invalid settings. Nothing was changed.");
-      return;
+function effectiveJson(s: Settings): string {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [section, fields] of Object.entries(s as unknown as Record<string, Record<string, unknown>>)) {
+    for (const [field, v] of Object.entries(fields)) {
+      if (UNLISTED_KEYS.includes(`${section}.${field}`)) continue;
+      (out[section] ??= {})[field] = v;
     }
-    setSaved(s);
-    setDraft(s);
-    applyAppearance(s);
-    setStatus("Settings imported.");
-  };
-
-  return (
-    <form
-      className="settings"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (issues.length === 0 && dirty.length > 0) save();
-      }}
-    >
-      <div className="settings__bar" role="region" aria-label="Save settings">
-        <span role="status">{status ?? (dirty.length > 0 ? `${dirty.length} unsaved ${dirty.length === 1 ? "change" : "changes"}` : "All changes saved")}</span>
-        {issues.length > 0 && <span className="warn-text">{formatCount(issues.length)} to fix</span>}
-        <button
-          type="button"
-          className="btn"
-          disabled={dirty.length === 0}
-          onClick={() => {
-            setDraft(saved);
-            setServerIssues([]);
-            setStatus(null);
-          }}
-        >
-          Revert
-        </button>
-        <button type="submit" className="btn btn--primary" disabled={dirty.length === 0 || issues.length > 0 || saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
-
-      <Group id="scan" title="Scanning">
-        <Choice
-          ctx={ctx}
-          section="scan"
-          field="default_size_mode"
-          label="Default size"
-          options={[
-            ["allocated", "Size on disk (allocated)"],
-            ["logical", "File size (logical)"],
-          ]}
-        />
-        <GlobsField ctx={ctx} />
-        <Toggle ctx={ctx} section="scan" field="include_network_drives" label="Include network drives" />
-        <Toggle ctx={ctx} section="scan" field="auto_scan_on_launch" label="Scan the system drive when Strata starts" />
-        <Toggle ctx={ctx} section="scan" field="auto_scan_removable" label="Scan removable drives when plugged in" />
-        <NumberField ctx={ctx} section="scan" field="walker_concurrency" label="Fallback scanner threads" hint="0 picks automatically. Lower it for slow network drives." />
-        <Toggle ctx={ctx} section="scan" field="show_follow_policy" label="Show the link policy notice" hint="Strata never follows junctions, symbolic links or mount points while scanning, so nothing is counted twice." />
-      </Group>
-
-      <Group id="live" title="Live updates">
-        <Toggle ctx={ctx} section="live" field="usn_enabled" label="Keep the map current with the change journal" />
-        <NumberField ctx={ctx} section="live" field="update_tick_ms" label="Update interval" unit="ms" step={100} />
-        <Toggle ctx={ctx} section="live" field="auto_rescan_on_journal_loss" label="Rescan automatically when changes were missed" />
-      </Group>
-
-      <Group id="activity" title="Activity tracking (advanced)">
-        <Toggle ctx={ctx} section="activity" field="enabled" label="Track which programs write to disk" hint="Off by default. Uses ETW through the helper; data stays on this PC." />
-        <NumberField ctx={ctx} section="activity" field="retention_days" label="Keep activity for" unit="days" />
-        <NumberField ctx={ctx} section="activity" field="cpu_cap_percent" label="CPU cap" unit="%" step={0.1} />
-      </Group>
-
-      <Group id="helper" title="Helper">
-        <Choice
-          ctx={ctx}
-          section="helper"
-          field="mode"
-          label="How the elevated helper runs"
-          options={[
-            ["on_demand", "On demand (UAC prompt when needed)"],
-            ["service", "As a Windows service (no prompts)"],
-          ]}
-        />
-        <HelperService />
-      </Group>
-
-      <Group id="cleanup" title="Cleanup">
-        <Choice
-          ctx={ctx}
-          section="cleanup"
-          field="default_method"
-          label="Default method"
-          options={[
-            ["recycle_bin", "Move to Recycle Bin"],
-            ["permanent", "Delete permanently"],
-          ]}
-        />
-        <NumberField ctx={ctx} section="cleanup" field="large_delete_confirm_bytes" label="Ask again for permanent deletes over" unit="GB" scale={GB} step={0.5} />
-        <NumberField ctx={ctx} section="cleanup" field="stale_node_modules_days" label="node_modules count as stale after" unit="days" />
-        <NumberField ctx={ctx} section="cleanup" field="stale_installers_days" label="Installers count as old after" unit="days" />
-        <NumberField ctx={ctx} section="cleanup" field="duplicates_min_bytes" label="Ignore duplicates smaller than" unit="MB" scale={MB} step={0.5} />
-      </Group>
-
-      <Group id="history" title="History">
-        <NumberField ctx={ctx} section="history" field="snapshot_interval_hours" label="Snapshot every" unit="hours" />
-        <NumberField ctx={ctx} section="history" field="retention_days" label="Keep snapshots for" unit="days" />
-        <NumberField ctx={ctx} section="history" field="thin_after_days" label="Keep one per week after" unit="days" />
-        <NumberField ctx={ctx} section="history" field="min_dir_bytes" label="Record folders larger than" unit="MB" scale={MB} />
-      </Group>
-
-      <Group id="appearance" title="Appearance">
-        <Choice
-          ctx={ctx}
-          section="appearance"
-          field="theme"
-          label="Theme"
-          options={[
-            ["system", "Follow Windows"],
-            ["light", "Light"],
-            ["dark", "Dark"],
-          ]}
-        />
-        <Choice
-          ctx={ctx}
-          section="appearance"
-          field="color_mode"
-          label="Default colors"
-          options={[
-            ["category", "Category"],
-            ["file_type", "File type"],
-            ["age", "Age"],
-            ["app", "Owning app"],
-            ["safety", "Safety tier"],
-          ]}
-        />
-        <Choice
-          ctx={ctx}
-          section="appearance"
-          field="treemap_style"
-          label="Treemap style"
-          options={[
-            ["flat", "Flat"],
-            ["cushion", "Cushion"],
-          ]}
-        />
-        <Choice
-          ctx={ctx}
-          section="appearance"
-          field="units"
-          label="Units"
-          options={[
-            ["binary", "Binary, shown as KB/MB/GB (like Explorer)"],
-            ["decimal", "SI (1 kB = 1000 bytes)"],
-          ]}
-        />
-        <Toggle ctx={ctx} section="appearance" field="compact_density" label="Compact rows" />
-        <PatternsToggle />
-      </Group>
-
-      <Group id="rules" title="Rules">
-        <Toggle ctx={ctx} section="rules" field="user_rules_enabled" label="Load my own rule packs" />
-        <RulesDirField ctx={ctx} />
-        <RulesTools />
-      </Group>
-
-      <Group id="data" title="Data">
-        <DataTools onImported={imported} />
-        <Toggle ctx={ctx} section="privacy" field="crash_reports_opt_in" label="Send crash reports" hint="Off by default. Never includes paths, file names or scan data." />
-      </Group>
-
-      <Group id="startup" title="Startup and tray">
-        <Toggle ctx={ctx} section="startup" field="launch_at_login" label="Start with Windows" />
-        <Toggle ctx={ctx} section="startup" field="start_minimized_to_tray" label="Start minimized to the tray" />
-        <Toggle ctx={ctx} section="tray" field="enabled" label="Show a tray icon (free space at a glance, quick scan)" />
-        <Toggle ctx={ctx} section="tray" field="low_space_notification" label="Notify when free space drops low" />
-        <NumberField ctx={ctx} section="tray" field="low_space_threshold_bytes" label="Low space means under" unit="GB" scale={GB} />
-      </Group>
-
-      <AboutGroup ctx={ctx} />
-    </form>
-  );
+  }
+  return JSON.stringify(out, null, 2);
 }
 
-// -----------------------------------------------------------------------------
-// Composite fields
-// -----------------------------------------------------------------------------
-
-function GlobsField({ ctx }: { ctx: FieldCtx }) {
-  const id = useId();
-  const err = issueFor(ctx, "scan.exclude_globs");
-  const [text, setText] = useState(ctx.draft.scan.exclude_globs.join("\n"));
-  return (
-    <div className="field">
-      <label htmlFor={id}>Exclude from scans (one pattern per line)</label>
-      <textarea
-        id={id}
-        className="input textarea"
-        rows={3}
-        value={text}
-        aria-invalid={err !== null}
-        aria-describedby={err ? `${id}-err` : `${id}-hint`}
-        onChange={(e) => {
-          setText(e.target.value);
-          ctx.set(
-            "scan",
-            "exclude_globs",
-            e.target.value.split(/\r?\n/).filter((l, i, a) => !(l === "" && i === a.length - 1)),
-          );
-        }}
-      />
-      <p id={`${id}-hint`} className="field__hint">
-        Example: <code>D:\Backups\**</code>
-      </p>
-      {err && (
-        <p id={`${id}-err`} className="field__error" role="alert">
-          {err}
-        </p>
-      )}
-    </div>
-  );
+/** Tints JSON tokens: keys, strings, numbers and literals. */
+function JsonLine({ line }: { line: string }) {
+  const parts: ReactNode[] = [];
+  const re = /("(?:[^"\\]|\\.)*")(\s*:)?|\b(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b|\b(true|false|null)\b/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(line)) !== null) {
+    if (m.index > last) parts.push(line.slice(last, m.index));
+    if (m[1] !== undefined) {
+      parts.push(
+        <span key={k++} className={m[2] ? "j-key" : "j-str"}>
+          {m[1]}
+        </span>,
+      );
+      if (m[2]) parts.push(m[2]);
+    } else if (m[3] !== undefined) {
+      parts.push(
+        <span key={k++} className="j-num">
+          {m[3]}
+        </span>,
+      );
+    } else {
+      parts.push(
+        <span key={k++} className="j-lit">
+          {m[4]}
+        </span>,
+      );
+    }
+    last = re.lastIndex;
+  }
+  parts.push(line.slice(last));
+  return <>{parts}</>;
 }
 
-function RulesDirField({ ctx }: { ctx: FieldCtx }) {
-  const id = useId();
-  const err = issueFor(ctx, "rules.user_rules_dir");
-  return (
-    <div className="field">
-      <label htmlFor={id}>User rules folder</label>
-      <input
-        id={id}
-        type="text"
-        className="input"
-        value={ctx.draft.rules.user_rules_dir ?? ""}
-        placeholder="Default (in your app data folder)"
-        aria-invalid={err !== null}
-        onChange={(e) => {
-          ctx.set("rules", "user_rules_dir", e.target.value === "" ? null : e.target.value);
-        }}
-      />
-      {err && (
-        <p className="field__error" role="alert">
-          {err}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function PatternsToggle() {
-  const id = useId();
-  const patterns = useSettings((s) => s.patterns);
-  const setPatterns = useSettings((s) => s.setPatterns);
-  return (
-    <div className="field field--toggle">
-      <input
-        id={id}
-        type="checkbox"
-        role="switch"
-        checked={patterns}
-        onChange={(e) => {
-          setPatterns(e.target.checked);
-        }}
-      />
-      <label htmlFor={id}>Category patterns for color-blind use (applies now)</label>
-    </div>
-  );
-}
-
-function HelperService() {
+function JsonView({ settings, unsaved, onImported }: { settings: Settings; unsaved: boolean; onImported: (s: Settings) => void }) {
   const features = useFeatures();
-  const has = useCapability("helper_service_status");
-  const canChange = useCapability("helper_service_install", "helper_service_uninstall");
-  const [load, reload] = useLoad(() => features.settings.fetchHelperService(), [features], has);
-  const [busy, setBusy] = useState(false);
-  if (!has) return <p className="detail__muted">Installing the service isn’t available in this build.</p>;
-  return (
-    <LoadState load={load} feature="Helper service" command="helper_service_status" onRetry={reload}>
-      {(s) => (
-        <div className="toolbar">
-          <span>{s.installed ? (s.running ? "Service installed and running." : "Service installed, not running.") : "Service not installed."}</span>
-          <button
-            type="button"
-            className="btn"
-            disabled={!canChange || busy}
-            onClick={() => {
-              setBusy(true);
-              (s.installed ? features.settings.uninstallHelperService() : features.settings.installHelperService()).then(
-                () => {
-                  setBusy(false);
-                  reload();
-                },
-                (e: unknown) => {
-                  setBusy(false);
-                  useApp.getState().notify(errorMessage(e));
-                },
-              );
-            }}
-          >
-            {s.installed ? "Uninstall service (admin)…" : "Install service (admin)…"}
-          </button>
-        </div>
-      )}
-    </LoadState>
-  );
-}
-
-function RulesTools() {
-  const features = useFeatures();
-  const canList = useCapability("rules_list");
-  const canOpen = useCapability("rules_open_folder");
-  const canReload = useCapability("rules_reload");
-  const canExplain = useCapability("rules_explain");
-  const [showRules, setShowRules] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [rules] = useLoad(() => features.settings.fetchRules(), [features], canList && showRules);
-  const [reloadMsg, setReloadMsg] = useState<string | null>(null);
-  const [path, setPath] = useState("");
-  const [explain, setExplain] = useState<{ result: Explanation } | { error: string } | null>(null);
-  const testerId = useId();
-  return (
-    <>
-      <div className="toolbar">
-        <button
-          type="button"
-          className="btn"
-          disabled={!canOpen}
-          onClick={() => {
-            void features.settings.openRulesFolder().catch((e: unknown) => {
-              useApp.getState().notify(errorMessage(e));
-            });
-          }}
-        >
-          Open user rules folder
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={!canReload}
-          onClick={() => {
-            features.settings.reloadRules().then(
-              (r) => {
-                setReloadMsg(
-                  `Loaded ${formatCount(r.builtin)} built-in and ${formatCount(r.user)} user rules.${r.problems.length > 0 ? ` Problems: ${r.problems.map((p) => `${p.file}: ${p.message}`).join("; ")}` : ""}`,
-                );
-              },
-              (e: unknown) => {
-                setReloadMsg(errorMessage(e));
-              },
-            );
-          }}
-        >
-          Reload rules
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={!canList}
-          aria-expanded={showRules}
-          onClick={() => {
-            setShowRules(!showRules);
-          }}
-        >
-          {showRules ? "Hide built-in rules" : "View built-in rules"}
-        </button>
-      </div>
-      {reloadMsg && <p role="status">{reloadMsg}</p>}
-      {showRules && (
-        <LoadState load={rules} feature="Rules" command="rules_list">
-          {(list) => {
-            const q = filter.toLowerCase();
-            const shown = list.filter((r) => q === "" || r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
-            return (
-              <>
-                <label>
-                  Filter rules{" "}
-                  <input
-                    type="search"
-                    className="input"
-                    value={filter}
-                    onChange={(e) => {
-                      setFilter(e.target.value);
-                    }}
-                  />
-                </label>
-                <div className="scroll-box" tabIndex={0} role="region" aria-label="Rules (read-only)">
-                  <table className="table">
-                    <caption className="visually-hidden">Rules, read-only</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Rule</th>
-                        <th scope="col">Category</th>
-                        <th scope="col">Safety</th>
-                        <th scope="col">Source</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {shown.map((r) => (
-                        <tr key={`${r.source}-${r.id}`}>
-                          <th scope="row">
-                            <div className="cell-name">{r.name}</div>
-                            <div className="cell-path">{r.id}</div>
-                            <div className="detail__muted">{r.explain}</div>
-                          </th>
-                          <td>{categoryInfo(r.category).label}</td>
-                          <td>
-                            <SafetyBadge tier={r.safety} />
-                          </td>
-                          <td>
-                            {r.source === "builtin" ? "Built-in" : "Yours"}
-                            {r.overriddenBy && <div className="detail__muted">overridden by {r.overriddenBy}</div>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            );
-          }}
-        </LoadState>
-      )}
-      <div className="field">
-        <label htmlFor={testerId}>Why is this classified as…? Test a path</label>
-        <span className="field__input">
-          <input
-            id={testerId}
-            type="text"
-            className="input input--wide"
-            value={path}
-            placeholder="C:\Users\me\AppData\Local\Temp"
-            onChange={(e) => {
-              setPath(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                document.getElementById(`${testerId}-go`)?.click();
-              }
-            }}
-          />
-          <button
-            id={`${testerId}-go`}
-            type="button"
-            className="btn"
-            disabled={!canExplain || path.trim() === ""}
-            onClick={() => {
-              features.settings.explainPath(path.trim()).then(
-                (result) => {
-                  setExplain({ result });
-                },
-                (e: unknown) => {
-                  setExplain({ error: errorMessage(e) });
-                },
-              );
-            }}
-          >
-            Explain
-          </button>
-        </span>
-      </div>
-      {explain && ("error" in explain ? <p className="warn-text">{explain.error}</p> : <ExplanationView e={explain.result} />)}
-    </>
-  );
-}
-
-const CLEAR_TEXT: Readonly<Record<ClearableData, [string, string]>> = {
-  history: ["Clear history", "Deletes every snapshot. Usage charts and “what changed” start over. Your files are not touched."],
-  activity: ["Clear activity data", "Deletes all recorded program activity. Your files are not touched."],
-  caches: ["Clear Strata’s caches", "Deletes the scan index cache and duplicate hashes. The next launch rescans. Your files are not touched."],
-};
-
-function DataTools({ onImported }: { onImported: (s: Settings, issues: SettingsIssue[]) => void }) {
-  const features = useFeatures();
-  const canClear = useCapability("data_clear");
   const canExport = useCapability("settings_export");
   const canImport = useCapability("settings_import");
-  const [confirm, setConfirm] = useState<ClearableData | null>(null);
-  const importId = useId();
+  const fileId = useId();
+  const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string; issues?: SettingsIssue[] } | null>(null);
+  const json = effectiveJson(settings);
+  const lines = json.split("\n");
   return (
-    <>
-      <div className="toolbar">
-        {(Object.keys(CLEAR_TEXT) as ClearableData[]).map((k) => (
-          <button
-            key={k}
-            type="button"
-            className="btn"
-            disabled={!canClear}
-            onClick={() => {
-              setConfirm(k);
-            }}
-          >
-            {CLEAR_TEXT[k][0]}…
-          </button>
-        ))}
-      </div>
-      <div className="toolbar">
+    <div className="json">
+      <div className="json__bar">
+        <span className="smuted">
+          Effective settings, read-only{unsaved ? "; changes still being saved are not shown" : ""}. Edit them on the Settings tab, or import a file.
+        </span>
         <button
           type="button"
-          className="btn"
-          disabled={!canExport}
+          className="btn btn--sm"
           onClick={() => {
+            navigator.clipboard.writeText(json).then(
+              () => {
+                setMsg({ tone: "ok", text: "Copied to the clipboard." });
+              },
+              (e: unknown) => {
+                setMsg({ tone: "error", text: errorMessage(e) });
+              },
+            );
+          }}
+        >
+          <Icon name="copy" size={14} />
+          Copy
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          aria-disabled={!canExport || undefined}
+          data-tip={canExport ? "Save a file you can import on another PC" : missingReason("settings_export")}
+          onClick={() => {
+            if (!canExport) return;
             features.settings.exportSettings().then(
-              (json) => {
-                const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+              (text) => {
+                const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
                 const a = document.createElement("a");
                 a.href = url;
                 a.download = "strata-settings.json";
                 a.click();
                 URL.revokeObjectURL(url);
+                setMsg({ tone: "ok", text: "Exported strata-settings.json." });
               },
               (e: unknown) => {
-                useApp.getState().notify(errorMessage(e));
+                setMsg({ tone: "error", text: errorMessage(e) });
               },
             );
           }}
         >
-          Export settings
+          <Icon name="download" size={14} />
+          Export…
         </button>
-        <label htmlFor={importId} className={`btn${canImport ? "" : " btn--disabled"}`}>
-          Import settings…
+        <label htmlFor={fileId} className="btn btn--sm" aria-disabled={!canImport || undefined} data-tip={canImport ? "Replace these settings from an exported file" : missingReason("settings_import")}>
+          <Icon name="upload" size={14} />
+          Import…
         </label>
         <input
-          id={importId}
+          id={fileId}
           type="file"
           accept=".json,application/json"
           className="visually-hidden"
@@ -805,129 +279,351 @@ function DataTools({ onImported }: { onImported: (s: Settings, issues: SettingsI
               .then((text) => features.settings.importSettings(text))
               .then(
                 (r) => {
-                  onImported(r.settings, r.issues);
+                  if (r.issues.length > 0) {
+                    setMsg({ tone: "error", text: "Import refused: the file has invalid settings. Nothing was changed.", issues: r.issues });
+                    return;
+                  }
+                  onImported(r.settings);
+                  setMsg({ tone: "ok", text: "Settings imported." });
                 },
                 (err: unknown) => {
-                  useApp.getState().notify(`Import failed: ${errorMessage(err)}`);
+                  setMsg({ tone: "error", text: `Import failed: ${errorMessage(err)}` });
                 },
               );
           }}
         />
       </div>
-      {confirm && (
-        <ConfirmDialog
-          title={`${CLEAR_TEXT[confirm][0]}?`}
-          confirmLabel={CLEAR_TEXT[confirm][0]}
-          danger
-          onCancel={() => {
-            setConfirm(null);
-          }}
-          onConfirm={() => {
-            const what = confirm;
-            setConfirm(null);
-            features.settings.clearData(what).then(
-              () => {
-                useApp.getState().notify(`${CLEAR_TEXT[what][0]}: done.`);
-              },
-              (e: unknown) => {
-                useApp.getState().notify(errorMessage(e));
-              },
-            );
-          }}
-        >
-          <p>{CLEAR_TEXT[confirm][1]}</p>
-        </ConfirmDialog>
+      {msg && (
+        <p className={`sresult sresult--${msg.tone}`} role={msg.tone === "error" ? "alert" : "status"}>
+          <Icon name={msg.tone === "ok" ? "check" : "warning"} size={14} />
+          <span>
+            {msg.text}
+            {msg.issues && (
+              <ul className="sproblems">
+                {msg.issues.map((i) => (
+                  <li key={i.key}>
+                    <code>{i.key}</code>: {i.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </span>
+        </p>
       )}
-    </>
+      <pre className="json__code" tabIndex={0} aria-label="Effective settings as JSON">
+        {lines.map((l, i) => (
+          <span key={i} className="json__line">
+            <span className="json__ln" aria-hidden="true">
+              {i + 1}
+            </span>
+            <JsonLine line={l} />
+            {"\n"}
+          </span>
+        ))}
+      </pre>
+    </div>
   );
 }
 
-function AboutGroup({ ctx }: { ctx?: FieldCtx }) {
-  const features = useFeatures();
-  const canLicenses = useCapability("about_licenses");
-  const canUpdate = useCapability("updates_check");
-  const [info] = useLoad(() => getAppInfo(), []);
-  const [showLicenses, setShowLicenses] = useState(false);
-  const [licenses] = useLoad(() => features.settings.fetchLicenses(), [features], canLicenses && showLicenses);
-  const [update, setUpdate] = useState<string | null>(null);
+// -----------------------------------------------------------------------------
+// Page
+// -----------------------------------------------------------------------------
+
+function categoryPanels(id: CategoryId, settings: Settings | null): ReactNode {
+  switch (id) {
+    case "rules":
+      return <RulesPanels />;
+    case "helper":
+      return <HelperPanels />;
+    case "updates":
+      return (
+        <Panel title="Check now">
+          <UpdateCheck />
+        </Panel>
+      );
+    case "privacy":
+      return <DataPanels />;
+    case "about":
+      return <AboutPanels settings={settings} />;
+    default:
+      return null;
+  }
+}
+
+function panelMatches(id: CategoryId, q: SettingsQuery): boolean {
+  if (q.modifiedOnly) return false;
+  if (q.words.length === 0) return true;
+  const cat = SETTINGS_CATEGORIES.find((c) => c.id === id);
+  const hay = `${cat?.title ?? ""} ${PANEL_TERMS[id] ?? ""}`.toLowerCase();
+  return q.words.every((w) => hay.includes(w));
+}
+
+function SaveStatus({ editor, canSave }: { editor: Editor | null; canSave: boolean }) {
+  if (!editor) return null;
+  const n = editor.issues.size;
+  let text: string;
+  let tone = "";
+  if (!canSave) {
+    text = "Changes can’t be saved in this build";
+    tone = "warn";
+  } else if (n > 0) {
+    text = `${formatCount(n)} ${n === 1 ? "setting needs" : "settings need"} attention — not saved`;
+    tone = "warn";
+  } else if (editor.save.kind === "saving") text = "Saving…";
+  else if (editor.save.kind === "failed") {
+    text = `Not saved: ${editor.save.message}`;
+    tone = "warn";
+  } else if (editor.save.kind === "saved") text = "All changes saved";
+  else text = "Changes save automatically";
   return (
-    <Group id="about" title="About">
-      <p>
-        Strata {info.state === "ready" ? info.data.version : ""} · MIT licensed · no telemetry unless you opt in.
-      </p>
-      {ctx && (
-        <>
-          <Choice
-            ctx={ctx}
-            section="updates"
-            field="channel"
-            label="Update channel"
-            options={[
-              ["stable", "Stable"],
-              ["beta", "Beta"],
-            ]}
+    <span className={`settings__status${tone ? ` settings__status--${tone}` : ""}`} role="status">
+      {tone === "warn" ? <Icon name="warning" size={14} /> : editor.save.kind === "saved" ? <Icon name="check" size={14} /> : null}
+      {text}
+    </span>
+  );
+}
+
+/** Props for {@link SettingsPage}. */
+export interface SettingsPageProps {
+  /** Loaded settings, or `null` when this build has no settings store. */
+  initial: Settings | null;
+  canSave: boolean;
+}
+
+/** The Settings page body. */
+export function SettingsPage({ initial, canSave }: SettingsPageProps) {
+  const editor = useSettingsEditor(initial, canSave);
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"ui" | "json">("ui");
+  const [active, setActive] = useState<CategoryId>("general");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const q = parseQuery(query);
+  const searching = q.words.length > 0 || q.modifiedOnly;
+  const draft = editor?.draft ?? null;
+
+  const visible = useMemo(() => {
+    const out = new Map<CategoryId, { settings: SettingDef[]; panels: boolean }>();
+    for (const c of SETTINGS_CATEGORIES) {
+      const settings = SETTINGS.filter((d) => d.category === c.id && matchesQuery(d, q, draft));
+      const panels = c.id in PANEL_TERMS && panelMatches(c.id, q);
+      if (settings.length > 0 || panels || !searching) out.set(c.id, { settings, panels });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `q` is derived from `query`.
+  }, [query, draft, searching]);
+  const matchCount = [...visible.values()].reduce((a, v) => a + v.settings.length, 0);
+  const current: CategoryId | null = visible.has(active) ? active : ([...visible.keys()][0] ?? null);
+
+  // Scrolls only the content pane; scrollIntoView would also move the workspace.
+  const scrollTo = (id: CategoryId) => {
+    setActive(id);
+    const root = contentRef.current;
+    const el = document.getElementById(`settings-cat-${id}`);
+    if (!root || !el) return;
+    root.scrollTop += el.getBoundingClientRect().top - root.getBoundingClientRect().top;
+  };
+
+  useEffect(() => {
+    const focus = useLayout.getState().settingsFocus;
+    if (focus && SETTINGS_CATEGORIES.some((c) => c.id === focus)) {
+      useLayout.setState({ settingsFocus: null });
+      requestAnimationFrame(() => {
+        scrollTo(focus as CategoryId);
+      });
+    } else {
+      searchRef.current?.focus();
+    }
+  }, []);
+
+  // Scroll spy: the category nearest the top of the content becomes active.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root || mode !== "ui") return;
+    const onScroll = () => {
+      const top = root.getBoundingClientRect().top;
+      let current: CategoryId | null = null;
+      for (const el of root.querySelectorAll<HTMLElement>("[data-category]")) {
+        if (el.getBoundingClientRect().top - top <= 48) current = el.dataset.category as CategoryId;
+      }
+      if (current) setActive(current);
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      root.removeEventListener("scroll", onScroll);
+    };
+  }, [mode]);
+
+  return (
+    <section className="settings" aria-labelledby="settings-title">
+      <header className="settings__head">
+        <h1 id="settings-title" className="settings__title">
+          Settings
+        </h1>
+        <div className="settings__search">
+          <Icon name="search" size={14} />
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search settings"
+            aria-describedby="settings-search-hint"
+            placeholder="Search settings"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (mode === "json") setMode("ui");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && query !== "") {
+                e.stopPropagation();
+                setQuery("");
+              }
+            }}
           />
-          <Toggle ctx={ctx} section="updates" field="auto_download" label="Download updates in the background (applied on restart)" />
-        </>
-      )}
-      <div className="toolbar">
-        <button
-          type="button"
-          className="btn"
-          disabled={!canUpdate}
-          onClick={() => {
-            features.settings.checkForUpdates().then(
-              (u) => {
-                setUpdate(u.available && u.latest ? `Version ${u.latest} is available on the ${u.channel} channel.` : `You’re up to date (${u.current}).`);
-              },
-              (e: unknown) => {
-                setUpdate(errorMessage(e));
-              },
-            );
-          }}
-        >
-          Check for updates
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={!canLicenses}
-          aria-expanded={showLicenses}
-          onClick={() => {
-            setShowLicenses(!showLicenses);
-          }}
-        >
-          Third-party licenses
-        </button>
-      </div>
-      {update && <p role="status">{update}</p>}
-      {showLicenses && (
-        <LoadState load={licenses} feature="Licenses" command="about_licenses">
-          {(list) => (
-            <div className="scroll-box" tabIndex={0} role="region" aria-label="Third-party licenses">
-              <table className="table">
-                <caption className="visually-hidden">Third-party components</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Component</th>
-                    <th scope="col">Version</th>
-                    <th scope="col">License</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((l) => (
-                    <tr key={`${l.ecosystem}-${l.name}-${l.version}`}>
-                      <th scope="row">{l.name}</th>
-                      <td>{l.version}</td>
-                      <td>{l.license}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <button
+            type="button"
+            className={q.modifiedOnly ? "settings__chip is-on" : "settings__chip"}
+            aria-pressed={q.modifiedOnly}
+            data-tip="Show only settings you changed"
+            onClick={() => {
+              setQuery(q.modifiedOnly ? query.replace(/@modified\s*/i, "").trim() : `@modified ${query}`.trim());
+            }}
+          >
+            Modified
+          </button>
+          <span id="settings-search-hint" className="visually-hidden">
+            Matches titles, descriptions and keys. Type @modified to list changed settings.
+          </span>
+        </div>
+        <div className="seg" role="radiogroup" aria-label="Settings view">
+          {(["ui", "json"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              tabIndex={mode === m ? 0 : -1}
+              onClick={() => {
+                setMode(m);
+              }}
+            >
+              <Icon name={m === "ui" ? "list" : "braces"} size={14} />
+              <span className="seg__text">{m === "ui" ? "Settings" : "JSON"}</span>
+            </button>
+          ))}
+        </div>
+        <SaveStatus editor={editor} canSave={canSave} />
+      </header>
+      <div className="settings__layout">
+        <nav className="settings__nav" aria-label="Settings categories">
+          <ul>
+            {SETTINGS_CATEGORIES.map((c) => {
+              const v = visible.get(c.id);
+              const modified = draft ? SETTINGS.filter((d) => d.category === c.id && isModified(draft, d)).length : 0;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="settings__navitem"
+                    aria-current={mode === "ui" && current === c.id ? "true" : undefined}
+                    aria-disabled={searching && !v ? true : undefined}
+                    onClick={() => {
+                      if (mode === "json") setMode("ui");
+                      if (v) requestAnimationFrame(() => {
+                        scrollTo(c.id);
+                      });
+                    }}
+                  >
+                    <span className="settings__navlabel">{c.title}</span>
+                    {searching && v && v.settings.length > 0 && <span className="settings__navcount">{v.settings.length}</span>}
+                    {!searching && modified > 0 && (
+                      <span className="settings__navdot" aria-label={`${modified} modified`} data-tip={`${modified} modified`} />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <div className="settings__content" ref={contentRef} tabIndex={-1}>
+          {mode === "json" ? (
+            draft && editor ? (
+              <JsonView settings={editor.saved} unsaved={!sameValue(editor.saved, editor.draft)} onImported={editor.replace} />
+            ) : (
+              <p className="smuted settings__empty">The JSON view needs the settings store, which this build doesn’t include.</p>
+            )
+          ) : (
+            <>
+              {searching && (
+                <p className="settings__count" role="status">
+                  {matchCount === 0 && visible.size === 0
+                    ? `No settings match “${query.trim()}”.`
+                    : `${formatCount(matchCount)} ${matchCount === 1 ? "setting" : "settings"} found`}
+                </p>
+              )}
+              {!editor && (
+                <div className="settings__notice" role="note">
+                  <Icon name="info" size={16} />
+                  <p>Saving settings isn’t available in this build. The tools below still work where the engine supports them.</p>
+                </div>
+              )}
+              {SETTINGS_CATEGORIES.map((c) => {
+                const v = visible.get(c.id);
+                if (!v) return null;
+                const groups = [...new Set(v.settings.map((d) => d.group ?? ""))];
+                return (
+                  <section key={c.id} id={`settings-cat-${c.id}`} data-category={c.id} className="scat" aria-labelledby={`settings-cat-${c.id}-h`}>
+                    <h2 id={`settings-cat-${c.id}-h`} className="scat__title">
+                      <Highlight text={c.title} words={q.words} />
+                    </h2>
+                    <p className="scat__desc">{c.description}</p>
+                    {editor &&
+                      groups.map((g) => (
+                        <div key={g} className="scat__group">
+                          {g && <h3 className="scat__subtitle">{g}</h3>}
+                          {v.settings
+                            .filter((d) => (d.group ?? "") === g)
+                            .map((d) => (
+                              <SettingRow
+                                key={`${d.key}:${editor.revision}`}
+                                def={d}
+                                value={getSetting(editor.draft, d.key)}
+                                error={editor.issues.get(d.key) ?? null}
+                                modified={isModified(editor.draft, d)}
+                                disabled={!canSave}
+                                words={q.words}
+                                onChange={(value) => {
+                                  editor.set(d.key, value);
+                                }}
+                                onReset={() => {
+                                  editor.reset(d.key);
+                                }}
+                              />
+                            ))}
+                        </div>
+                      ))}
+                    {v.panels && categoryPanels(c.id, draft)}
+                  </section>
+                );
+              })}
+            </>
           )}
-        </LoadState>
-      )}
-    </Group>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Settings view: loads settings, then renders the page. */
+export function SettingsView() {
+  const features = useFeatures();
+  const canLoad = useCapability("settings_load");
+  const canSave = useCapability("settings_save");
+  const [load, reload] = useLoad(() => features.settings.loadSettings(), [features], canLoad);
+  if (!canLoad) return <SettingsPage initial={null} canSave={false} />;
+  return (
+    <LoadState load={load} feature="Settings" command="settings_load" onRetry={reload}>
+      {(s) => <SettingsPage initial={s} canSave={canSave} />}
+    </LoadState>
   );
 }

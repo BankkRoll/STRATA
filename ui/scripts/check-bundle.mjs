@@ -12,6 +12,7 @@ const LAZY = [
   "ArcRenderer",
   "CircleRenderer",
   "CommandPalette",
+  "CheatSheet",
   // Wave-2 views: each must stay its own chunk so the entry keeps its budget.
   "CleanupView",
   "RecommendationsView",

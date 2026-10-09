@@ -11,14 +11,13 @@ import { ServicesContext, type Services } from "../services";
 import { useApp } from "../store/app";
 import { useQueue } from "../store/queue";
 import { useSettings } from "../store/settings";
-import { defaultSettings, dupeGroup, fakeFeatures, plan, queueEntry, resolves, type FeatureOverrides } from "../test/features";
+import { dupeGroup, fakeFeatures, plan, queueEntry, resolves, type FeatureOverrides } from "../test/features";
 import { resetStores, testServices } from "../test/services";
 import { CleanupView } from "./CleanupView";
 import { DetailPanel } from "./DetailPanel";
 import { DuplicatesView } from "./DuplicatesView";
 import { HistoryView } from "./HistoryView";
 import { LargestView } from "./LargestView";
-import { SettingsView } from "./SettingsView";
 import { ToolsView } from "./ToolsView";
 
 const GIB = 1024 ** 3;
@@ -280,66 +279,6 @@ describe("duplicates", () => {
 });
 
 // -----------------------------------------------------------------------------
-// Settings
-// -----------------------------------------------------------------------------
-
-describe("settings", () => {
-  it("round-trips with validation and applies appearance on save", async () => {
-    const saveSettings = vi.fn((s: ReturnType<typeof defaultSettings>) => Promise.resolve({ settings: s, issues: [] }));
-    setup(["settings_load", "settings_save"], { settings: { loadSettings: resolves(defaultSettings()), saveSettings } }, <SettingsView />);
-    const tick = await screen.findByRole("spinbutton", { name: "Update interval" });
-    const save = screen.getByRole<HTMLButtonElement>("button", { name: "Save" });
-    expect(save.disabled).toBe(true);
-
-    fireEvent.change(tick, { target: { value: "50" } });
-    expect(tick.getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByText("50 is outside 100..=60000")).toBeTruthy();
-    expect(save.disabled).toBe(true);
-
-    fireEvent.change(tick, { target: { value: "500" } });
-    fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Ask again for permanent deletes over" }), { target: { value: "2" } });
-    expect(screen.getByText("3 unsaved changes")).toBeTruthy();
-    fireEvent.click(save);
-    await waitFor(() => {
-      expect(saveSettings).toHaveBeenCalled();
-    });
-    const sent = saveSettings.mock.calls[0]?.[0];
-    expect(sent?.live.update_tick_ms).toBe(500);
-    expect(sent?.appearance.theme).toBe("dark");
-    expect(sent?.cleanup.large_delete_confirm_bytes).toBe(2 * GIB);
-    expect(await screen.findByText("Settings saved.")).toBeTruthy();
-    expect(useSettings.getState().theme).toBe("dark");
-  });
-
-  it("shows the backend's issues when it refuses a save", async () => {
-    const saveSettings = vi.fn((s: ReturnType<typeof defaultSettings>) => Promise.resolve({ settings: s, issues: [{ key: "history.retention_days", message: "too short for weekly thinning" }] }));
-    setup(["settings_load", "settings_save"], { settings: { loadSettings: resolves(defaultSettings()), saveSettings } }, <SettingsView />);
-    fireEvent.change(await screen.findByRole("spinbutton", { name: "Keep snapshots for" }), { target: { value: "40" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("too short for weekly thinning")).toBeTruthy();
-    expect(screen.getByText(/Not saved/)).toBeTruthy();
-  });
-
-  it("tests a path against the rules", async () => {
-    const explainPath = resolves({
-      path: "C:\\Users\\me\\AppData\\Local\\Temp",
-      result: { category: 7, safety: "safe" as const, ruleId: "windows.temp", regenerable: true },
-      rule: null,
-      originPath: null,
-      steps: [],
-      trace: ["windows.temp matched {TEMP}"],
-    });
-    setup(["settings_load", "settings_save", "rules_explain"], { settings: { loadSettings: resolves(defaultSettings()), explainPath } }, <SettingsView />);
-    const input = await screen.findByRole("textbox", { name: /Test a path/ });
-    fireEvent.change(input, { target: { value: "C:\\Users\\me\\AppData\\Local\\Temp" } });
-    fireEvent.click(screen.getByRole("button", { name: "Explain" }));
-    expect(await screen.findByText("windows.temp matched {TEMP}")).toBeTruthy();
-    expect(explainPath).toHaveBeenCalledWith("C:\\Users\\me\\AppData\\Local\\Temp");
-  });
-});
-
-// -----------------------------------------------------------------------------
 // History, charts, tools, largest, detail, routing
 // -----------------------------------------------------------------------------
 
@@ -505,20 +444,23 @@ describe("detail panel additions", () => {
 });
 
 describe("routing", () => {
-  it("lazy-loads feature views from the nav and gates volume views", async () => {
+  it("lazy-loads feature views from the activity bar and gates volume views", async () => {
     render(<App services={testServices()} />);
-    const nav = screen.getByRole("navigation", { name: "Views" });
-    const largest = within(nav).getByRole("button", { name: "Largest files" });
+    const areas = screen.getByRole("navigation", { name: "Areas" });
+    fireEvent.click(within(areas).getByRole("button", { name: "Insights" }));
+    const sidebar = await screen.findByRole("navigation", { name: "Insights sidebar" });
+    const largest = within(sidebar).getByRole("button", { name: "Largest files" });
     expect(largest.getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(within(nav).getByRole("button", { name: "Settings" }));
+    fireEvent.click(within(areas).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
-    expect(screen.getByText("Saving settings isn’t available in this build")).toBeTruthy();
+    expect(screen.getByText(/Saving settings isn’t available in this build/)).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: /sidebar/ })).toBeNull();
     await flush();
   });
 
-  it("shows the queue count in the nav", () => {
+  it("shows the queue count in the activity bar", () => {
     useQueue.setState({ items: [queueEntry(1), queueEntry(2)], refused: [] });
     render(<App services={testServices()} />);
-    expect(screen.getByRole("button", { name: /Cleanup queue, 2 queued/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cleanup, 2 queued" })).toBeTruthy();
   });
 });

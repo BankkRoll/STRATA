@@ -11,7 +11,11 @@ import type { Services } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
 import { FEATURE_VIEWS } from "../views/featureViews";
-import { NAV_VIEWS } from "./NavRail";
+import { AREAS, VISUAL_VIEWS } from "../shell/areas";
+import { shortcutOf } from "../shell/keymap";
+import { useLayout } from "../shell/layout";
+import { goToArea } from "../shell/navigation";
+import { activeTab, closeTab, openTab, useTabs } from "../shell/tabs";
 
 /** One palette command. */
 export interface PaletteCommand {
@@ -19,7 +23,7 @@ export interface PaletteCommand {
   title: string;
   /** Group heading. */
   group: "Go to" | "View" | "Appearance" | "Volumes" | "Actions";
-  shortcut?: string;
+  shortcut?: string | undefined;
   availability: Availability;
   run(): void;
 }
@@ -41,15 +45,38 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
   const need = (cmd: string, reason: string): Availability => (caps.has(cmd) ? ok : { enabled: false, reason });
   const out: PaletteCommand[] = [];
 
-  for (const v of NAV_VIEWS) {
+  const needVolume: Availability = hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." };
+  for (const a of AREAS.filter((x) => x.id !== "settings")) {
+    out.push({
+      id: `area.${a.id}`,
+      title: `Go to ${a.label}`,
+      group: "Go to",
+      shortcut: a.shortcut,
+      availability: ok,
+      run: () => {
+        goToArea(a.id);
+      },
+    });
+  }
+  out.push({
+    id: "view.home",
+    title: "Show Volumes",
+    group: "Go to",
+    availability: ok,
+    run: () => {
+      useApp.getState().setView("home");
+    },
+  });
+  for (const v of VISUAL_VIEWS) {
     out.push({
       id: `view.${v.id}`,
       title: `Show ${v.label}`,
       group: "Go to",
       shortcut: v.shortcut,
-      availability: v.id === "home" || hasVolume ? ok : { enabled: false, reason: "Open a scanned volume first." },
+      availability: needVolume,
       run: () => {
         useApp.getState().setView(v.id);
+        if (useLayout.getState().split === "list") useLayout.getState().set({ split: "split" });
       },
     });
   }
@@ -75,21 +102,77 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
       useApp.getState().goUp();
     },
   });
-  for (const [pane, label] of [
-    ["list", "list pane"],
-    ["detail", "details pane"],
-    ["nav", "navigation"],
+  for (const [pane, label, command] of [
+    ["list", "list pane", "toggleList"],
+    ["detail", "inspector", "toggleInspector"],
   ] as const) {
     out.push({
       id: `pane.${pane}`,
       title: `${app.panes[pane] ? "Hide" : "Show"} ${label}`,
       group: "View",
+      shortcut: shortcutOf(command),
       availability: ok,
       run: () => {
         useApp.getState().togglePane(pane);
       },
     });
   }
+  const layout = useLayout.getState();
+  out.push({
+    id: "pane.sidebar",
+    title: `${layout.sidebarOpen ? "Hide" : "Show"} sidebar`,
+    group: "View",
+    shortcut: shortcutOf("toggleSidebar"),
+    availability: ok,
+    run: () => {
+      const l = useLayout.getState();
+      l.set({ sidebarOpen: !l.sidebarOpen });
+    },
+  });
+  out.push({
+    id: "tab.new",
+    title: "Open the current folder in a new tab",
+    group: "View",
+    shortcut: shortcutOf("newTab"),
+    availability: needVolume,
+    run: () => {
+      const s = useApp.getState();
+      if (s.volumeId !== null) openTab(s.volumeId, s.path);
+    },
+  });
+  out.push({
+    id: "tab.close",
+    title: "Close the tab",
+    group: "View",
+    shortcut: shortcutOf("closeTab"),
+    availability: activeTab(useTabs.getState()) ? ok : { enabled: false, reason: "No tab is open." },
+    run: () => {
+      const t = activeTab(useTabs.getState());
+      if (t) closeTab(t.id);
+    },
+  });
+  out.push({
+    id: "path.edit",
+    title: "Edit the path",
+    group: "Go to",
+    shortcut: shortcutOf("editPath"),
+    availability: needVolume,
+    run: () => {
+      const s = useApp.getState();
+      if (s.view === "home") s.setView(s.lastVisual);
+      useLayout.getState().setEditingPath(true);
+    },
+  });
+  out.push({
+    id: "help.shortcuts",
+    title: "Show keyboard shortcuts",
+    group: "Actions",
+    shortcut: "?",
+    availability: ok,
+    run: () => {
+      useLayout.getState().setCheatSheet(true);
+    },
+  });
   out.push({
     id: "size.toggle",
     title: app.sizeMode === "allocated" ? "Size mode: Logical" : "Size mode: On disk (allocated)",
@@ -197,6 +280,7 @@ export function buildCommands(services: Services, volumes: readonly VolumeInfo[]
     id: "settings.open",
     title: "Open settings",
     group: "Actions",
+    shortcut: "Ctrl+,",
     availability: ok,
     run: () => {
       useApp.getState().setView("settings");

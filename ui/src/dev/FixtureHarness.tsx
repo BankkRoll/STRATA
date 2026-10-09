@@ -12,6 +12,10 @@ import { App } from "../App";
 import { loadRenderer, createRenderer } from "../render/registry";
 import type { ViewController } from "../render/ViewController";
 import { useApp } from "../store/app";
+import { FeaturesContext } from "../features";
+import type { VolumeInfo } from "../lib/volumes";
+import type { Services } from "../services";
+import { FIXTURE_FEATURE_COMMANDS, fixtureFeatures } from "./fixtureFeatures";
 import { FIXTURE_KINDS, fixtureServices, loadFixtures } from "./fixtureServices";
 
 /** Frame-time statistics of one benchmark run. */
@@ -197,25 +201,64 @@ function PerfPanel() {
 }
 
 /**
+ * Adds placeholder volumes and a scan scenario (`?scenario=`): `scanning`,
+ * `partial`, `stale`, `firstrun` (nothing scanned) or `elevated`.
+ */
+function withScenario(base: Services, scenario: string | null): Services {
+  const caps = new Set([...base.capabilities(), ...FIXTURE_FEATURE_COMMANDS]);
+  const hour = 3_600_000;
+  const extra = (patch: Partial<VolumeInfo> & Pick<VolumeInfo, "id">, template: VolumeInfo): VolumeInfo => ({ ...template, categoryBytes: null, scan: { state: "never", progress: null, lastScanMs: null, scanner: null, rootId: null }, ...patch });
+  const list = async (): Promise<VolumeInfo[]> => {
+    const [fixture] = await base.volumes.list();
+    if (!fixture) return [];
+    const v: VolumeInfo = { ...fixture };
+    if (scenario === "scanning") v.scan = { ...v.scan, state: "scanning", progress: { entries: 1_284_311, bytes: v.totalBytes * 0.41, fraction: 0.42, etaSecs: 95 } };
+    if (scenario === "partial") v.scan = { ...v.scan, state: "partial" };
+    if (scenario === "stale") v.scan = { ...v.scan, state: "stale", lastScanMs: Date.now() - 50 * hour };
+    if (scenario === "firstrun") {
+      v.scan = { state: "never", progress: null, lastScanMs: null, scanner: null, rootId: null };
+      v.categoryBytes = null;
+    }
+    return [
+      extra({ id: "sys", label: "Windows", mountPoints: ["C:\\"], isSystem: true, totalBytes: 1024 ** 4, freeBytes: 212 * 1024 ** 3 }, v),
+      v,
+      extra({ id: "usb", label: "Backup", mountPoints: ["E:\\"], kind: "removable", filesystem: "exFAT", totalBytes: 2 * 1024 ** 4, freeBytes: 1.6 * 1024 ** 4 }, v),
+    ];
+  };
+  return {
+    ...base,
+    capabilities: () => caps,
+    volumes: {
+      ...base.volumes,
+      list,
+      helperStatus: () => Promise.resolve(scenario === "elevated" ? { elevated: true, mode: "on_demand" as const } : { elevated: false, mode: "none" as const }),
+    },
+  };
+}
+
+/**
  * Loads fixtures and mounts the app with fixture services.
  *
  * @param el - Root element.
  */
 export function mountFixtureHarness(el: HTMLElement): void {
-  const large = new URLSearchParams(location.search).get("fixture") === "large";
+  const params = new URLSearchParams(location.search);
+  const large = params.get("fixture") === "large";
   window.__strataHarness = Object.assign(state, { run });
   void (async () => {
     await Promise.all(FIXTURE_KINDS.map((k) => loadRenderer(k)));
     state.shaders = checkShaders();
     const data = await loadFixtures(large);
-    const services = fixtureServices(data);
-    useApp.getState().openVolume("fixture", 0);
-    const view = new URLSearchParams(location.search).get("view");
-    if (view === "sunburst" || view === "icicle" || view === "flame" || view === "bubbles" || view === "mindmap") useApp.getState().setView(view);
+    const services = withScenario(fixtureServices(data), params.get("scenario"));
+    if (params.get("open") !== "0" && params.get("scenario") !== "firstrun") useApp.getState().openVolume("fixture", 0);
+    const view = params.get("view");
+    if (view === "sunburst" || view === "icicle" || view === "flame" || view === "bubbles" || view === "mindmap" || view === "settings" || view === "home") useApp.getState().setView(view);
     createRoot(el).render(
       <StrictMode>
-        <App services={services} />
-        <PerfPanel />
+        <FeaturesContext value={fixtureFeatures()}>
+          <App services={services} />
+        </FeaturesContext>
+        {params.get("harness") !== "0" && <PerfPanel />}
       </StrictMode>,
     );
     state.ready = true;

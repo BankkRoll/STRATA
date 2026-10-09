@@ -116,6 +116,28 @@ fn scans_an_image_and_reports() {
 }
 
 #[test]
+fn every_io_mode_and_depth_scans_the_same() {
+    let img = write_image("cli-modes.img");
+    let path = img.to_str().unwrap();
+    let mut reports = Vec::new();
+    for mode in ["--sequential", "--no-buffering"] {
+        for depth in ["1", "8"] {
+            let (code, out, err) = cli(&["scan", path, mode, "--io-depth", depth, "--top", "5"]);
+            assert_eq!(code, 0, "{mode} depth {depth}: {err}");
+            assert!(out.contains("deferred/extension merge"), "{out}");
+            assert!(out.contains("ADS logical"), "{out}");
+            let totals: String = out
+                .lines()
+                .skip_while(|l| !l.starts_with("Totals"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            reports.push(totals);
+        }
+    }
+    assert!(reports.windows(2).all(|w| w[0] == w[1]));
+}
+
+#[test]
 fn writes_golden_json() {
     let img = write_image("cli-golden.img");
     let json = tmp("cli-golden.json");

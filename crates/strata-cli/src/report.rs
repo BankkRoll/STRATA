@@ -238,10 +238,19 @@ pub fn render(
     );
     let _ = writeln!(
         o,
-        "  CPU                          parse {:.3} s, assemble {:.3} s, sink {:.3} s",
+        "  CPU                          parse {:.3} s, assemble {:.3} s ({:.3} s in deferred/extension merge, {:.3} s waiting for values), sink {:.3} s",
         stats.parse_time.as_secs_f64(),
         stats.assemble_time.as_secs_f64(),
+        stats.merge_time.as_secs_f64(),
+        stats.value_wait.as_secs_f64(),
         stats.sink_time.as_secs_f64()
+    );
+    let _ = writeln!(
+        o,
+        "  completion                   {} deferred records, {} attribute lists/reparse buffers read in {:.3} s during the pass",
+        stats.deferred_records,
+        stats.values_read,
+        stats.value_read_time.as_secs_f64()
     );
     if stats.cancelled {
         let _ = writeln!(o, "  CANCELLED: totals are partial");

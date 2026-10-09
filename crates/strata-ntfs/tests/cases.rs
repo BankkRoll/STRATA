@@ -733,6 +733,12 @@ fn system_files_root_and_extend_children_are_flagged() {
         }]
     );
     assert_eq!(bad.sizes.total_allocated(), 0);
+    // Metadata streams stay out of user-facing ADS logical totals.
+    assert_eq!(bad.sizes.ads_logical, 0);
+    assert!(
+        recs.values()
+            .all(|r| !r.flags.contains(EntryFlags::NTFS_METADATA) || r.sizes.ads_logical == 0)
+    );
     // $MFT reports its own data as allocated.
     assert_eq!(
         recs[&0].sizes.allocated,

@@ -84,6 +84,8 @@ pub fn assemble(
         .map_or(ReparseKind::None, |r| ReparseKind::from_tag(r.tag));
     let is_wof = kind == ReparseKind::Wof;
 
+    let is_metadata = (base.record < FIRST_USER_RECORD && base.record != FileRef::NTFS_ROOT_RECORD)
+        || links.iter().any(|l| l.parent.record() == EXTEND_RECORD);
     let mut sizes = Sizes::default();
     let mut ads = Vec::new();
     let mut wof_allocated = None;
@@ -113,7 +115,15 @@ pub fn assemble(
         } else if is_wof && is_named(name, WOF_STREAM) {
             wof_allocated = Some(allocated);
         } else {
-            sizes.ads_logical = sizes.ads_logical.saturating_add(logical);
+            // NOTE: named streams of NTFS metadata files ($BadClus:$Bad,
+            // $UsnJrnl:$J, $Secure:$SDS, ...) are mostly sparse and some
+            // nominally span the whole volume, so their logical sizes would
+            // swamp user-facing ADS totals. Their allocated bytes still count
+            // (they occupy disk as NTFS metadata); the per-stream `AdsInfo`
+            // keeps the true logical size.
+            if !is_metadata {
+                sizes.ads_logical = sizes.ads_logical.saturating_add(logical);
+            }
             sizes.ads_allocated = sizes.ads_allocated.saturating_add(allocated);
             ads.push(AdsInfo {
                 name: name.clone(),
@@ -137,8 +147,6 @@ pub fn assemble(
     if kind == ReparseKind::Cloud {
         flags = flags.with_cloud(CloudState::from_attributes(attributes));
     }
-    let is_metadata = (base.record < FIRST_USER_RECORD && base.record != FileRef::NTFS_ROOT_RECORD)
-        || links.iter().any(|l| l.parent.record() == EXTEND_RECORD);
     flags.set(EntryFlags::NTFS_METADATA, is_metadata);
 
     ScanRecord {

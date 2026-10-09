@@ -12,16 +12,21 @@
 //!    extension records and records that need completion.
 //! 3. **Caller's thread**: hands each chunk's ready records to the sink,
 //!    while the stages above work on the next chunks.
+//! 4. **Value reader** (own thread): reads the non-resident attribute lists
+//!    and reparse buffers that deferred records need, in queued batches,
+//!    while the pass continues.
 //!
 //! Records that need other records (attribute lists) or disk reads
 //! (non-resident reparse buffers) are completed after the pass, together
-//! with every extension record, merged by base reference.
+//! with every extension record, merged by base reference on the `rayon`
+//! pool (see [`crate::complete`]). Nothing the pass already read is read
+//! again.
 //!
 //! Output order: base records in record-number order as chunks complete,
 //! then the deferred records in record-number order. The order does not
 //! depend on I/O timing.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -31,10 +36,13 @@ use rayon::prelude::*;
 use strata_core::ScanRecord;
 
 use crate::assemble::assemble;
+use crate::complete::{
+    Deferred, ExtensionGroups, Holders, ValueReader, ValueRequest, ValueTotals, Want, merge,
+};
 use crate::error::{NtfsError, Result};
 use crate::io::{AlignedBuf, QueuedReader, ReadAt};
 use crate::overlapped::{Batch, Part};
-use crate::record::{ParsedRecord, RecordOutcome, parse_record};
+use crate::record::{ParsedRecord, RecordOutcome, ReparseLoc, parse_record};
 use crate::volume::{NtfsVolume, read_segments};
 
 /// Default read size per I/O request.
@@ -46,6 +54,9 @@ pub const DEFAULT_IO_DEPTH: usize = 8;
 
 /// Upper bound on records per batch handed to the sink after the pass.
 const DEFERRED_BATCH: usize = 65_536;
+
+/// Threads reading the non-resident values deferred records need.
+const VALUE_THREADS: usize = 4;
 
 /// Runs of unused records shorter than this are read through rather than
 /// skipped: one extra request costs more than reading a few hundred KiB.
@@ -135,8 +146,24 @@ pub struct ScanStats {
     /// self-contained records) on the thread pool.
     pub parse_time: Duration,
     /// Wall-clock time spent completing records that need other records
-    /// (attribute lists) or extra reads, after the pass.
+    /// (attribute lists) or extra reads, after the pass. Made of
+    /// [`ScanStats::value_wait`] and [`ScanStats::merge_time`].
     pub assemble_time: Duration,
+    /// Base records completed after the pass because they have an
+    /// attribute list or a non-resident reparse buffer.
+    pub deferred_records: u64,
+    /// Non-resident attribute lists and reparse buffers read to complete
+    /// deferred records.
+    pub values_read: u64,
+    /// Time the busiest value-reader thread spent reading those values. It
+    /// runs alongside the pass, so
+    /// only [`ScanStats::value_wait`] of it adds to the elapsed time.
+    pub value_read_time: Duration,
+    /// After the pass, time spent waiting for value reads to finish.
+    pub value_wait: Duration,
+    /// After the pass, time spent grouping extension records under their
+    /// bases and assembling deferred records (excluding the sink).
+    pub merge_time: Duration,
     /// Time spent inside the caller's sink.
     pub sink_time: Duration,
     /// Wall-clock time of the scan.
@@ -177,8 +204,10 @@ struct ReadTotals {
 /// What the parser stage hands back after the pass.
 struct ParseOutput {
     stats: ScanStats,
-    deferred: BTreeMap<u64, ParsedRecord>,
-    extensions: HashMap<u64, Vec<ParsedRecord>>,
+    /// Records needing completion, in record order.
+    deferred: Vec<Deferred>,
+    /// Extension records, grouped by base record.
+    extensions: ExtensionGroups,
     error: Option<NtfsError>,
 }
 
@@ -186,7 +215,7 @@ struct ParseOutput {
 enum Item {
     Ready(ScanRecord, u64),
     Extension(Box<ParsedRecord>),
-    Deferred(Box<ParsedRecord>),
+    Deferred(Box<Deferred>),
     Free,
     SkippedByBitmap,
     Unreadable,
@@ -285,13 +314,19 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
         let mut sink_time = Duration::ZERO;
         let mut stopped = false;
 
-        let (totals, parsed) = std::thread::scope(|scope| {
+        // NOTE: completion reads go through the overlapped handle even when
+        // `io_depth` is 1: they are small and random, and queueing them
+        // is what keeps them off the critical path.
+        let value_reader = ValueReader::new(self, self.reader().queued());
+        let (totals, parsed, values, value_wait) = std::thread::scope(|scope| {
             let (chunk_tx, chunk_rx) = bounded::<Result<Chunk>>(opts.queue_depth.max(1));
             let (batch_tx, batch_rx) = bounded::<Vec<ScanRecord>>(opts.queue_depth.max(1));
             let (recycle_tx, recycle_rx) = unbounded::<AlignedBuf>();
+            let (value_tx, value_rx) = unbounded::<ValueRequest>();
             let plan = &plan;
             let cancelled = &cancelled;
             let in_use_bit = &in_use_bit;
+            let value_reader = &value_reader;
             let reader = scope.spawn(move || {
                 let new_buf = || AlignedBuf::new(opts.chunk_bytes, align);
                 self.read_chunks(
@@ -304,8 +339,25 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
                     cancelled,
                 )
             });
+            // PERF: issuing an overlapped read costs several microseconds of
+            // CPU, which caps one thread well below what an SSD sustains for
+            // small random reads; the threads share one request queue.
+            let values: Vec<_> = (0..VALUE_THREADS)
+                .map(|_| {
+                    let rx = value_rx.clone();
+                    scope.spawn(move || value_reader.run(&rx, cancelled))
+                })
+                .collect();
+            drop(value_rx);
             let parser = scope.spawn(move || {
-                self.parse_chunks(stats, &chunk_rx, &batch_tx, &recycle_tx, in_use_bit)
+                self.parse_chunks(
+                    stats,
+                    &chunk_rx,
+                    &batch_tx,
+                    &recycle_tx,
+                    &value_tx,
+                    in_use_bit,
+                )
             });
 
             for batch in &batch_rx {
@@ -326,12 +378,20 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
             let totals = reader
                 .join()
                 .unwrap_or_else(|p| std::panic::resume_unwind(p));
-            (totals, parsed)
+            let waited = Instant::now();
+            let mut all = ValueTotals::default();
+            for v in values {
+                let v = v.join().unwrap_or_else(|p| std::panic::resume_unwind(p));
+                all.fetched.extend(v.fetched);
+                all.values += v.values;
+                all.busy = all.busy.max(v.busy);
+            }
+            (totals, parsed, all, waited.elapsed())
         });
         let ParseOutput {
             mut stats,
             deferred,
-            mut extensions,
+            extensions,
             error,
         } = parsed;
         if let Some(e) = error {
@@ -343,34 +403,32 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
         stats.reads = totals.reads;
         stats.peak_in_flight = totals.peak_in_flight;
         stats.read_time = totals.read_time;
+        let ValueTotals {
+            fetched,
+            values: values_read,
+            busy,
+        } = values;
+        stats.values_read = values_read;
+        stats.value_read_time = busy;
+        stats.value_wait = value_wait;
+        stats.deferred_records = deferred.len() as u64;
 
-        let assemble_started = Instant::now();
+        let merge_started = Instant::now();
         let sink_before = stats.sink_time;
-        let cs = self.boot().cluster_size;
-        let mut batch = Vec::new();
-        for (n, base) in deferred {
-            let mut exts = extensions.remove(&n).unwrap_or_default();
-            let base_ref = base.file_ref();
-            let before = exts.len();
-            exts.retain(|e| e.base == Some(base_ref));
-            stats.extensions_orphaned += (before - exts.len()) as u64;
-            stats.extensions_merged += exts.len() as u64;
-            let complete = self.extensions_complete(&base, &exts);
-            let reparse = self.resolve_reparse(&base, &exts);
-            let mut rec = assemble(base, exts, reparse, cs);
-            rec.flags.set(strata_core::EntryFlags::PARTIAL, !complete);
-            batch.push(rec);
-            if batch.len() >= DEFERRED_BATCH {
-                deliver(&mut stats, &mut sink, std::mem::take(&mut batch));
-            }
-        }
-        if !batch.is_empty() {
-            deliver(&mut stats, &mut sink, batch);
-        }
-        stats.extensions_orphaned += extensions.values().map(|v| v.len() as u64).sum::<u64>();
-        stats.assemble_time = assemble_started
+        let (merged, orphaned) = merge(
+            self,
+            deferred,
+            extensions,
+            fetched,
+            DEFERRED_BATCH,
+            |batch| deliver(&mut stats, &mut sink, batch),
+        );
+        stats.extensions_merged += merged;
+        stats.extensions_orphaned += orphaned;
+        stats.merge_time = merge_started
             .elapsed()
-            .saturating_sub(stats.sink_time - sink_before);
+            .saturating_sub(stats.sink_time.saturating_sub(sink_before));
+        stats.assemble_time = stats.value_wait + stats.merge_time;
         stats.elapsed = started.elapsed();
         Ok(stats)
     }
@@ -622,13 +680,14 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
         rx: &Receiver<Result<Chunk>>,
         tx: &Sender<Vec<ScanRecord>>,
         recycle: &Sender<AlignedBuf>,
+        values: &Sender<ValueRequest>,
         in_use_bit: &(dyn Fn(u64) -> bool + Sync),
     ) -> ParseOutput {
         let rs = self.layout().record_size as usize;
         let base_opts = self.parse_options();
         let cs = self.boot().cluster_size;
-        let mut deferred = BTreeMap::new();
-        let mut extensions: HashMap<u64, Vec<ParsedRecord>> = HashMap::new();
+        let mut deferred: Vec<Deferred> = Vec::new();
+        let mut extensions = ExtensionGroups::default();
         let mut error = None;
         loop {
             let waited = Instant::now();
@@ -674,14 +733,15 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
                         stats.extension_records += 1;
                         stats.other_attr_allocated =
                             stats.other_attr_allocated.saturating_add(p.other_allocated);
-                        let base = p.base.map_or(0, |b| b.record());
-                        extensions.entry(base).or_default().push(*p);
+                        extensions.push(*p);
                     }
-                    Item::Deferred(p) => {
+                    Item::Deferred(mut d) => {
                         stats.in_use += 1;
-                        stats.other_attr_allocated =
-                            stats.other_attr_allocated.saturating_add(p.other_allocated);
-                        deferred.insert(p.record, *p);
+                        stats.other_attr_allocated = stats
+                            .other_attr_allocated
+                            .saturating_add(d.base.other_allocated);
+                        request_values(&mut d, deferred.len(), values);
+                        deferred.push(*d);
                     }
                     Item::Free => stats.free += 1,
                     Item::SkippedByBitmap => {
@@ -706,6 +766,33 @@ impl<R: ReadAt + Sync> NtfsVolume<R> {
             extensions,
             error,
         }
+    }
+}
+
+/// Asks the value reader for what deferred record `slot` needs from disk:
+/// a non-resident attribute list (moved out of the record, which no longer
+/// needs it) and the base's own non-resident reparse buffer.
+fn request_values(d: &mut Deferred, slot: usize, values: &Sender<ValueRequest>) {
+    let record = d.base.record;
+    if d.holders == Holders::Pending
+        && let Some(loc) = d.base.attr_list.take()
+    {
+        // NOTE: the value reader never hangs up before the parser does, so
+        // a failed send cannot happen; the record would stay partial if it did.
+        let _ = values.send(ValueRequest {
+            slot,
+            record,
+            want: Want::List,
+            loc,
+        });
+    }
+    if let Some(ReparseLoc::NonResident(loc)) = &d.base.reparse {
+        let _ = values.send(ValueRequest {
+            slot,
+            record,
+            want: Want::Reparse,
+            loc: loc.clone(),
+        });
     }
 }
 
@@ -804,7 +891,7 @@ fn classify(outcome: RecordOutcome, cluster_size: u64) -> Item {
             if p.base.is_some() {
                 Item::Extension(p)
             } else if p.needs_completion() {
-                Item::Deferred(p)
+                Item::Deferred(Box::new(Deferred::new(*p)))
             } else {
                 let other = p.other_allocated;
                 Item::Ready(assemble(*p, Vec::new(), None, cluster_size), other)

@@ -38,6 +38,7 @@
 mod assemble;
 mod attr;
 mod boot;
+mod complete;
 mod error;
 mod fixup;
 pub mod io;

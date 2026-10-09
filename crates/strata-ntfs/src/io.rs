@@ -187,10 +187,15 @@ impl AlignedBuf {
 
 /// How a raw volume handle is opened. Both are offered so they can be
 /// benchmarked against each other on real hardware.
+///
+/// Reads through a [`RawVolume`] and its [`QueuedReader`] are sector aligned
+/// in both modes: volume handles (`\\.\X:`) reject unaligned offsets and
+/// lengths with `ERROR_INVALID_PARAMETER` even when the cache is in use, so
+/// unaligned requests go through a bounce buffer either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IoMode {
-    /// `FILE_FLAG_NO_BUFFERING`: bypasses the cache; every read must be
-    /// sector aligned. Unaligned requests go through a bounce buffer.
+    /// `FILE_FLAG_NO_BUFFERING`: bypasses the cache; the buffer address
+    /// must be sector aligned too.
     #[default]
     NoBuffering,
     /// `FILE_FLAG_SEQUENTIAL_SCAN`: cached reads with aggressive read-ahead.
@@ -262,8 +267,8 @@ impl RawVolume {
         Ok(Self::from_file(file, mode, RAW_ALIGNMENT).with_queue(queued))
     }
 
-    /// Wraps an already-open handle. `align` is the sector alignment honoured
-    /// in [`IoMode::NoBuffering`] mode. No [`QueuedReader`] is attached.
+    /// Wraps an already-open handle. `align` is the sector alignment every
+    /// read honours, in either mode. No [`QueuedReader`] is attached.
     #[must_use]
     pub fn from_file(file: File, mode: IoMode, align: usize) -> Self {
         Self {
@@ -291,19 +296,15 @@ impl RawVolume {
 
 impl ReadAt for RawVolume {
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        match self.mode {
-            IoMode::Sequential => read_exact_at(&self.file, offset, buf),
-            IoMode::NoBuffering => aligned_read(self.align, offset, buf, |o, b| {
-                read_exact_at(&self.file, o, b)
-            }),
-        }
+        // NOTE: buffered volume handles still reject unaligned offsets and
+        // lengths, so both modes bounce (see `IoMode`).
+        aligned_read(self.align, offset, buf, |o, b| {
+            read_exact_at(&self.file, o, b)
+        })
     }
 
     fn alignment(&self) -> usize {
-        match self.mode {
-            IoMode::NoBuffering => self.align,
-            IoMode::Sequential => 1,
-        }
+        self.align
     }
 
     fn queued(&self) -> Option<&QueuedReader> {
@@ -339,12 +340,10 @@ impl QueuedReader {
     /// The open fails, or the platform is not Windows.
     pub fn open(path: impl AsRef<Path>, mode: IoMode) -> io::Result<Self> {
         let file = OverlappedFile::open(path.as_ref(), SHARE_READ_WRITE, mode_flags(mode))?;
+        // NOTE: volume handles need sector-aligned reads in both modes.
         Ok(Self {
             file,
-            align: match mode {
-                IoMode::NoBuffering => RAW_ALIGNMENT,
-                IoMode::Sequential => 1,
-            },
+            align: RAW_ALIGNMENT,
         })
     }
 

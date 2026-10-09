@@ -36,6 +36,10 @@ criterion = { version = "0.8.2", default-features = false, features = ["cargo_be
 name = "perf_image"
 required-features = ["test-image"]
 
+[[example]]
+name = "perf_links"
+required-features = ["test-image"]
+
 [[bench]]
 name = "parse"
 harness = false

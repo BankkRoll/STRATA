@@ -17,6 +17,7 @@ use strata_core::{EntryFlags, FileRef, Reparse, ScanRecord};
 use crate::assemble::assemble;
 use crate::attr::{AT_BITMAP, AT_DATA, parse_attr_list, parse_reparse};
 use crate::boot::BootSector;
+use crate::complete::Holders;
 use crate::error::{NtfsError, RecordError, Result};
 use crate::io::ReadAt;
 use crate::record::{
@@ -31,7 +32,7 @@ pub const BITMAP_RECORD: u64 = 6;
 
 /// Largest attribute list or reparse buffer read from disk. NTFS caps
 /// attribute lists at 256 KiB and reparse buffers at 16 KiB.
-const MAX_SMALL_VALUE: u64 = 16 * 1024 * 1024;
+pub(crate) const MAX_SMALL_VALUE: u64 = 16 * 1024 * 1024;
 /// Largest `$MFT:$BITMAP` read (covers ~2 billion records).
 const MAX_MFT_BITMAP: u64 = 256 * 1024 * 1024;
 /// Read granularity when streaming large values.
@@ -270,20 +271,18 @@ impl<R: ReadAt> NtfsVolume<R> {
         base: &ParsedRecord,
         extensions: &[ParsedRecord],
     ) -> bool {
-        let Some(list) = &base.attr_list else {
-            return true;
+        let holders = match &base.attr_list {
+            Some(list @ ValueLoc::NonResident { .. }) => self
+                .read_value(list, MAX_SMALL_VALUE)
+                .map_or(Holders::Unreadable, |b| Holders::decode(&b, base.record)),
+            _ => Holders::of(base),
         };
-        let Ok(bytes) = self.read_value(list, MAX_SMALL_VALUE) else {
-            return false;
-        };
-        let Ok(entries) = parse_attr_list(&bytes) else {
-            return false;
-        };
-        entries
-            .iter()
-            .map(|e| e.holder.record())
-            .filter(|&h| h != base.record)
-            .all(|h| extensions.iter().any(|x| x.record == h))
+        let mut records: Vec<u64> = extensions.iter().map(|x| x.record).collect();
+        records.sort_unstable();
+        match holders {
+            Holders::Listed(h) => h.iter().all(|r| records.binary_search(r).is_ok()),
+            other => other == Holders::NoList,
+        }
     }
 
     /// Reads the extension records named by `base`'s attribute list.

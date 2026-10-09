@@ -458,6 +458,11 @@ pub fn drop_privileges(except: &[&str]) -> Result<Vec<String>> {
 mod tests {
     use super::*;
 
+    /// Serializes tests that change or compare the process token: privilege
+    /// state is process-wide, so a concurrent enable shows up in another
+    /// test's comparison.
+    static PROCESS_TOKEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn privilege_buffer_round_trip() {
         let e = [
@@ -531,8 +536,11 @@ mod tests {
 
     #[test]
     fn guard_enables_then_restores() {
+        let _serial = PROCESS_TOKEN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // NOTE: SeTimeZonePrivilege is held but disabled by default for
-        // standard and admin users alike, and no other test touches it.
+        // standard and admin users alike.
         let t = Token::current_process(TOKEN_QUERY).unwrap();
         let Some(before) = t.privilege_enabled("SeTimeZonePrivilege").unwrap() else {
             return;
@@ -553,6 +561,9 @@ mod tests {
 
     #[test]
     fn removal_on_duplicate_token_leaves_process_untouched() {
+        let _serial = PROCESS_TOKEN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let t = Token::current_process(TOKEN_QUERY | TOKEN_DUPLICATE).unwrap();
         let before = t.privileges().unwrap();
         let dup = t.duplicate().unwrap();

@@ -6,6 +6,8 @@ All notable changes to Strata are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-09
+
 ### Added
 
 - Fast scanning of NTFS drives by reading the Master File Table directly, with a

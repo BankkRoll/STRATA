@@ -1,0 +1,623 @@
+# Developer tooling (SPEC §12.2 "Developer tooling"). Build output and
+# dependency folders are only matched next to the project file that proves
+# what they are (node_modules + package.json, target + Cargo.toml, ...), so a
+# folder that merely happens to be called `dist` or `build` is left alone.
+
+schema_version = 1
+pack = "dev"
+version = 1
+description = "Package caches, dependency folders, build output, SDKs, Docker/WSL disks and git."
+
+[lists]
+dotnet_projects = ["*.csproj", "*.fsproj", "*.vbproj"]
+js_build_dirs = [".next", ".nuxt", ".svelte-kit", ".turbo", ".parcel-cache", ".vite", ".angular", ".output", ".docusaurus", ".astro", ".expo-shared"]
+gradle_projects = ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]
+
+# ----------------------------------------------------------------------------- JavaScript
+
+[[rule]]
+id = "dev.node_modules"
+name = "Node.js dependencies"
+category = "dev_build"
+subcategory = "dev.dependencies"
+safety = "safe"
+regenerable = true
+app = "Node.js / npm"
+explain = "Packages installed for a project. Deleting is safe; run `npm install` (or pnpm/yarn) to restore them."
+match.dir_name = "node_modules"
+match.requires_sibling = "package.json"
+
+[[rule]]
+id = "dev.node_modules_stale"
+name = "Stale Node.js dependencies"
+category = "dev_build"
+subcategory = "dev.dependencies.stale"
+safety = "safe"
+regenerable = true
+app = "Node.js / npm"
+explain = "Packages of a project nothing has touched for over 180 days. Safe to delete; reinstall when you return to the project."
+match.dir_name = "node_modules"
+match.requires_sibling = "package.json"
+match.older_than_days = 180
+
+[[rule]]
+id = "dev.js_build_output"
+name = "JavaScript build output"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+explain = "Build output or a framework cache (Next.js, Nuxt, SvelteKit, Turborepo, Parcel, Vite, Angular, ...). Recreated by the next build."
+match.dir_name = ["@js_build_dirs", "dist", "build"]
+match.requires_sibling = "package.json"
+
+[[rule]]
+id = "dev.npm_global"
+name = "Global npm packages"
+category = "apps"
+safety = "careful"
+app = "Node.js / npm"
+explain = "Command-line tools installed with `npm install -g`. Remove them with `npm uninstall -g <name>`."
+match.path = '{APPDATA}\npm\node_modules'
+
+[[rule]]
+id = "dev.npm_cache"
+name = "npm cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Node.js / npm"
+explain = "Downloaded package tarballs. npm re-downloads what it needs (`npm cache clean --force` does the same)."
+match.path = ['{LOCALAPPDATA}\npm-cache', '{APPDATA}\npm-cache']
+
+[[rule]]
+id = "dev.yarn_cache"
+name = "Yarn cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Yarn"
+explain = "Packages cached by Yarn. Re-downloaded on the next install (`yarn cache clean`)."
+match.path = ['{LOCALAPPDATA}\Yarn\Cache', '{LOCALAPPDATA}\Yarn\Berry\cache']
+
+[[rule]]
+id = "dev.pnpm_store"
+name = "pnpm store"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "pnpm"
+explain = "pnpm's content-addressed package store. Projects keep working (their files are hard links); `pnpm store prune` removes only unused packages."
+match.path = ['{LOCALAPPDATA}\pnpm\store', '{LOCALAPPDATA}\pnpm-cache', '{USERPROFILE}\.pnpm-store']
+
+[[rule]]
+id = "dev.pnpm_store_volume"
+name = "pnpm store"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "pnpm"
+explain = "pnpm's package store for projects on this drive. `pnpm store prune` removes only unused packages."
+match.dir_name = ".pnpm-store"
+match.volume_root = true
+
+[[rule]]
+id = "dev.bun_cache"
+name = "Bun cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Bun"
+explain = "Packages cached by Bun. Re-downloaded on the next install."
+match.path = '{USERPROFILE}\.bun\install\cache'
+
+[[rule]]
+id = "dev.js_tool_caches"
+name = "JavaScript tool caches"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "safe"
+regenerable = true
+explain = "Downloads cached by node-gyp, Electron, electron-builder, Cypress, Deno or Dart/Flutter. Re-downloaded when needed."
+match.path = ['{LOCALAPPDATA}\node-gyp\Cache', '{LOCALAPPDATA}\electron\Cache', '{LOCALAPPDATA}\electron-builder\Cache', '{LOCALAPPDATA}\Cypress\Cache', '{LOCALAPPDATA}\deno', '{LOCALAPPDATA}\Pub\Cache']
+
+[[rule]]
+id = "dev.node_cli_cache"
+name = "Node.js CLI tool cache"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "probably"
+regenerable = true
+app = "Node.js CLI tools"
+explain = "Cache folder of a Node.js command-line tool (named `<tool>-nodejs` by the env-paths convention). The tool recreates it when it next runs."
+match.path_glob = '{LOCALAPPDATA}\*-nodejs'
+
+[[rule]]
+id = "dev.node_cli_config"
+name = "Node.js CLI tool settings"
+category = "dev_build"
+subcategory = "dev.tool_config"
+safety = "careful"
+app = "Node.js CLI tools"
+explain = "Settings or sign-in data of a Node.js command-line tool (named `<tool>-nodejs` by the env-paths convention). Deleting it resets the tool."
+match.path_glob = '{APPDATA}\*-nodejs'
+
+[[rule]]
+id = "dev.playwright_browsers"
+name = "Playwright browsers"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "probably"
+regenerable = true
+app = "Playwright"
+explain = "Browser builds downloaded for Playwright tests. `npx playwright install` downloads them again."
+match.path = ['{LOCALAPPDATA}\ms-playwright', '{LOCALAPPDATA}\ms-playwright-go']
+
+[[rule]]
+id = "dev.nvm"
+name = "Node.js versions (nvm)"
+category = "dev_build"
+subcategory = "dev.toolchains"
+safety = "careful"
+app = "nvm for Windows"
+explain = "Node.js versions installed with nvm. Remove unused ones with `nvm uninstall <version>`."
+match.path = '{LOCALAPPDATA}\nvm'
+
+# ----------------------------------------------------------------------------- Python
+
+[[rule]]
+id = "dev.pip_cache"
+name = "pip cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "pip"
+explain = "Wheels and HTTP responses cached by pip. Re-downloaded when needed (`pip cache purge`)."
+match.path = '{LOCALAPPDATA}\pip\cache'
+
+[[rule]]
+id = "dev.conda_pkgs"
+name = "Conda package cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Conda"
+explain = "Package archives conda downloaded. `conda clean --all` is the supported cleanup."
+match.dir_name = "pkgs"
+match.requires_sibling = "conda-meta"
+
+[[rule]]
+id = "dev.conda_user_pkgs"
+name = "Conda package cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Conda"
+explain = "Package archives conda downloaded. `conda clean --all` is the supported cleanup."
+match.path = '{USERPROFILE}\.conda\pkgs'
+
+[[rule]]
+id = "dev.poetry_uv_cache"
+name = "Poetry / uv cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+explain = "Packages and virtual environments cached by Poetry or uv. Recreated when needed."
+match.path = ['{LOCALAPPDATA}\pypoetry\Cache', '{LOCALAPPDATA}\uv\cache']
+
+[[rule]]
+id = "dev.pycache"
+name = "Python bytecode cache"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+explain = "Compiled Python bytecode. Python regenerates it on the next run."
+match.dir_name = "__pycache__"
+
+[[rule]]
+id = "dev.python_tool_caches"
+name = "Python tool caches"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+explain = "Caches and test environments of mypy, pytest, ruff, tox, nox or Hypothesis. Recreated on the next run."
+match.dir_name = [".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".nox", ".hypothesis"]
+
+[[rule]]
+id = "dev.python_venv"
+name = "Python virtual environment"
+category = "dev_build"
+subcategory = "dev.dependencies"
+safety = "probably"
+regenerable = true
+explain = "A virtual environment (it contains pyvenv.cfg). Recreate it with `python -m venv` and reinstall the requirements; packages installed by hand are lost."
+match.dir_name = "*"
+match.requires_child = "pyvenv.cfg"
+
+# ----------------------------------------------------------------------------- Rust
+
+[[rule]]
+id = "dev.cargo_registry"
+name = "Cargo registry and git cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Rust / Cargo"
+explain = "Crate sources and git checkouts Cargo downloaded. Re-downloaded on the next build."
+match.path = ['{USERPROFILE}\.cargo\registry', '{USERPROFILE}\.cargo\git', '{CARGO_HOME}\registry', '{CARGO_HOME}\git']
+
+[[rule]]
+id = "dev.cargo_target"
+name = "Rust build output"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = "Rust / Cargo"
+explain = "Compiled artifacts of a Cargo project. Rebuilt by `cargo build` (`cargo clean` does the same)."
+match.dir_name = "target"
+match.requires_sibling = "Cargo.toml"
+
+[[rule]]
+id = "dev.rustup_toolchains"
+name = "Rust toolchains"
+category = "dev_build"
+subcategory = "dev.toolchains"
+safety = "careful"
+app = "Rust / rustup"
+explain = "Installed Rust toolchains. Remove unused ones with `rustup toolchain uninstall <name>`."
+match.path = ['{USERPROFILE}\.rustup\toolchains', '{RUSTUP_HOME}\toolchains']
+
+[[rule]]
+id = "dev.rustup_downloads"
+name = "rustup downloads"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "safe"
+regenerable = true
+app = "Rust / rustup"
+explain = "Partial and temporary downloads of rustup."
+match.path = ['{USERPROFILE}\.rustup\downloads', '{USERPROFILE}\.rustup\tmp']
+
+# ----------------------------------------------------------------------------- Go, JVM, .NET
+
+[[rule]]
+id = "dev.go_mod_cache"
+name = "Go module cache"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Go"
+explain = "Module sources Go downloaded. Its files are read-only; clean it with `go clean -modcache`."
+match.path = ['{USERPROFILE}\go\pkg\mod', '{GOMODCACHE}']
+
+[[rule]]
+id = "dev.go_build_cache"
+name = "Go build cache"
+category = "caches"
+subcategory = "dev.build_cache"
+safety = "safe"
+regenerable = true
+app = "Go"
+explain = "Compiled package cache. Rebuilt as needed (`go clean -cache`)."
+match.path = '{LOCALAPPDATA}\go-build'
+
+[[rule]]
+id = "dev.gradle_caches"
+name = "Gradle caches"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Gradle"
+explain = "Dependencies and build caches Gradle downloaded. Re-downloaded by the next build."
+match.path = '{USERPROFILE}\.gradle\caches'
+
+[[rule]]
+id = "dev.gradle_wrapper"
+name = "Gradle distributions"
+category = "dev_build"
+subcategory = "dev.toolchains"
+safety = "probably"
+regenerable = true
+app = "Gradle"
+explain = "Gradle versions downloaded by project wrappers. Re-downloaded by the next build that needs them."
+match.path = '{USERPROFILE}\.gradle\wrapper\dists'
+
+[[rule]]
+id = "dev.gradle_project"
+name = "Gradle build output"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = "Gradle"
+explain = "Build output and the per-project Gradle cache. Recreated by the next build."
+match.dir_name = ["build", ".gradle"]
+match.requires_sibling = "@gradle_projects"
+
+[[rule]]
+id = "dev.maven_repository"
+name = "Maven repository"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "Maven"
+explain = "Artifacts Maven downloaded. Re-downloaded by the next build."
+match.path = '{USERPROFILE}\.m2\repository'
+
+[[rule]]
+id = "dev.maven_target"
+name = "Maven build output"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = "Maven"
+explain = "Compiled output of a Maven project. Recreated by `mvn package`."
+match.dir_name = "target"
+match.requires_sibling = "pom.xml"
+
+[[rule]]
+id = "dev.nuget_packages"
+name = "NuGet packages"
+category = "caches"
+subcategory = "dev.package_cache"
+safety = "safe"
+regenerable = true
+app = "NuGet / .NET"
+explain = "Packages restored by NuGet. Restored again on the next build (`dotnet nuget locals all --clear`)."
+match.path = ['{USERPROFILE}\.nuget\packages', '{LOCALAPPDATA}\NuGet\v3-cache', '{LOCALAPPDATA}\NuGet\Cache', '{LOCALAPPDATA}\NuGet\plugins-cache', '{LOCALAPPDATA}\NuGet\http-cache']
+
+[[rule]]
+id = "dev.dotnet_bin_obj"
+name = ".NET build output"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = ".NET"
+explain = "Compiled output and intermediate files of a .NET project. Recreated by the next build."
+match.dir_name = ["bin", "obj"]
+match.requires_sibling = "@dotnet_projects"
+
+[[rule]]
+id = "dev.cmake_build"
+name = "CMake build folder"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "probably"
+regenerable = true
+explain = "A build folder next to CMakeLists.txt. Recreated by configuring and building again (custom build settings in it are lost)."
+match.dir_name = ["build", "out", "cmake-build-debug", "cmake-build-release"]
+match.requires_sibling = "CMakeLists.txt"
+
+[[rule]]
+id = "dev.jetbrains_caches"
+name = "JetBrains IDE caches"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "safe"
+regenerable = true
+app = "JetBrains"
+explain = "Index and caches of a JetBrains IDE. Rebuilt on the next start (indexing takes a while)."
+match.path_glob = ['{LOCALAPPDATA}\JetBrains\*\caches', '{LOCALAPPDATA}\JetBrains\*\index']
+
+# ----------------------------------------------------------------------------- Android, Visual Studio, vcpkg
+
+[[rule]]
+id = "dev.android_system_images"
+name = "Android emulator images"
+category = "dev_build"
+subcategory = "dev.sdk"
+safety = "careful"
+app = "Android SDK"
+explain = "Android system images and virtual devices. Re-downloadable from the SDK Manager, but emulator data inside AVDs is lost."
+match.path = ['{LOCALAPPDATA}\Android\Sdk\system-images', '{USERPROFILE}\.android\avd']
+
+[[rule]]
+id = "dev.android_sdk"
+name = "Android SDK"
+category = "dev_build"
+subcategory = "dev.sdk"
+safety = "careful"
+app = "Android SDK"
+explain = "The Android SDK (platforms, build tools, emulator). Manage components with Android Studio's SDK Manager."
+match.path = '{LOCALAPPDATA}\Android\Sdk'
+
+[[rule]]
+id = "dev.android_cache"
+name = "Android tool cache"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "safe"
+regenerable = true
+app = "Android SDK"
+explain = "Caches of the Android build tools."
+match.path = ['{USERPROFILE}\.android\cache', '{USERPROFILE}\.android\build-cache']
+
+[[rule]]
+id = "dev.vs_solution_cache"
+name = "Visual Studio solution cache"
+category = "dev_build"
+subcategory = "dev.build_cache"
+safety = "probably"
+regenerable = true
+app = "Visual Studio"
+explain = "Per-solution IntelliSense database and settings. Rebuilt when the solution is opened (window layout and breakpoints are lost)."
+match.dir_name = ".vs"
+match.requires_sibling = ["*.sln", "*.slnx", "CMakeLists.txt"]
+
+[[rule]]
+id = "dev.vs_component_cache"
+name = "Visual Studio component cache"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "probably"
+regenerable = true
+app = "Visual Studio"
+explain = "MEF component cache Visual Studio rebuilds on start."
+match.path_glob = '{LOCALAPPDATA}\Microsoft\VisualStudio\*\ComponentModelCache'
+
+[[rule]]
+id = "dev.vs_installer_packages"
+name = "Visual Studio installer packages"
+category = "caches"
+subcategory = "dev.tool_cache"
+safety = "probably"
+app = "Visual Studio"
+explain = "Packages the Visual Studio Installer keeps for repairs and modifications. They are re-downloaded when needed."
+match.path = '{PROGRAMDATA}\Microsoft\VisualStudio\Packages'
+
+[[rule]]
+id = "dev.vcpkg"
+name = "vcpkg build trees and downloads"
+category = "dev_build"
+subcategory = "dev.build_cache"
+safety = "safe"
+regenerable = true
+app = "vcpkg"
+explain = "Intermediate build trees, source downloads and staged packages of vcpkg. Rebuilt or re-downloaded when needed."
+match.dir_name = ["buildtrees", "downloads", "packages"]
+match.requires_sibling = [".vcpkg-root", "vcpkg.exe"]
+
+# ----------------------------------------------------------------------------- Game engines
+
+[[rule]]
+id = "dev.unity_library"
+name = "Unity Library cache"
+category = "dev_build"
+subcategory = "dev.build_cache"
+safety = "probably"
+regenerable = true
+app = "Unity"
+explain = "Imported-asset cache of a Unity project. Unity rebuilds it, but reimporting a large project can take a long time."
+match.dir_name = "Library"
+match.requires_sibling = "ProjectSettings"
+
+[[rule]]
+id = "dev.unity_temp"
+name = "Unity temporary build files"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = "Unity"
+explain = "Temporary and intermediate files of a Unity project. Recreated automatically."
+match.dir_name = ["Temp", "obj", "Logs"]
+match.requires_sibling = "ProjectSettings"
+
+[[rule]]
+id = "dev.unreal_intermediate"
+name = "Unreal intermediate files"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "safe"
+regenerable = true
+app = "Unreal Engine"
+explain = "Derived data and intermediate build files of an Unreal project. Rebuilt on the next build or editor start."
+match.dir_name = ["DerivedDataCache", "Intermediate", "Binaries"]
+match.requires_sibling = "*.uproject"
+
+[[rule]]
+id = "dev.unreal_saved"
+name = "Unreal saved data"
+category = "dev_build"
+subcategory = "dev.build"
+safety = "probably"
+app = "Unreal Engine"
+explain = "Logs, autosaves, crash reports and local config of an Unreal project. Autosaves may be your only backup of recent edits."
+match.dir_name = "Saved"
+match.requires_sibling = "*.uproject"
+
+[[rule]]
+id = "dev.unreal_shared_ddc"
+name = "Unreal shared derived data cache"
+category = "caches"
+subcategory = "dev.build_cache"
+safety = "safe"
+regenerable = true
+app = "Unreal Engine"
+explain = "Engine-wide derived data cache. Rebuilt as projects need it."
+match.path = '{LOCALAPPDATA}\UnrealEngine\Common\DerivedDataCache'
+
+# ----------------------------------------------------------------------------- Docker, WSL
+
+[[rule]]
+id = "dev.docker_disk"
+name = "Docker Desktop disk image"
+category = "dev_build"
+subcategory = "dev.containers"
+safety = "careful"
+action = "open_tool"
+tool = "docker_prune"
+app = "Docker Desktop"
+explain = "Docker's virtual disk holding all images, containers and volumes. Never delete it directly: prune with `docker system prune` (and `docker volume prune`) and let Docker Desktop reclaim the space. `docker system df` shows what uses it."
+match.path = ['{LOCALAPPDATA}\Docker\wsl\disk\docker_data.vhdx', '{LOCALAPPDATA}\Docker\wsl\data\ext4.vhdx', '{LOCALAPPDATA}\Docker\wsl\main\ext4.vhdx', '{LOCALAPPDATA}\Docker\wsl\distro\ext4.vhdx']
+
+[[rule]]
+id = "dev.docker_logs"
+name = "Docker Desktop logs"
+category = "temp"
+safety = "safe"
+app = "Docker Desktop"
+explain = "Diagnostic logs from Docker Desktop."
+match.path = '{LOCALAPPDATA}\Docker\log'
+
+[[rule]]
+id = "dev.wsl_disk"
+name = "WSL distribution disk"
+category = "dev_build"
+subcategory = "dev.containers"
+safety = "careful"
+action = "open_tool"
+tool = "wsl_compact"
+app = "Windows Subsystem for Linux"
+explain = "The virtual disk of a WSL Linux distribution: everything inside that Linux system. Space freed inside WSL does not shrink this file until it is compacted (`wsl --shutdown`, then `Optimize-VHD` or `diskpart compact vdisk`)."
+match.path_glob = ['{LOCALAPPDATA}\Packages\*\LocalState\ext4.vhdx', '{WSL_DISTRO}\ext4.vhdx']
+
+[[rule]]
+id = "dev.wsl_disk_any"
+name = "Linux virtual disk"
+category = "dev_build"
+subcategory = "dev.containers"
+safety = "careful"
+action = "open_tool"
+tool = "wsl_compact"
+explain = "A WSL or Docker ext4 virtual disk in a custom location. Deleting it deletes that Linux system; unregister it with `wsl --unregister <name>` instead."
+match.file_name = "ext4.vhdx"
+
+# ----------------------------------------------------------------------------- git
+
+[[rule]]
+id = "dev.git"
+name = "Git repository data"
+category = "dev_build"
+subcategory = "dev.vcs"
+safety = "never"
+explain = "The project's version history. Deleting it destroys every commit, branch and stash not pushed elsewhere."
+match.name = ".git"
+
+[[rule]]
+id = "dev.git_large"
+name = "Large Git repository data"
+category = "dev_build"
+subcategory = "dev.vcs.large"
+safety = "never"
+explain = "A repository with over 1 GB of history (large packs). `git gc`, `git lfs prune` or a shallow clone can shrink it; never delete it."
+match.dir_name = ".git"
+match.min_size = "1 GiB"

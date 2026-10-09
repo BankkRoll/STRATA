@@ -1,0 +1,198 @@
+# AI / ML tools and model weights (SPEC §12.2 "AI / ML"). Model weights are
+# re-downloadable but large and slow to fetch again, so they are `careful`.
+# Claude has its own pack (claude.toml).
+
+schema_version = 1
+pack = "ai"
+version = 1
+description = "Hugging Face, Ollama, LM Studio, ComfyUI, Automatic1111/Forge, torch hub, Whisper, Copilot, Tabnine and model file types."
+
+[lists]
+comfyui_markers = ["custom_nodes", "comfy", "comfy_extras"]
+webui_markers = ["webui.py", "webui-user.bat", "webui-user.sh", "launch.py"]
+
+[[rule]]
+id = "ai.huggingface"
+name = "Hugging Face cache"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "Hugging Face"
+explain = "Model weights and datasets downloaded by Hugging Face libraries (transformers, diffusers, hub). Re-downloadable but large; delete individual models with `huggingface-cli delete-cache` to keep the ones you use."
+match.path = ['{USERPROFILE}\.cache\huggingface', '{HF_HOME}']
+
+[[rule]]
+id = "ai.ollama.models"
+name = "Ollama models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "Ollama"
+explain = "Models pulled with Ollama. Remove them with `ollama rm <model>` so Ollama's manifests stay consistent; blobs shared by several models are only freed when no model uses them."
+match.path = ['{USERPROFILE}\.ollama\models', '{OLLAMA_MODELS}']
+
+[[rule]]
+id = "ai.ollama.app"
+name = "Ollama app"
+category = "apps"
+safety = "careful"
+action = "open_tool"
+tool = "app_uninstaller"
+app = "Ollama"
+explain = "The installed Ollama runtime. Uninstall it from Settings > Apps."
+match.path = '{LOCALAPPDATA}\Programs\Ollama'
+
+[[rule]]
+id = "ai.ollama.logs"
+name = "Ollama logs and updates"
+category = "temp"
+safety = "probably"
+app = "Ollama"
+explain = "Ollama's server logs and downloaded updates."
+match.path = '{LOCALAPPDATA}\Ollama'
+
+[[rule]]
+id = "ai.lmstudio.models"
+name = "LM Studio models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "LM Studio"
+explain = "Models downloaded in LM Studio. Remove them from LM Studio's My Models tab."
+match.path = ['{USERPROFILE}\.lmstudio\models', '{USERPROFILE}\.cache\lm-studio\models']
+
+[[rule]]
+id = "ai.lmstudio.data"
+name = "LM Studio data"
+category = "apps"
+safety = "careful"
+app = "LM Studio"
+explain = "LM Studio's chats, presets and settings."
+match.path = ['{USERPROFILE}\.lmstudio', '{USERPROFILE}\.cache\lm-studio']
+
+[[rule]]
+id = "ai.comfyui.models"
+name = "ComfyUI models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "ComfyUI"
+explain = "Checkpoints, LoRAs, VAEs and other models used by ComfyUI. Large and often hard to find again; delete individual models you no longer use."
+match.dir_name = "models"
+match.requires_sibling = "@comfyui_markers"
+
+[[rule]]
+id = "ai.comfyui.output"
+name = "ComfyUI outputs"
+category = "media"
+safety = "careful"
+app = "ComfyUI"
+explain = "Images and videos you generated with ComfyUI. Your own content."
+match.dir_name = ["output", "input"]
+match.requires_sibling = "@comfyui_markers"
+
+[[rule]]
+id = "ai.webui.models"
+name = "Stable Diffusion WebUI models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "Stable Diffusion WebUI (A1111 / Forge)"
+explain = "Checkpoints, LoRAs, VAEs and upscalers used by Automatic1111 / Forge. Large and often hard to find again."
+match.dir_name = ["models", "embeddings"]
+match.requires_sibling = "@webui_markers"
+
+[[rule]]
+id = "ai.webui.outputs"
+name = "Stable Diffusion WebUI outputs"
+category = "media"
+safety = "careful"
+app = "Stable Diffusion WebUI (A1111 / Forge)"
+explain = "Images you generated with Automatic1111 / Forge. Your own content."
+match.dir_name = ["outputs", "log"]
+match.requires_sibling = "@webui_markers"
+
+[[rule]]
+id = "ai.torch_hub"
+name = "PyTorch hub cache"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "PyTorch"
+explain = "Pretrained weights downloaded by torch.hub and torchvision. Re-downloaded on next use, but can be large."
+match.path = '{USERPROFILE}\.cache\torch'
+
+[[rule]]
+id = "ai.whisper"
+name = "Whisper models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "OpenAI Whisper"
+explain = "Speech-recognition models downloaded by Whisper. Re-downloaded on next use."
+match.path = '{USERPROFILE}\.cache\whisper'
+
+[[rule]]
+id = "ai.keras"
+name = "Keras models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "Keras"
+explain = "Pretrained weights and datasets downloaded by Keras."
+match.path = ['{USERPROFILE}\.keras\models', '{USERPROFILE}\.keras\datasets']
+
+[[rule]]
+id = "ai.gpt4all"
+name = "GPT4All models"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+app = "GPT4All"
+explain = "Models downloaded in GPT4All. Remove them from GPT4All's Models view."
+match.path = '{LOCALAPPDATA}\nomic.ai\GPT4All'
+
+[[rule]]
+id = "ai.copilot.data"
+name = "GitHub Copilot CLI data"
+category = "apps"
+safety = "careful"
+app = "GitHub Copilot"
+explain = "Copilot CLI configuration, skills and session data."
+match.path = ['{USERPROFILE}\.copilot', '{LOCALAPPDATA}\github-copilot']
+
+[[rule]]
+id = "ai.copilot.logs"
+name = "GitHub Copilot logs"
+category = "temp"
+safety = "safe"
+app = "GitHub Copilot"
+explain = "Diagnostic logs written by the Copilot CLI."
+match.path = '{USERPROFILE}\.copilot\logs'
+
+[[rule]]
+id = "ai.tabnine"
+name = "Tabnine data"
+category = "apps"
+safety = "careful"
+app = "Tabnine"
+explain = "Tabnine's local models, binaries and settings. Re-downloaded by the Tabnine extension if removed."
+match.path = ['{APPDATA}\TabNine', '{LOCALAPPDATA}\TabNine']
+
+[[rule]]
+id = "ai.model_files"
+name = "AI model file"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+explain = "A machine-learning model file (weights). Usually large and re-downloadable from where you got it."
+match.ext = ["safetensors", "gguf", "ggml", "ckpt", "pt", "pth", "onnx", "tflite", "mlmodel"]
+
+[[rule]]
+id = "ai.model_misnamed"
+name = "AI model (detected from content)"
+category = "ai_models"
+subcategory = "ai.models"
+safety = "careful"
+explain = "The file's content is a GGUF or safetensors model even though its name does not say so (often saved as .bin)."
+match.magic = ["gguf", "safetensors"]

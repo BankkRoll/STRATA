@@ -1,0 +1,234 @@
+# Web browsers, every profile (SPEC §12.2 "Browsers").
+#
+# Profile data (history, cookies, passwords, bookmarks, extensions) is
+# `never`: it is not junk. Caches inside are carved out by more specific path
+# globs and are `safe` (warn if the browser is running).
+
+schema_version = 1
+pack = "browsers"
+version = 1
+description = "Chrome, Edge, Brave, Opera/Opera GX, Vivaldi, Arc, Chromium and Firefox profiles and caches."
+
+[lists]
+# Per-profile cache folders of Chromium-based browsers.
+chromium_profile_caches = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "Media Cache", "Application Cache", "Download Service"]
+# Cache folders at the root of a Chromium "User Data" folder.
+chromium_root_caches = ["ShaderCache", "GrShaderCache", "GraphiteDawnCache", "GPUPersistentCache", "component_crx_cache", "extensions_crx_cache", "Crashpad"]
+
+# ----------------------------------------------------------------------------- Chrome
+
+[[rule]]
+id = "browsers.chrome.profile"
+name = "Chrome profile data"
+category = "apps"
+safety = "never"
+app = "Google Chrome"
+explain = "Chrome's history, cookies, saved passwords, bookmarks and extensions for every profile. Not junk; clear browsing data from Chrome's settings instead."
+match.path_glob = '{LOCALAPPDATA}\Google\Chrome*\User Data'
+
+[[rule]]
+id = "browsers.chrome.cache"
+name = "Chrome cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Google Chrome"
+explain = "Web and GPU caches for a Chrome profile. Chrome rebuilds them; close Chrome first."
+match.path_glob = ['{LOCALAPPDATA}\Google\Chrome*\User Data\*\*', '{LOCALAPPDATA}\Google\Chrome*\User Data\*\Service Worker\CacheStorage', '{LOCALAPPDATA}\Google\Chrome*\User Data\*\Service Worker\ScriptCache']
+match.dir_name = ["@chromium_profile_caches", "CacheStorage", "ScriptCache"]
+
+[[rule]]
+id = "browsers.chrome.root_cache"
+name = "Chrome shared caches"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Google Chrome"
+explain = "Shader, component and crash-report caches shared by all Chrome profiles. Rebuilt automatically."
+match.path_glob = '{LOCALAPPDATA}\Google\Chrome*\User Data\*'
+match.dir_name = "@chromium_root_caches"
+
+# ----------------------------------------------------------------------------- Edge
+
+[[rule]]
+id = "browsers.edge.profile"
+name = "Edge profile data"
+category = "apps"
+safety = "never"
+app = "Microsoft Edge"
+explain = "Edge's history, cookies, saved passwords, favorites and extensions for every profile. Clear browsing data from Edge's settings instead."
+match.path_glob = '{LOCALAPPDATA}\Microsoft\Edge*\User Data'
+
+[[rule]]
+id = "browsers.edge.cache"
+name = "Edge cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Microsoft Edge"
+explain = "Web and GPU caches for an Edge profile. Edge rebuilds them; close Edge first."
+match.path_glob = ['{LOCALAPPDATA}\Microsoft\Edge*\User Data\*\*', '{LOCALAPPDATA}\Microsoft\Edge*\User Data\*\Service Worker\CacheStorage', '{LOCALAPPDATA}\Microsoft\Edge*\User Data\*\Service Worker\ScriptCache']
+match.dir_name = ["@chromium_profile_caches", "CacheStorage", "ScriptCache"]
+
+[[rule]]
+id = "browsers.edge.root_cache"
+name = "Edge shared caches"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Microsoft Edge"
+explain = "Shader, component and crash-report caches shared by all Edge profiles. Rebuilt automatically."
+match.path_glob = '{LOCALAPPDATA}\Microsoft\Edge*\User Data\*'
+match.dir_name = "@chromium_root_caches"
+
+# ----------------------------------------------------------------------------- Brave
+
+[[rule]]
+id = "browsers.brave.profile"
+name = "Brave profile data"
+category = "apps"
+safety = "never"
+app = "Brave"
+explain = "Brave's history, cookies, passwords, bookmarks, wallets and extensions. Clear browsing data from Brave's settings instead."
+match.path_glob = '{LOCALAPPDATA}\BraveSoftware\Brave-Browser*\User Data'
+
+[[rule]]
+id = "browsers.brave.cache"
+name = "Brave cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Brave"
+explain = "Web and GPU caches for a Brave profile. Brave rebuilds them; close Brave first."
+match.path_glob = ['{LOCALAPPDATA}\BraveSoftware\Brave-Browser*\User Data\*\*', '{LOCALAPPDATA}\BraveSoftware\Brave-Browser*\User Data\*\Service Worker\CacheStorage', '{LOCALAPPDATA}\BraveSoftware\Brave-Browser*\User Data\*\Service Worker\ScriptCache']
+match.dir_name = ["@chromium_profile_caches", "@chromium_root_caches", "CacheStorage", "ScriptCache"]
+
+# ----------------------------------------------------------------------------- Vivaldi
+
+[[rule]]
+id = "browsers.vivaldi.profile"
+name = "Vivaldi profile data"
+category = "apps"
+safety = "never"
+app = "Vivaldi"
+explain = "Vivaldi's history, cookies, passwords, notes, mail and bookmarks. Clear browsing data from Vivaldi's settings instead."
+match.path = '{LOCALAPPDATA}\Vivaldi\User Data'
+
+[[rule]]
+id = "browsers.vivaldi.cache"
+name = "Vivaldi cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Vivaldi"
+explain = "Web and GPU caches for a Vivaldi profile. Vivaldi rebuilds them; close Vivaldi first."
+match.path_glob = ['{LOCALAPPDATA}\Vivaldi\User Data\*\*', '{LOCALAPPDATA}\Vivaldi\User Data\*\Service Worker\CacheStorage']
+match.dir_name = ["@chromium_profile_caches", "@chromium_root_caches", "CacheStorage"]
+
+# ----------------------------------------------------------------------------- Arc
+
+[[rule]]
+id = "browsers.arc.profile"
+name = "Arc profile data"
+category = "apps"
+safety = "never"
+app = "Arc"
+explain = "Arc's history, cookies, passwords and spaces. Clear browsing data from Arc's settings instead."
+match.path_glob = '{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_*\LocalCache\Local\Arc\User Data'
+
+[[rule]]
+id = "browsers.arc.cache"
+name = "Arc cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Arc"
+explain = "Web and GPU caches for an Arc profile. Arc rebuilds them; close Arc first."
+match.path_glob = ['{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_*\LocalCache\Local\Arc\User Data\*\*', '{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_*\LocalCache\Local\Arc\User Data\*\Service Worker\CacheStorage']
+match.dir_name = ["@chromium_profile_caches", "@chromium_root_caches", "CacheStorage"]
+
+# ----------------------------------------------------------------------------- Chromium
+
+[[rule]]
+id = "browsers.chromium.profile"
+name = "Chromium profile data"
+category = "apps"
+safety = "never"
+app = "Chromium"
+explain = "Chromium's history, cookies, passwords and bookmarks. Clear browsing data from the browser's settings instead."
+match.path = '{LOCALAPPDATA}\Chromium\User Data'
+
+[[rule]]
+id = "browsers.chromium.cache"
+name = "Chromium cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Chromium"
+explain = "Web and GPU caches for a Chromium profile. Rebuilt automatically; close the browser first."
+match.path_glob = ['{LOCALAPPDATA}\Chromium\User Data\*\*', '{LOCALAPPDATA}\Chromium\User Data\*\Service Worker\CacheStorage']
+match.dir_name = ["@chromium_profile_caches", "@chromium_root_caches", "CacheStorage"]
+
+# ----------------------------------------------------------------------------- Opera / Opera GX
+
+[[rule]]
+id = "browsers.opera.profile"
+name = "Opera profile data"
+category = "apps"
+safety = "never"
+app = "Opera"
+explain = "Opera / Opera GX history, cookies, passwords and bookmarks. Clear browsing data from Opera's settings instead."
+match.path_glob = '{APPDATA}\Opera Software\Opera*'
+
+[[rule]]
+id = "browsers.opera.cache"
+name = "Opera cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Opera"
+explain = "Opera / Opera GX web, GPU and shader caches. Opera rebuilds them; close Opera first."
+match.path_glob = ['{LOCALAPPDATA}\Opera Software\Opera*\*', '{LOCALAPPDATA}\Opera Software\Opera*\*\*', '{APPDATA}\Opera Software\Opera*\*', '{APPDATA}\Opera Software\Opera*\*\*', '{APPDATA}\Opera Software\Opera*\*\Service Worker\CacheStorage']
+match.dir_name = ["@chromium_profile_caches", "@chromium_root_caches", "System Cache", "CacheStorage"]
+
+# ----------------------------------------------------------------------------- Firefox
+
+[[rule]]
+id = "browsers.firefox.profile"
+name = "Firefox profile data"
+category = "apps"
+safety = "never"
+app = "Mozilla Firefox"
+explain = "Firefox's history, cookies, saved passwords, bookmarks and add-ons. Clear browsing data from Firefox's settings instead."
+match.path_glob = ['{APPDATA}\Mozilla\Firefox\Profiles\*', '{FIREFOX_PROFILE}']
+
+[[rule]]
+id = "browsers.firefox.cache"
+name = "Firefox cache"
+category = "caches"
+subcategory = "browser.cache"
+safety = "safe"
+regenerable = true
+app = "Mozilla Firefox"
+explain = "Firefox's web cache, startup cache and thumbnails. Firefox rebuilds them; close Firefox first."
+match.path_glob = ['{LOCALAPPDATA}\Mozilla\Firefox\Profiles\*\*', '{FIREFOX_PROFILE}\*']
+match.dir_name = ["cache2", "startupCache", "thumbnails", "jumpListCache", "OfflineCache", "shader-cache"]
+
+[[rule]]
+id = "browsers.mozilla_profile_detected"
+name = "Mozilla profile"
+category = "apps"
+safety = "never"
+app = "Mozilla Firefox / Thunderbird"
+explain = "A Firefox or Thunderbird profile (it contains places.sqlite / prefs.js): browsing or mail data. Not junk."
+match.dir_name = "*"
+match.requires_child = ["places.sqlite", "prefs.js"]

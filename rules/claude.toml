@@ -1,0 +1,237 @@
+# Claude Code and the Claude desktop app (SPEC §12.2 "Claude").
+#
+# Locations verified on the dev machine (2026-10-09):
+#   ~\.claude\{projects,file-history,sessions,session-env,cache,paste-cache,
+#     shell-snapshots,debug,downloads,backups,plugins,skills,ide,state},
+#   ~\.claude.json, ~\.local\bin\claude.exe, ~\.local\share\claude\versions,
+#   ~\.local\state\claude, %LOCALAPPDATA%\claude-cli-nodejs\Cache,
+#   %APPDATA%\npm\node_modules\@anthropic-ai, ~\.vscode\extensions\anthropic.claude-code-*.
+# The desktop app is not installed on the dev machine; its rules follow the
+# Squirrel/Electron layout (%LOCALAPPDATA%\AnthropicClaude, %APPDATA%\Claude)
+# and the MSIX layout, and are listed as unverified in docs/tracks/classify.md.
+#
+# Session and project data is `careful`, never `safe`.
+
+schema_version = 1
+pack = "claude"
+version = 1
+description = "Claude Code (CLI, native install, npm package, IDE extensions) and Claude desktop."
+
+[lists]
+claude_desktop_roots = ['{APPDATA}\Claude', '{LOCALAPPDATA}\Packages\Claude_*\LocalCache\Roaming\Claude', '{LOCALAPPDATA}\Packages\AnthropicPBC.Claude_*\LocalCache\Roaming\Claude']
+
+# ----------------------------------------------------------------------------- Claude Code: ~/.claude
+
+[[rule]]
+id = "claude.code.home"
+name = "Claude Code data"
+category = "apps"
+safety = "careful"
+app = "Claude Code"
+explain = "Claude Code's settings, memory files, sessions, plugins and caches. Sub-folders are classified individually."
+match.path = '{USERPROFILE}\.claude'
+
+[[rule]]
+id = "claude.code.config"
+name = "Claude Code settings"
+category = "apps"
+safety = "never"
+app = "Claude Code"
+explain = "Your Claude Code settings, global instructions (CLAUDE.md), keybindings or sign-in credentials. Not junk."
+match.path = ['{USERPROFILE}\.claude\settings.json', '{USERPROFILE}\.claude\settings.local.json', '{USERPROFILE}\.claude\CLAUDE.md', '{USERPROFILE}\.claude\.credentials.json', '{USERPROFILE}\.claude\keybindings.json', '{USERPROFILE}\.claude\agents', '{USERPROFILE}\.claude\commands', '{USERPROFILE}\.claude.json']
+
+[[rule]]
+id = "claude.code.projects"
+name = "Claude Code session transcripts"
+category = "apps"
+subcategory = "ai.claude.sessions"
+safety = "careful"
+app = "Claude Code"
+explain = "Conversation transcripts for every project, used by `claude --resume` and `/resume`. Deleting a project's folder loses its history; Claude Code prunes old transcripts itself (cleanupPeriodDays)."
+match.path = '{USERPROFILE}\.claude\projects'
+
+[[rule]]
+id = "claude.code.file_history"
+name = "Claude Code file checkpoints"
+category = "apps"
+subcategory = "ai.claude.sessions"
+safety = "careful"
+app = "Claude Code"
+explain = "Snapshots of files Claude Code edited, used to rewind changes. Deleting them makes earlier checkpoints unrecoverable."
+match.path = '{USERPROFILE}\.claude\file-history'
+
+[[rule]]
+id = "claude.code.sessions"
+name = "Claude Code session state"
+category = "apps"
+subcategory = "ai.claude.sessions"
+safety = "careful"
+app = "Claude Code"
+explain = "Per-session state and the prompt history used for up-arrow recall."
+match.path = ['{USERPROFILE}\.claude\sessions', '{USERPROFILE}\.claude\session-env', '{USERPROFILE}\.claude\history.jsonl', '{USERPROFILE}\.claude\todos', '{USERPROFILE}\.claude\state']
+
+[[rule]]
+id = "claude.code.caches"
+name = "Claude Code caches"
+category = "caches"
+subcategory = "ai.claude.cache"
+safety = "safe"
+regenerable = true
+app = "Claude Code"
+explain = "Caches, debug logs, shell environment snapshots and IDE lock files Claude Code recreates as needed."
+match.path = ['{USERPROFILE}\.claude\cache', '{USERPROFILE}\.claude\debug', '{USERPROFILE}\.claude\shell-snapshots', '{USERPROFILE}\.claude\ide', '{USERPROFILE}\.claude\statsig', '{USERPROFILE}\.claude\downloads', '{USERPROFILE}\.claude\stats-cache.json', '{USERPROFILE}\.claude\.last-cleanup']
+
+[[rule]]
+id = "claude.code.paste_cache"
+name = "Claude Code paste cache"
+category = "caches"
+subcategory = "ai.claude.cache"
+safety = "probably"
+app = "Claude Code"
+explain = "Large pasted text referenced from prompt history. Old entries are only needed to recall those prompts."
+match.path = '{USERPROFILE}\.claude\paste-cache'
+
+[[rule]]
+id = "claude.code.backups"
+name = "Claude Code config backups"
+category = "apps"
+safety = "probably"
+app = "Claude Code"
+explain = "Automatic backups of Claude Code's configuration file. Keep the newest in case the config is damaged."
+match.path_glob = ['{USERPROFILE}\.claude\backups', '{USERPROFILE}\.claude.json.backup*', '{USERPROFILE}\.claude\*.bak*']
+
+[[rule]]
+id = "claude.code.plugins"
+name = "Claude Code plugins"
+category = "apps"
+safety = "careful"
+app = "Claude Code"
+explain = "Installed plugins and their data. Remove plugins with `/plugin` so the install list stays consistent."
+match.path = ['{USERPROFILE}\.claude\plugins', '{USERPROFILE}\.claude\skills']
+
+[[rule]]
+id = "claude.code.plugin_cache"
+name = "Claude Code plugin downloads"
+category = "caches"
+subcategory = "ai.claude.cache"
+safety = "probably"
+app = "Claude Code"
+explain = "Downloaded plugin versions and cloned marketplaces. Claude Code fetches them again, but installed plugins are unavailable until it does."
+match.path = ['{USERPROFILE}\.claude\plugins\cache', '{USERPROFILE}\.claude\plugins\marketplaces']
+
+# ----------------------------------------------------------------------------- Claude Code: install locations
+
+[[rule]]
+id = "claude.code.native_install"
+name = "Claude Code (native install)"
+category = "apps"
+subcategory = "ai.claude.app"
+safety = "careful"
+app = "Claude Code"
+explain = "Claude Code's installed versions. The launcher runs the newest; Claude Code removes old versions on update. Uninstall with `claude uninstall` rather than deleting files."
+match.path = ['{USERPROFILE}\.local\share\claude', '{USERPROFILE}\.local\bin\claude.exe']
+
+[[rule]]
+id = "claude.code.native_state"
+name = "Claude Code runtime state"
+category = "temp"
+safety = "probably"
+app = "Claude Code"
+explain = "Lock files and runtime state of the native Claude Code install. Only stale if no Claude Code session is running."
+match.path = '{USERPROFILE}\.local\state\claude'
+
+[[rule]]
+id = "claude.code.cli_cache"
+name = "Claude Code logs"
+category = "caches"
+subcategory = "ai.claude.logs"
+safety = "safe"
+regenerable = true
+app = "Claude Code"
+explain = "MCP server logs and caches written by Claude Code, per project."
+match.path = '{LOCALAPPDATA}\claude-cli-nodejs'
+
+[[rule]]
+id = "claude.code.npm_package"
+name = "Claude Code (npm package)"
+category = "apps"
+subcategory = "ai.claude.app"
+safety = "careful"
+app = "Claude Code"
+explain = "Claude Code installed as a global npm package. Remove it with `npm uninstall -g @anthropic-ai/claude-code`."
+match.path = '{APPDATA}\npm\node_modules\@anthropic-ai\claude-code'
+
+[[rule]]
+id = "claude.code.ide_extension"
+name = "Claude Code IDE extension"
+category = "apps"
+subcategory = "ai.claude.app"
+safety = "careful"
+app = "Claude Code"
+explain = "The Claude Code extension for VS Code or Cursor (one folder per installed version). Remove it from the editor's Extensions view; the editor deletes superseded versions itself."
+match.path_glob = ['{USERPROFILE}\.vscode\extensions\anthropic.claude-code-*', '{USERPROFILE}\.vscode-insiders\extensions\anthropic.claude-code-*', '{USERPROFILE}\.cursor\extensions\anthropic.claude-code-*']
+
+# ----------------------------------------------------------------------------- Claude desktop
+
+[[rule]]
+id = "claude.desktop.install"
+name = "Claude desktop app"
+category = "apps"
+subcategory = "ai.claude.app"
+safety = "careful"
+action = "open_tool"
+tool = "app_uninstaller"
+app = "Claude"
+explain = "The installed Claude desktop app and its updater. Uninstall it from Settings > Apps."
+match.path = '{LOCALAPPDATA}\AnthropicClaude'
+
+[[rule]]
+id = "claude.desktop.updates"
+name = "Claude desktop update packages"
+category = "caches"
+subcategory = "ai.claude.updates"
+safety = "probably"
+app = "Claude"
+explain = "Update packages kept by the desktop app's updater, and older app versions. Not needed to run the current version."
+match.path = '{LOCALAPPDATA}\AnthropicClaude\packages'
+
+[[rule]]
+id = "claude.desktop.data"
+name = "Claude desktop data"
+category = "apps"
+safety = "never"
+app = "Claude"
+explain = "The Claude desktop app's sign-in, settings (claude_desktop_config.json, MCP servers) and local storage. Caches and logs inside are listed separately."
+match.path_glob = "@claude_desktop_roots"
+
+[[rule]]
+id = "claude.desktop.cache"
+name = "Claude desktop cache"
+category = "caches"
+subcategory = "ai.claude.cache"
+safety = "safe"
+regenerable = true
+app = "Claude"
+explain = "Web, code and GPU caches the desktop app rebuilds. Quit Claude first."
+match.path_glob = ['{APPDATA}\Claude\**\*', '{LOCALAPPDATA}\Packages\Claude_*\LocalCache\Roaming\Claude\**\*', '{LOCALAPPDATA}\Packages\AnthropicPBC.Claude_*\LocalCache\Roaming\Claude\**\*']
+match.dir_name = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "Crashpad"]
+
+[[rule]]
+id = "claude.desktop.logs"
+name = "Claude desktop logs"
+category = "temp"
+subcategory = "ai.claude.logs"
+safety = "safe"
+app = "Claude"
+explain = "Diagnostic logs from the desktop app and its MCP servers."
+match.path_glob = ['{APPDATA}\Claude\logs', '{LOCALAPPDATA}\Packages\Claude_*\LocalCache\Roaming\Claude\logs', '{LOCALAPPDATA}\Packages\AnthropicPBC.Claude_*\LocalCache\Roaming\Claude\logs']
+
+[[rule]]
+id = "claude.desktop.extensions"
+name = "Claude desktop extensions and VM images"
+category = "apps"
+subcategory = "ai.claude.app"
+safety = "careful"
+app = "Claude"
+explain = "Installed desktop extensions and downloaded virtual-machine images used by agent features. Re-downloadable but large; remove extensions from the app's settings."
+match.path_glob = ['{APPDATA}\Claude\Claude Extensions', '{APPDATA}\Claude\vm_bundles', '{LOCALAPPDATA}\Packages\Claude_*\LocalCache\Roaming\Claude\Claude Extensions', '{LOCALAPPDATA}\Packages\Claude_*\LocalCache\Roaming\Claude\vm_bundles']

@@ -1,0 +1,94 @@
+# Generic patterns that apply anywhere (SPEC §12.2 "Generic"). They are
+# extension/name/property rules, the lowest precedence classes, so any
+# location rule (a cache folder, the Windows folder) takes priority. Users can
+# change the thresholds by overriding these rules by id.
+
+schema_version = 1
+pack = "generic"
+version = 1
+description = "Temp files, Office owner files, big logs, dumps, backups, empty files and folders, old & large files."
+
+[[rule]]
+id = "generic.tmp_files"
+name = "Temporary file"
+category = "temp"
+safety = "probably"
+explain = "A temporary file. Usually left behind by a program that crashed or did not clean up; skipped if in use."
+match.ext = "tmp"
+match.applies_to = "file"
+
+[[rule]]
+id = "generic.office_owner_files"
+name = "Office lock file"
+category = "temp"
+safety = "probably"
+explain = "A hidden owner file Office creates while a document is open (\"~$name\"). Leftovers from closed documents can be deleted; it is skipped while the document is open."
+match.file_name = '~$*'
+
+[[rule]]
+id = "generic.big_logs"
+name = "Large log file"
+category = "temp"
+safety = "probably"
+explain = "A log file over 10 MB in an application data folder. Logs are only needed for troubleshooting."
+match.ext = ["log", "etl"]
+match.min_size = "10 MB"
+match.under = ['{LOCALAPPDATA}', '{APPDATA}', '{PROGRAMDATA}']
+
+[[rule]]
+id = "generic.crash_dumps"
+name = "Crash dump"
+category = "temp"
+safety = "probably"
+explain = "A memory dump written when a program crashed. Only useful for debugging that crash."
+match.ext = ["dmp", "mdmp", "hdmp"]
+match.applies_to = "file"
+
+[[rule]]
+id = "generic.backup_files"
+name = "Backup file"
+category = "temp"
+safety = "probably"
+explain = "A .bak backup copy. Check that the original is fine before deleting it."
+match.ext = "bak"
+match.applies_to = "file"
+
+[[rule]]
+id = "generic.thumbs_db"
+name = "Folder thumbnail cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Thumbs.db, a thumbnail cache older Windows versions wrote into folders. Regenerated if needed."
+match.file_name = "Thumbs.db"
+
+[[rule]]
+id = "generic.zero_byte_file"
+name = "Empty file"
+category = "unknown"
+safety = "careful"
+explain = "A file with no content. Some programs use empty files as markers or locks, so review before removing."
+match.any = true
+match.applies_to = "file"
+match.max_size = 0
+
+[[rule]]
+id = "generic.empty_folder"
+name = "Empty folder"
+category = "unknown"
+safety = "careful"
+explain = "A folder with nothing in it. Some programs expect their folders to exist, so review before removing."
+match.any = true
+match.empty_dir = true
+
+[[rule]]
+id = "generic.old_large"
+name = "Old & large"
+category = "unknown"
+safety = "careful"
+action = "info_only"
+explain = "A file over 1 GB that has not changed in more than a year. Worth reviewing; Strata makes no claim about whether it is safe to remove."
+match.any = true
+match.applies_to = "file"
+match.min_size = "1 GiB"
+match.older_than_days = 365

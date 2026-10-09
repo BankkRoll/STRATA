@@ -1,0 +1,203 @@
+# Games and launchers (SPEC §12.2 "Games / launchers"). Installed games are
+# `never` deleted directly: uninstall through the launcher so it does not
+# keep thinking the game is installed. Shader caches and leftover downloads
+# are `safe`. Steam libraries and Epic installs on other drives come from
+# discovery tokens ({STEAM_LIBRARY}, {EPIC_GAME}).
+
+schema_version = 1
+pack = "games"
+version = 1
+description = "Steam, Epic, Battle.net, EA app, Ubisoft Connect, GOG, Xbox and Roblox."
+
+# ----------------------------------------------------------------------------- Steam
+
+[[rule]]
+id = "games.steam.library"
+name = "Steam library"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "Steam"
+explain = "A Steam library folder. Manage games from Steam (Library > Manage > Uninstall); Steam tracks them in its manifests."
+match.path_glob = ['{STEAM_LIBRARY}\steamapps', '**\steamapps']
+match.requires_child = ["common", "libraryfolder.vdf", "libraryfolders.vdf"]
+
+[[rule]]
+id = "games.steam.game"
+name = "Steam game"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "Steam"
+explain = "An installed Steam game. Uninstall it from Steam so Steam's library stays correct."
+match.path_glob = ['{STEAM_LIBRARY}\steamapps\common\*', '**\steamapps\common\*']
+
+[[rule]]
+id = "games.steam.shader_cache"
+name = "Steam shader cache"
+category = "caches"
+subcategory = "games.shader_cache"
+safety = "safe"
+regenerable = true
+app = "Steam"
+explain = "Pre-compiled shaders Steam downloads or builds per game. Rebuilt automatically (the first launch afterwards may stutter)."
+match.path_glob = ['{STEAM_LIBRARY}\steamapps\shadercache', '**\steamapps\shadercache']
+
+[[rule]]
+id = "games.steam.leftovers"
+name = "Steam download leftovers"
+category = "temp"
+subcategory = "games.downloads"
+safety = "safe"
+app = "Steam"
+explain = "Partial or staged downloads Steam keeps while updating. Safe when no download is running; Steam resumes from scratch."
+match.path_glob = ['{STEAM_LIBRARY}\steamapps\downloading', '{STEAM_LIBRARY}\steamapps\temp', '**\steamapps\downloading', '**\steamapps\temp']
+
+[[rule]]
+id = "games.steam.workshop"
+name = "Steam Workshop content"
+category = "games"
+safety = "careful"
+app = "Steam"
+explain = "Mods and maps you subscribed to in the Steam Workshop. Re-downloaded from Steam, but unsubscribe there to remove them for good."
+match.path_glob = ['{STEAM_LIBRARY}\steamapps\workshop', '**\steamapps\workshop']
+
+[[rule]]
+id = "games.steam.client_caches"
+name = "Steam client caches"
+category = "caches"
+safety = "safe"
+regenerable = true
+app = "Steam"
+explain = "Steam's web-view cache, logs and crash dumps. Rebuilt automatically."
+match.path = ['{LOCALAPPDATA}\Steam\htmlcache', '{PROGRAMFILES_X86}\Steam\logs', '{PROGRAMFILES_X86}\Steam\dumps', '{PROGRAMFILES_X86}\Steam\appcache\httpcache']
+
+# ----------------------------------------------------------------------------- Epic
+
+[[rule]]
+id = "games.epic.game"
+name = "Epic Games title"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "Epic Games Launcher"
+explain = "A game installed with the Epic Games Launcher. Uninstall it from the launcher's Library."
+match.path_glob = ['{EPIC_GAME}', '{PROGRAMFILES}\Epic Games\*']
+
+[[rule]]
+id = "games.epic.manifests"
+name = "Epic Games Launcher manifests"
+category = "games"
+safety = "never"
+app = "Epic Games Launcher"
+explain = "The launcher's record of installed games. Deleting it makes the launcher forget them."
+match.path = '{PROGRAMDATA}\Epic\EpicGamesLauncher'
+
+[[rule]]
+id = "games.epic.webcache"
+name = "Epic Games Launcher web cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+app = "Epic Games Launcher"
+explain = "The launcher's web-view cache. Rebuilt on the next start."
+match.path_glob = '{LOCALAPPDATA}\EpicGamesLauncher\Saved\webcache*'
+
+# ----------------------------------------------------------------------------- Battle.net, EA, Ubisoft, GOG
+
+[[rule]]
+id = "games.battlenet.cache"
+name = "Battle.net cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+app = "Battle.net"
+explain = "Battle.net's download and web caches. Rebuilt on the next start."
+match.path = ['{PROGRAMDATA}\Battle.net\Cache', '{PROGRAMDATA}\Blizzard Entertainment\Battle.net\Cache', '{LOCALAPPDATA}\Battle.net\Cache', '{LOCALAPPDATA}\Battle.net\BrowserCache']
+
+[[rule]]
+id = "games.ea.cache"
+name = "EA app cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+app = "EA app"
+explain = "The EA app's web and download caches. Rebuilt on the next start."
+match.path = ['{LOCALAPPDATA}\Electronic Arts\EA Desktop\cache', '{LOCALAPPDATA}\Electronic Arts\EA Desktop\CEF']
+
+[[rule]]
+id = "games.ubisoft.games"
+name = "Ubisoft Connect game"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "Ubisoft Connect"
+explain = "A game installed with Ubisoft Connect. Uninstall it from Ubisoft Connect."
+match.path_glob = '{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\games\*'
+
+[[rule]]
+id = "games.ubisoft.cache"
+name = "Ubisoft Connect cache"
+category = "caches"
+safety = "probably"
+regenerable = true
+app = "Ubisoft Connect"
+explain = "Ubisoft Connect's web, asset and log caches. Rebuilt on the next start. (Saves live in the separate savegames folder, which is not touched.)"
+match.path = ['{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\cache', '{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\logs']
+
+[[rule]]
+id = "games.gog.games"
+name = "GOG Galaxy game"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "GOG Galaxy"
+explain = "A game installed with GOG Galaxy. Uninstall it from GOG Galaxy."
+match.path_glob = ['{PROGRAMFILES_X86}\GOG Galaxy\Games\*', '{SYSTEMDRIVE}\GOG Games\*']
+
+[[rule]]
+id = "games.gog.cache"
+name = "GOG Galaxy cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+app = "GOG Galaxy"
+explain = "GOG Galaxy's web cache. Rebuilt on the next start."
+match.path = '{PROGRAMDATA}\GOG.com\Galaxy\webcache'
+
+# ----------------------------------------------------------------------------- Xbox, Roblox
+
+[[rule]]
+id = "games.xbox.games"
+name = "Xbox app games"
+category = "games"
+safety = "never"
+action = "open_tool"
+tool = "launcher_uninstall"
+app = "Xbox"
+explain = "Games installed by the Xbox app / Microsoft Store. Uninstall them from the Xbox app or Settings > Apps; their files are protected packages."
+match.dir_name = "XboxGames"
+match.volume_root = true
+
+[[rule]]
+id = "games.roblox.versions"
+name = "Roblox versions"
+category = "games"
+safety = "careful"
+app = "Roblox"
+explain = "Roblox player and studio versions. The launcher re-downloads them; uninstall Roblox from Settings > Apps to remove it."
+match.path = '{LOCALAPPDATA}\Roblox\Versions'
+
+[[rule]]
+id = "games.roblox.logs"
+name = "Roblox logs and downloads"
+category = "temp"
+safety = "safe"
+app = "Roblox"
+explain = "Roblox logs and temporary downloads."
+match.path = ['{LOCALAPPDATA}\Roblox\logs', '{LOCALAPPDATA}\Roblox\Downloads']

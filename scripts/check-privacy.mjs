@@ -42,7 +42,11 @@ const WORKTREE_PATH = /\.claude[\\/]worktrees/;
 function problemsIn(line) {
   const found = [];
   for (const m of line.matchAll(PROFILE_PATH)) {
-    if (!ALLOWED_PROFILES.has(m[1].toLowerCase())) found.push(`user profile path (${m[0]})`);
+    const name = m[1].toLowerCase();
+    // NOTE: `$...`, `%...%`, `{...}` and `<...>` are metadata names, env vars,
+    // tokens or placeholders, never a real account.
+    if (/^[$%{<]/.test(name) || ALLOWED_PROFILES.has(name)) continue;
+    found.push(`user profile path (${m[0]})`);
   }
   if (REAL_SID.test(line)) found.push("real account SID");
   if (WORKTREE_PATH.test(line)) found.push("local worktree path");

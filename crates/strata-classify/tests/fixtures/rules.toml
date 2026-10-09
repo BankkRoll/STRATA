@@ -1,0 +1,1154 @@
+# Fixture cases for every built-in rule. See tests/rule_fixtures.rs.
+#
+# - `tree`: entries to create (a trailing `\` makes a directory; parents are
+#   created as directories). Inline tables add `size`, `age_days`, `magic`
+#   and `flags`.
+# - `match`: paths the rule must match itself (not by inheritance).
+# - `no_match`: near-miss paths the rule must not match itself.
+# - `auto_near_miss` (default true) also checks `<path>_nearmiss`.
+# Per-user tokens expand to both fixture profiles (alice and bob).
+
+# ============================================================================ windows
+
+[[case]]
+rule = "windows.windir"
+match = ['{WINDIR}\']
+
+[[case]]
+rule = "windows.program_files"
+match = ['{PROGRAMFILES}\', '{PROGRAMFILES_X86}\']
+
+[[case]]
+rule = "windows.windowsapps"
+match = ['{PROGRAMFILES}\WindowsApps\']
+
+[[case]]
+rule = "windows.ntfs_metadata"
+tree = [{ path = 'C:\$MFT', flags = ["ntfs_metadata"] }, { path = 'D:\$Extend\$UsnJrnl', flags = ["ntfs_metadata"] }]
+match = ['C:\$MFT', 'D:\$Extend\$UsnJrnl']
+no_match = ['D:\data\x.bin']
+auto_near_miss = false
+
+[[case]]
+rule = "windows.ntfs_metadata_names"
+match = ['C:\$LogFile', 'D:\$Extend\']
+no_match = ['C:\Users\$LogFile', 'D:\data\$Extend\']
+
+[[case]]
+rule = "windows.system_volume_information"
+match = ['C:\System Volume Information\', 'D:\System Volume Information\']
+no_match = ['D:\backup\System Volume Information\']
+
+[[case]]
+rule = "windows.recycle_bin"
+match = ['C:\$Recycle.Bin\', 'D:\$Recycle.Bin\']
+no_match = ['D:\x\$Recycle.Bin\']
+
+[[case]]
+rule = "windows.hiberfil"
+match = ['C:\hiberfil.sys']
+no_match = ['C:\temp2\hiberfil.sys']
+
+[[case]]
+rule = "windows.pagefile"
+match = ['C:\pagefile.sys', 'C:\swapfile.sys', 'D:\pagefile.sys']
+no_match = ['D:\old\pagefile.sys']
+
+[[case]]
+rule = "windows.boot"
+match = ['{SYSTEMDRIVE}\Boot\', '{SYSTEMDRIVE}\Recovery\', '{SYSTEMDRIVE}\bootmgr', '{SYSTEMDRIVE}\$WinREAgent\']
+no_match = ['D:\Boot\', 'D:\Recovery\']
+
+[[case]]
+rule = "windows.programdata_microsoft"
+match = ['{PROGRAMDATA}\Microsoft\']
+
+[[case]]
+rule = "windows.registry_hives"
+match = ['{USERPROFILE}\NTUSER.DAT', '{USERPROFILE}\ntuser.dat.LOG1', '{USERPROFILE}\ntuser.ini', '{LOCALAPPDATA}\Microsoft\Windows\UsrClass.dat']
+no_match = ['E:\backup\NTUSER.DAT']
+auto_near_miss = false
+
+[[case]]
+rule = "windows.app_execution_aliases"
+match = ['{LOCALAPPDATA}\Microsoft\WindowsApps\']
+
+[[case]]
+rule = "windows.store_app_data"
+match = ['{LOCALAPPDATA}\Packages\Microsoft.WindowsCalculator_8wekyb3d8bbwe\']
+no_match = ['{LOCALAPPDATA}\PackagesOld\Foo\']
+auto_near_miss = false
+
+[[case]]
+rule = "windows.package_cache"
+match = ['{PROGRAMDATA}\Package Cache\', '{LOCALAPPDATA}\Package Cache\']
+
+[[case]]
+rule = "windows.user_temp"
+match = ['{TEMP}\']
+
+[[case]]
+rule = "windows.windows_temp"
+match = ['{WINDIR}\Temp\']
+
+[[case]]
+rule = "windows.update_download_cache"
+match = ['{WINDIR}\SoftwareDistribution\Download\']
+no_match = ['{WINDIR}\SoftwareDistribution\DataStore\']
+
+[[case]]
+rule = "windows.delivery_optimization"
+match = ['{WINDIR}\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache\', '{WINDIR}\SoftwareDistribution\DeliveryOptimization\']
+
+[[case]]
+rule = "windows.error_reporting"
+match = ['{PROGRAMDATA}\Microsoft\Windows\WER\', '{LOCALAPPDATA}\Microsoft\Windows\WER\']
+
+[[case]]
+rule = "windows.memory_dump"
+match = ['{WINDIR}\MEMORY.DMP']
+
+[[case]]
+rule = "windows.minidumps"
+match = ['{WINDIR}\Minidump\', '{LOCALAPPDATA}\CrashDumps\']
+
+[[case]]
+rule = "windows.live_kernel_reports"
+match = ['{WINDIR}\LiveKernelReports\']
+
+[[case]]
+rule = "windows.thumbnail_cache"
+match = ['{LOCALAPPDATA}\Microsoft\Windows\Explorer\thumbcache_1280.db', '{LOCALAPPDATA}\Microsoft\Windows\Explorer\iconcache_16.db']
+no_match = ['{USERPROFILE}\thumbcache_1280.db', '{LOCALAPPDATA}\Microsoft\Windows\Explorer\ExplorerStartupLog.etl']
+
+[[case]]
+rule = "windows.directx_shader_cache"
+match = ['{LOCALAPPDATA}\D3DSCache\']
+
+[[case]]
+rule = "windows.gpu_shader_caches"
+match = ['{LOCALAPPDATA}\NVIDIA\DXCache\', '{LOCALAPPDATA}\NVIDIA\GLCache\', '{LOCALAPPDATA}\AMD\VkCache\', '{PROGRAMDATA}\NVIDIA Corporation\NV_Cache\', '{APPDATA}\NVIDIA\ComputeCache\', '{USERPROFILE}\AppData\LocalLow\Intel\ShaderCache\']
+no_match = ['{LOCALAPPDATA}\NVIDIA\Settings\']
+
+[[case]]
+rule = "windows.gpu_installer_leftovers"
+match = ['{SYSTEMDRIVE}\NVIDIA\', '{SYSTEMDRIVE}\AMD\']
+no_match = ['D:\NVIDIA\']
+
+[[case]]
+rule = "windows.previous_installation"
+match = ['{SYSTEMDRIVE}\Windows.old\', '{SYSTEMDRIVE}\$WINDOWS.~BT\', '{SYSTEMDRIVE}\$WINDOWS.~WS\', '{SYSTEMDRIVE}\$GetCurrent\']
+no_match = ['D:\Windows.old\']
+
+[[case]]
+rule = "windows.winsxs"
+match = ['{WINDIR}\WinSxS\']
+
+[[case]]
+rule = "windows.installer_cache"
+match = ['{WINDIR}\Installer\']
+
+[[case]]
+rule = "windows.prefetch"
+match = ['{WINDIR}\Prefetch\']
+
+[[case]]
+rule = "windows.servicing_logs"
+match = ['{WINDIR}\Logs\CBS\', '{WINDIR}\Logs\DISM\']
+no_match = ['{WINDIR}\Logs\WindowsUpdate\']
+
+[[case]]
+rule = "windows.font_cache"
+match = ['{WINDIR}\ServiceProfiles\LocalService\AppData\Local\FontCache\', '{WINDIR}\System32\FNTCACHE.DAT']
+
+[[case]]
+rule = "windows.inet_cache"
+match = ['{LOCALAPPDATA}\Microsoft\Windows\INetCache\']
+
+[[case]]
+rule = "windows.web_cache_db"
+match = ['{LOCALAPPDATA}\Microsoft\Windows\WebCache\']
+
+[[case]]
+rule = "windows.cloud_online_only"
+tree = [{ path = '{DOCUMENTS}\report.docx', flags = ["cloud_online_only"] }, { path = '{USERPROFILE}\OneDrive\big.mp4', flags = ["cloud_online_only"] }]
+match = ['{DOCUMENTS}\report.docx', '{USERPROFILE}\OneDrive\big.mp4']
+
+[[case]]
+rule = "windows.cloud_synced"
+tree = [{ path = '{DOCUMENTS}\notes.txt', flags = ["cloud"] }]
+match = ['{DOCUMENTS}\notes.txt']
+
+# ============================================================================ userdata
+
+[[case]]
+rule = "userdata.documents"
+match = ['{DOCUMENTS}\']
+
+[[case]]
+rule = "userdata.desktop"
+match = ['{DESKTOP}\']
+
+[[case]]
+rule = "userdata.pictures"
+match = ['{PICTURES}\']
+
+[[case]]
+rule = "userdata.music"
+match = ['{MUSIC}\']
+
+[[case]]
+rule = "userdata.videos"
+match = ['{VIDEOS}\']
+
+[[case]]
+rule = "userdata.downloads"
+match = ['{DOWNLOADS}\']
+
+[[case]]
+rule = "userdata.public"
+match = ['{PUBLIC}\']
+
+[[case]]
+rule = "userdata.saved_games"
+match = ['{USERPROFILE}\Saved Games\']
+
+[[case]]
+rule = "userdata.onedrive_root"
+match = ['{USERPROFILE}\OneDrive\', '{USERPROFILE}\OneDrive - Contoso\']
+no_match = ['{USERPROFILE}\MyOneDrive\']
+auto_near_miss = false
+
+[[case]]
+rule = "userdata.images"
+match = ['E:\stuff\photo.JPG', 'E:\stuff\scan.heic', '{PICTURES}\cat.png']
+
+[[case]]
+rule = "userdata.video_files"
+match = ['E:\stuff\clip.mp4', '{VIDEOS}\movie.MKV']
+
+[[case]]
+rule = "userdata.audio_files"
+match = ['E:\stuff\song.mp3', 'E:\stuff\take.flac']
+
+[[case]]
+rule = "userdata.document_files"
+match = ['E:\stuff\report.pdf', '{DOCUMENTS}\budget.xlsx']
+
+[[case]]
+rule = "userdata.archive_files"
+match = ['E:\stuff\backup.zip', 'E:\stuff\src.tar']
+
+[[case]]
+rule = "userdata.disk_images"
+match = ['E:\vm\disk.vhdx', 'E:\iso\debian.iso']
+
+# ============================================================================ browsers
+
+[[case]]
+rule = "browsers.chrome.profile"
+match = ['{LOCALAPPDATA}\Google\Chrome\User Data\', '{LOCALAPPDATA}\Google\Chrome Beta\User Data\']
+no_match = ['{LOCALAPPDATA}\Google\Chrome\Application\']
+
+[[case]]
+rule = "browsers.chrome.cache"
+tree = ['{LOCALAPPDATA}\Google\Chrome\User Data\Default\History']
+match = ['{LOCALAPPDATA}\Google\Chrome\User Data\Default\Cache\', '{LOCALAPPDATA}\Google\Chrome\User Data\Profile 3\Code Cache\', '{LOCALAPPDATA}\Google\Chrome\User Data\Default\GPUCache\', '{LOCALAPPDATA}\Google\Chrome\User Data\Default\Service Worker\CacheStorage\']
+no_match = ['{LOCALAPPDATA}\Google\Chrome\User Data\Default\History', '{LOCALAPPDATA}\Google\Chrome\User Data\Default\Local Storage\']
+
+[[case]]
+rule = "browsers.chrome.root_cache"
+match = ['{LOCALAPPDATA}\Google\Chrome\User Data\ShaderCache\', '{LOCALAPPDATA}\Google\Chrome\User Data\GrShaderCache\', '{LOCALAPPDATA}\Google\Chrome\User Data\Crashpad\']
+no_match = ['{LOCALAPPDATA}\Google\Chrome\User Data\Default\']
+
+[[case]]
+rule = "browsers.edge.profile"
+match = ['{LOCALAPPDATA}\Microsoft\Edge\User Data\', '{LOCALAPPDATA}\Microsoft\Edge Dev\User Data\']
+no_match = ['{LOCALAPPDATA}\Microsoft\Edge\Application\']
+
+[[case]]
+rule = "browsers.edge.cache"
+match = ['{LOCALAPPDATA}\Microsoft\Edge\User Data\Default\Cache\', '{LOCALAPPDATA}\Microsoft\Edge\User Data\Profile 1\Code Cache\']
+no_match = ['{LOCALAPPDATA}\Microsoft\Edge\User Data\Default\Bookmarks']
+
+[[case]]
+rule = "browsers.edge.root_cache"
+match = ['{LOCALAPPDATA}\Microsoft\Edge\User Data\GrShaderCache\', '{LOCALAPPDATA}\Microsoft\Edge\User Data\GPUPersistentCache\']
+no_match = ['{LOCALAPPDATA}\Microsoft\Edge\User Data\Default\']
+
+[[case]]
+rule = "browsers.brave.profile"
+match = ['{LOCALAPPDATA}\BraveSoftware\Brave-Browser\User Data\']
+
+[[case]]
+rule = "browsers.brave.cache"
+match = ['{LOCALAPPDATA}\BraveSoftware\Brave-Browser\User Data\Default\Cache\', '{LOCALAPPDATA}\BraveSoftware\Brave-Browser\User Data\Default\Service Worker\CacheStorage\']
+no_match = ['{LOCALAPPDATA}\BraveSoftware\Brave-Browser\User Data\Default\Wallet\']
+
+[[case]]
+rule = "browsers.vivaldi.profile"
+match = ['{LOCALAPPDATA}\Vivaldi\User Data\']
+
+[[case]]
+rule = "browsers.vivaldi.cache"
+match = ['{LOCALAPPDATA}\Vivaldi\User Data\Default\Cache\']
+no_match = ['{LOCALAPPDATA}\Vivaldi\User Data\Default\Notes']
+
+[[case]]
+rule = "browsers.arc.profile"
+match = ['{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data\']
+
+[[case]]
+rule = "browsers.arc.cache"
+match = ['{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data\Default\Cache\']
+no_match = ['{LOCALAPPDATA}\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc\User Data\Default\History']
+
+[[case]]
+rule = "browsers.chromium.profile"
+match = ['{LOCALAPPDATA}\Chromium\User Data\']
+
+[[case]]
+rule = "browsers.chromium.cache"
+match = ['{LOCALAPPDATA}\Chromium\User Data\Default\Code Cache\']
+no_match = ['{LOCALAPPDATA}\Chromium\User Data\Default\Extensions\']
+
+[[case]]
+rule = "browsers.opera.profile"
+match = ['{APPDATA}\Opera Software\Opera Stable\', '{APPDATA}\Opera Software\Opera GX Stable\']
+no_match = ['{APPDATA}\Opera Software\Crash Reports\']
+auto_near_miss = false
+
+[[case]]
+rule = "browsers.opera.cache"
+match = ['{LOCALAPPDATA}\Opera Software\Opera Stable\Cache\', '{LOCALAPPDATA}\Opera Software\Opera GX Stable\Default\Cache\', '{APPDATA}\Opera Software\Opera Stable\Default\Code Cache\', '{APPDATA}\Opera Software\Opera GX Stable\GPUCache\']
+no_match = ['{APPDATA}\Opera Software\Opera Stable\Default\Local Storage\']
+
+[[case]]
+rule = "browsers.firefox.profile"
+match = ['{APPDATA}\Mozilla\Firefox\Profiles\b305dhs3.default-release\', '{FIREFOX_PROFILE}\']
+no_match = ['{APPDATA}\Mozilla\Firefox\Crash Reports\']
+auto_near_miss = false
+
+[[case]]
+rule = "browsers.firefox.cache"
+match = ['{LOCALAPPDATA}\Mozilla\Firefox\Profiles\b305dhs3.default-release\cache2\', '{LOCALAPPDATA}\Mozilla\Firefox\Profiles\b305dhs3.default-release\startupCache\', '{FIREFOX_PROFILE}\cache2\']
+no_match = ['{LOCALAPPDATA}\Mozilla\Firefox\Profiles\b305dhs3.default-release\safebrowsing\', '{FIREFOX_PROFILE}\storage\']
+
+[[case]]
+rule = "browsers.mozilla_profile_detected"
+tree = ['E:\Portable\Firefox\Data\profile\prefs.js', 'E:\Portable\Firefox\Data\profile\places.sqlite']
+match = ['E:\Portable\Firefox\Data\profile\']
+no_match = ['E:\Portable\Firefox\Data\', 'E:\Portable\Firefox\Other\']
+
+# ============================================================================ apps
+
+[[case]]
+rule = "apps.electron_cache"
+tree = ['{APPDATA}\SomeApp\Local Storage\', '{LOCALAPPDATA}\Other\Default\Preferences', '{APPDATA}\NoMarkers\settings.json']
+match = ['{APPDATA}\SomeApp\Cache\', '{APPDATA}\SomeApp\GPUCache\', '{LOCALAPPDATA}\Other\Default\Code Cache\']
+no_match = ['{APPDATA}\NoMarkers\Cache\', 'E:\project\Cache\']
+
+[[case]]
+rule = "apps.discord.data"
+match = ['{APPDATA}\discord\']
+
+[[case]]
+rule = "apps.discord.cache"
+match = ['{APPDATA}\discord\Cache\', '{APPDATA}\discord\Code Cache\', '{APPDATA}\discord\Partitions\x\GPUCache\']
+no_match = ['{APPDATA}\discord\Local Storage\', '{APPDATA}\discord\IndexedDB\']
+
+[[case]]
+rule = "apps.discord.install"
+match = ['{LOCALAPPDATA}\Discord\']
+
+[[case]]
+rule = "apps.squirrel_packages"
+tree = ['{LOCALAPPDATA}\Discord\Update.exe', '{LOCALAPPDATA}\Figma\Update.exe']
+match = ['{LOCALAPPDATA}\Discord\packages\', '{LOCALAPPDATA}\Figma\packages\']
+no_match = ['{LOCALAPPDATA}\SomeTool\packages\']
+
+[[case]]
+rule = "apps.slack.data"
+match = ['{APPDATA}\Slack\', '{LOCALAPPDATA}\Packages\91750D7E.Slack_8she8kybcnzg4\LocalCache\Roaming\Slack\']
+
+[[case]]
+rule = "apps.slack.cache"
+match = ['{APPDATA}\Slack\Cache\', '{LOCALAPPDATA}\Packages\91750D7E.Slack_8she8kybcnzg4\LocalCache\Roaming\Slack\Code Cache\']
+no_match = ['{APPDATA}\Slack\storage\']
+
+[[case]]
+rule = "apps.teams.data"
+match = ['{LOCALAPPDATA}\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\', '{APPDATA}\Microsoft\Teams\']
+
+[[case]]
+rule = "apps.teams.cache"
+match = ['{LOCALAPPDATA}\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\Default\Cache\', '{APPDATA}\Microsoft\Teams\tmp\', '{APPDATA}\Microsoft\Teams\GPUCache\']
+no_match = ['{APPDATA}\Microsoft\Teams\IndexedDB\']
+
+[[case]]
+rule = "apps.vscode.data"
+match = ['{APPDATA}\Code\', '{APPDATA}\Code - Insiders\']
+
+[[case]]
+rule = "apps.vscode.cache"
+match = ['{APPDATA}\Code\CachedData\', '{APPDATA}\Code\CachedExtensionVSIXs\', '{APPDATA}\Code\logs\', '{APPDATA}\Code\Cache\']
+no_match = ['{APPDATA}\Code\User\', '{APPDATA}\Code\Backups\']
+
+[[case]]
+rule = "apps.vscode.extensions"
+match = ['{USERPROFILE}\.vscode\extensions\']
+
+[[case]]
+rule = "apps.cursor.data"
+match = ['{APPDATA}\Cursor\']
+
+[[case]]
+rule = "apps.cursor.cache"
+match = ['{APPDATA}\Cursor\CachedData\', '{APPDATA}\Cursor\GPUCache\']
+no_match = ['{APPDATA}\Cursor\User\']
+
+[[case]]
+rule = "apps.cursor.extensions"
+match = ['{USERPROFILE}\.cursor\extensions\']
+
+[[case]]
+rule = "apps.cursor.install"
+match = ['{LOCALAPPDATA}\Programs\cursor\']
+
+[[case]]
+rule = "apps.spotify.cache"
+match = ['{LOCALAPPDATA}\Spotify\Storage\', '{LOCALAPPDATA}\Packages\SpotifyAB.SpotifyMusic_zpdnekdrzrea0\LocalCache\Spotify\Storage\']
+
+[[case]]
+rule = "apps.spotify.offline"
+match = ['{LOCALAPPDATA}\Spotify\Data\']
+
+[[case]]
+rule = "apps.zoom.install"
+match = ['{APPDATA}\Zoom\']
+
+[[case]]
+rule = "apps.zoom.data"
+match = ['{APPDATA}\Zoom\data\']
+
+[[case]]
+rule = "apps.zoom.logs"
+match = ['{APPDATA}\Zoom\logs\']
+
+[[case]]
+rule = "apps.notion.data"
+match = ['{APPDATA}\Notion\']
+
+[[case]]
+rule = "apps.notion.cache"
+match = ['{APPDATA}\Notion\Cache\', '{APPDATA}\Notion\Partitions\notion\GPUCache\']
+no_match = ['{APPDATA}\Notion\notion.db']
+
+[[case]]
+rule = "apps.figma.data"
+match = ['{APPDATA}\Figma\']
+
+[[case]]
+rule = "apps.figma.cache"
+match = ['{APPDATA}\Figma\DesktopProfile\', '{APPDATA}\Figma\Cache\']
+no_match = ['{APPDATA}\Figma\settings.json']
+
+[[case]]
+rule = "apps.figma.install"
+match = ['{LOCALAPPDATA}\Figma\']
+
+[[case]]
+rule = "apps.obsidian.data"
+match = ['{APPDATA}\obsidian\']
+
+[[case]]
+rule = "apps.obsidian.cache"
+match = ['{APPDATA}\obsidian\Cache\']
+no_match = ['{APPDATA}\obsidian\obsidian.json']
+
+[[case]]
+rule = "apps.telegram.data"
+match = ['{APPDATA}\Telegram Desktop\tdata\']
+
+[[case]]
+rule = "apps.telegram.cache"
+match = ['{APPDATA}\Telegram Desktop\tdata\user_data\', '{APPDATA}\Telegram Desktop\tdata\emoji\']
+no_match = ['{APPDATA}\Telegram Desktop\tdata\key_datas']
+
+[[case]]
+rule = "apps.thunderbird.profiles"
+match = ['{APPDATA}\Thunderbird\Profiles\']
+
+[[case]]
+rule = "apps.thunderbird.cache"
+match = ['{LOCALAPPDATA}\Thunderbird\Profiles\abc.default\cache2\']
+no_match = ['{LOCALAPPDATA}\Thunderbird\Profiles\abc.default\other\']
+
+# ============================================================================ ai
+
+[[case]]
+rule = "ai.huggingface"
+match = ['{USERPROFILE}\.cache\huggingface\', '{HF_HOME}\']
+
+[[case]]
+rule = "ai.ollama.models"
+match = ['{USERPROFILE}\.ollama\models\', '{OLLAMA_MODELS}\']
+no_match = ['{USERPROFILE}\.ollama\history']
+
+[[case]]
+rule = "ai.ollama.app"
+match = ['{LOCALAPPDATA}\Programs\Ollama\']
+
+[[case]]
+rule = "ai.ollama.logs"
+match = ['{LOCALAPPDATA}\Ollama\']
+
+[[case]]
+rule = "ai.lmstudio.models"
+match = ['{USERPROFILE}\.lmstudio\models\', '{USERPROFILE}\.cache\lm-studio\models\']
+
+[[case]]
+rule = "ai.lmstudio.data"
+match = ['{USERPROFILE}\.lmstudio\', '{USERPROFILE}\.cache\lm-studio\']
+
+[[case]]
+rule = "ai.comfyui.models"
+tree = ['E:\ComfyUI\custom_nodes\', 'E:\ComfyUI\main.py']
+match = ['E:\ComfyUI\models\']
+no_match = ['E:\Other\models\']
+
+[[case]]
+rule = "ai.comfyui.output"
+tree = ['E:\ComfyUI\comfy\']
+match = ['E:\ComfyUI\output\', 'E:\ComfyUI\input\']
+no_match = ['E:\Other\output\']
+
+[[case]]
+rule = "ai.webui.models"
+tree = ['E:\sd\webui.py']
+match = ['E:\sd\models\', 'E:\sd\embeddings\']
+no_match = ['E:\notsd\models\']
+
+[[case]]
+rule = "ai.webui.outputs"
+tree = ['E:\forge\webui-user.bat']
+match = ['E:\forge\outputs\']
+no_match = ['E:\notsd\outputs\']
+
+[[case]]
+rule = "ai.torch_hub"
+match = ['{USERPROFILE}\.cache\torch\']
+
+[[case]]
+rule = "ai.whisper"
+match = ['{USERPROFILE}\.cache\whisper\']
+
+[[case]]
+rule = "ai.keras"
+match = ['{USERPROFILE}\.keras\models\', '{USERPROFILE}\.keras\datasets\']
+
+[[case]]
+rule = "ai.gpt4all"
+match = ['{LOCALAPPDATA}\nomic.ai\GPT4All\']
+
+[[case]]
+rule = "ai.copilot.data"
+match = ['{USERPROFILE}\.copilot\', '{LOCALAPPDATA}\github-copilot\']
+
+[[case]]
+rule = "ai.copilot.logs"
+match = ['{USERPROFILE}\.copilot\logs\']
+
+[[case]]
+rule = "ai.tabnine"
+match = ['{APPDATA}\TabNine\']
+
+[[case]]
+rule = "ai.model_files"
+match = ['E:\models\flux.safetensors', 'E:\models\llama.GGUF', 'E:\models\net.onnx', 'E:\models\sd15.ckpt']
+
+[[case]]
+rule = "ai.model_misnamed"
+tree = [{ path = 'E:\models\llama.bin', magic = "gguf" }, { path = 'E:\models\weights', magic = "safetensors" }]
+match = ['E:\models\llama.bin', 'E:\models\weights']
+no_match = ['E:\models\plain.bin']
+
+# ============================================================================ claude
+
+[[case]]
+rule = "claude.code.home"
+match = ['{USERPROFILE}\.claude\']
+
+[[case]]
+rule = "claude.code.config"
+match = ['{USERPROFILE}\.claude\settings.json', '{USERPROFILE}\.claude\CLAUDE.md', '{USERPROFILE}\.claude\.credentials.json', '{USERPROFILE}\.claude.json', '{USERPROFILE}\.claude\agents\']
+no_match = ['{USERPROFILE}\.claude\projects\c--proj\CLAUDE.md']
+
+[[case]]
+rule = "claude.code.projects"
+match = ['{USERPROFILE}\.claude\projects\']
+
+[[case]]
+rule = "claude.code.file_history"
+match = ['{USERPROFILE}\.claude\file-history\']
+
+[[case]]
+rule = "claude.code.sessions"
+match = ['{USERPROFILE}\.claude\sessions\', '{USERPROFILE}\.claude\session-env\', '{USERPROFILE}\.claude\history.jsonl', '{USERPROFILE}\.claude\todos\']
+
+[[case]]
+rule = "claude.code.caches"
+match = ['{USERPROFILE}\.claude\cache\', '{USERPROFILE}\.claude\debug\', '{USERPROFILE}\.claude\shell-snapshots\', '{USERPROFILE}\.claude\ide\', '{USERPROFILE}\.claude\downloads\', '{USERPROFILE}\.claude\stats-cache.json']
+
+[[case]]
+rule = "claude.code.paste_cache"
+match = ['{USERPROFILE}\.claude\paste-cache\']
+
+[[case]]
+rule = "claude.code.backups"
+match = ['{USERPROFILE}\.claude\backups\', '{USERPROFILE}\.claude.json.backup.1760000000', '{USERPROFILE}\.claude\settings.json.bak-statusbar']
+no_match = ['{USERPROFILE}\.claude\settings.json', '{USERPROFILE}\.claude-other.json']
+auto_near_miss = false
+
+[[case]]
+rule = "claude.code.plugins"
+match = ['{USERPROFILE}\.claude\plugins\', '{USERPROFILE}\.claude\skills\']
+
+[[case]]
+rule = "claude.code.plugin_cache"
+match = ['{USERPROFILE}\.claude\plugins\cache\', '{USERPROFILE}\.claude\plugins\marketplaces\']
+no_match = ['{USERPROFILE}\.claude\plugins\data\']
+
+[[case]]
+rule = "claude.code.native_install"
+match = ['{USERPROFILE}\.local\share\claude\', '{USERPROFILE}\.local\bin\claude.exe']
+no_match = ['{USERPROFILE}\.local\bin\other.exe']
+
+[[case]]
+rule = "claude.code.native_state"
+match = ['{USERPROFILE}\.local\state\claude\']
+
+[[case]]
+rule = "claude.code.cli_cache"
+match = ['{LOCALAPPDATA}\claude-cli-nodejs\']
+
+[[case]]
+rule = "claude.code.npm_package"
+match = ['{APPDATA}\npm\node_modules\@anthropic-ai\claude-code\']
+no_match = ['{APPDATA}\npm\node_modules\@anthropic-ai\sdk\']
+
+[[case]]
+rule = "claude.code.ide_extension"
+match = ['{USERPROFILE}\.vscode\extensions\anthropic.claude-code-2.1.284-win32-x64\', '{USERPROFILE}\.cursor\extensions\anthropic.claude-code-2.0.1\']
+no_match = ['{USERPROFILE}\.vscode\extensions\ms-python.python-2024.1.0\']
+auto_near_miss = false
+
+[[case]]
+rule = "claude.desktop.install"
+match = ['{LOCALAPPDATA}\AnthropicClaude\']
+
+[[case]]
+rule = "claude.desktop.updates"
+match = ['{LOCALAPPDATA}\AnthropicClaude\packages\']
+no_match = ['{LOCALAPPDATA}\AnthropicClaude\app-1.0.0\']
+
+[[case]]
+rule = "claude.desktop.data"
+match = ['{APPDATA}\Claude\', '{LOCALAPPDATA}\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\']
+
+[[case]]
+rule = "claude.desktop.cache"
+match = ['{APPDATA}\Claude\Cache\', '{APPDATA}\Claude\Partitions\claude\Code Cache\', '{LOCALAPPDATA}\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\GPUCache\']
+no_match = ['{APPDATA}\Claude\Local Storage\', '{APPDATA}\Claude\claude_desktop_config.json']
+
+[[case]]
+rule = "claude.desktop.logs"
+match = ['{APPDATA}\Claude\logs\']
+
+[[case]]
+rule = "claude.desktop.extensions"
+match = ['{APPDATA}\Claude\Claude Extensions\', '{APPDATA}\Claude\vm_bundles\']
+
+# ============================================================================ dev
+
+[[case]]
+rule = "dev.node_modules"
+tree = ['{USERPROFILE}\proj\package.json', '{DOCUMENTS}\web\package.json']
+match = ['{USERPROFILE}\proj\node_modules\', '{DOCUMENTS}\web\node_modules\']
+no_match = ['E:\nopkg\node_modules\']
+
+[[case]]
+rule = "dev.node_modules_stale"
+tree = [{ path = 'E:\old\package.json', age_days = 400 }, { path = 'E:\old\node_modules\', age_days = 400 }, 'E:\fresh\package.json']
+match = ['E:\old\node_modules\']
+no_match = ['E:\fresh\node_modules\']
+
+[[case]]
+rule = "dev.js_build_output"
+tree = ['E:\web\package.json']
+match = ['E:\web\.next\', 'E:\web\dist\', 'E:\web\build\', 'E:\web\.svelte-kit\', 'E:\web\.turbo\']
+no_match = ['E:\plain\dist\', 'E:\plain\build\']
+
+[[case]]
+rule = "dev.npm_global"
+match = ['{APPDATA}\npm\node_modules\']
+
+[[case]]
+rule = "dev.npm_cache"
+match = ['{LOCALAPPDATA}\npm-cache\', '{APPDATA}\npm-cache\']
+
+[[case]]
+rule = "dev.yarn_cache"
+match = ['{LOCALAPPDATA}\Yarn\Cache\', '{LOCALAPPDATA}\Yarn\Berry\cache\']
+
+[[case]]
+rule = "dev.pnpm_store"
+match = ['{LOCALAPPDATA}\pnpm\store\', '{LOCALAPPDATA}\pnpm-cache\', '{USERPROFILE}\.pnpm-store\']
+
+[[case]]
+rule = "dev.pnpm_store_volume"
+match = ['D:\.pnpm-store\', 'E:\.pnpm-store\']
+no_match = ['E:\proj\.pnpm-store\']
+
+[[case]]
+rule = "dev.bun_cache"
+match = ['{USERPROFILE}\.bun\install\cache\']
+
+[[case]]
+rule = "dev.js_tool_caches"
+match = ['{LOCALAPPDATA}\node-gyp\Cache\', '{LOCALAPPDATA}\electron\Cache\', '{LOCALAPPDATA}\Cypress\Cache\', '{LOCALAPPDATA}\deno\']
+
+[[case]]
+rule = "dev.node_cli_cache"
+match = ['{LOCALAPPDATA}\hardhat-nodejs\', '{LOCALAPPDATA}\prisma-nodejs\']
+no_match = ['{LOCALAPPDATA}\nodejs\', '{LOCALAPPDATA}\Tool\hardhat-nodejs\']
+auto_near_miss = false
+
+[[case]]
+rule = "dev.node_cli_config"
+match = ['{APPDATA}\shopify-cli-kit-nodejs\']
+no_match = ['{APPDATA}\nodejs-thing\']
+auto_near_miss = false
+
+[[case]]
+rule = "dev.playwright_browsers"
+match = ['{LOCALAPPDATA}\ms-playwright\']
+
+[[case]]
+rule = "dev.nvm"
+match = ['{LOCALAPPDATA}\nvm\']
+
+[[case]]
+rule = "dev.pip_cache"
+match = ['{LOCALAPPDATA}\pip\Cache\']
+
+[[case]]
+rule = "dev.conda_pkgs"
+tree = ['E:\miniconda3\conda-meta\']
+match = ['E:\miniconda3\pkgs\']
+no_match = ['E:\other\pkgs\']
+
+[[case]]
+rule = "dev.conda_user_pkgs"
+match = ['{USERPROFILE}\.conda\pkgs\']
+
+[[case]]
+rule = "dev.poetry_uv_cache"
+match = ['{LOCALAPPDATA}\pypoetry\Cache\', '{LOCALAPPDATA}\uv\cache\']
+
+[[case]]
+rule = "dev.pycache"
+match = ['E:\py\__pycache__\', '{DOCUMENTS}\scripts\__pycache__\']
+
+[[case]]
+rule = "dev.python_tool_caches"
+match = ['E:\py\.pytest_cache\', 'E:\py\.mypy_cache\', 'E:\py\.tox\']
+
+[[case]]
+rule = "dev.python_venv"
+tree = ['E:\py\.venv\pyvenv.cfg', 'E:\py\myenv\pyvenv.cfg']
+match = ['E:\py\.venv\', 'E:\py\myenv\']
+no_match = ['E:\py\src\', 'E:\py\venv-without-cfg\']
+
+[[case]]
+rule = "dev.cargo_registry"
+match = ['{USERPROFILE}\.cargo\registry\', '{USERPROFILE}\.cargo\git\', '{CARGO_HOME}\registry\']
+no_match = ['{USERPROFILE}\.cargo\bin\']
+
+[[case]]
+rule = "dev.cargo_target"
+tree = ['E:\rs\Cargo.toml']
+match = ['E:\rs\target\']
+no_match = ['E:\notrust\target\']
+
+[[case]]
+rule = "dev.rustup_toolchains"
+match = ['{USERPROFILE}\.rustup\toolchains\', '{RUSTUP_HOME}\toolchains\']
+
+[[case]]
+rule = "dev.rustup_downloads"
+match = ['{USERPROFILE}\.rustup\downloads\', '{USERPROFILE}\.rustup\tmp\']
+
+[[case]]
+rule = "dev.go_mod_cache"
+match = ['{USERPROFILE}\go\pkg\mod\', '{GOMODCACHE}\']
+
+[[case]]
+rule = "dev.go_build_cache"
+match = ['{LOCALAPPDATA}\go-build\']
+
+[[case]]
+rule = "dev.gradle_caches"
+match = ['{USERPROFILE}\.gradle\caches\']
+
+[[case]]
+rule = "dev.gradle_wrapper"
+match = ['{USERPROFILE}\.gradle\wrapper\dists\']
+
+[[case]]
+rule = "dev.gradle_project"
+tree = ['E:\android\build.gradle.kts']
+match = ['E:\android\build\', 'E:\android\.gradle\']
+no_match = ['E:\nogradle\.gradle\']
+
+[[case]]
+rule = "dev.maven_repository"
+match = ['{USERPROFILE}\.m2\repository\']
+
+[[case]]
+rule = "dev.maven_target"
+tree = ['E:\jv\pom.xml']
+match = ['E:\jv\target\']
+no_match = ['E:\nojv\target\']
+
+[[case]]
+rule = "dev.nuget_packages"
+match = ['{USERPROFILE}\.nuget\packages\', '{LOCALAPPDATA}\NuGet\v3-cache\', '{LOCALAPPDATA}\NuGet\plugins-cache\']
+
+[[case]]
+rule = "dev.dotnet_bin_obj"
+tree = ['E:\cs\App.csproj', 'E:\fs\Lib.fsproj']
+match = ['E:\cs\bin\', 'E:\cs\obj\', 'E:\fs\obj\']
+no_match = ['E:\scripts\bin\']
+
+[[case]]
+rule = "dev.cmake_build"
+tree = ['E:\cpp\CMakeLists.txt']
+match = ['E:\cpp\build\', 'E:\cpp\out\']
+no_match = ['E:\nocmake\out\']
+
+[[case]]
+rule = "dev.jetbrains_caches"
+match = ['{LOCALAPPDATA}\JetBrains\IntelliJIdea2024.1\caches\', '{LOCALAPPDATA}\JetBrains\Rider2024.2\index\']
+
+[[case]]
+rule = "dev.android_system_images"
+match = ['{LOCALAPPDATA}\Android\Sdk\system-images\', '{USERPROFILE}\.android\avd\']
+
+[[case]]
+rule = "dev.android_sdk"
+match = ['{LOCALAPPDATA}\Android\Sdk\']
+
+[[case]]
+rule = "dev.android_cache"
+match = ['{USERPROFILE}\.android\cache\']
+
+[[case]]
+rule = "dev.vs_solution_cache"
+tree = ['E:\sln\App.sln', 'E:\cmk\CMakeLists.txt']
+match = ['E:\sln\.vs\', 'E:\cmk\.vs\']
+no_match = ['E:\nosln\.vs\']
+
+[[case]]
+rule = "dev.vs_component_cache"
+match = ['{LOCALAPPDATA}\Microsoft\VisualStudio\17.0_8a3b\ComponentModelCache\']
+
+[[case]]
+rule = "dev.vs_installer_packages"
+match = ['{PROGRAMDATA}\Microsoft\VisualStudio\Packages\']
+
+[[case]]
+rule = "dev.vcpkg"
+tree = ['E:\vcpkg\.vcpkg-root']
+match = ['E:\vcpkg\buildtrees\', 'E:\vcpkg\downloads\', 'E:\vcpkg\packages\']
+no_match = ['E:\stuff\downloads\']
+
+[[case]]
+rule = "dev.unity_library"
+tree = ['E:\game\ProjectSettings\', 'E:\game\Assets\']
+match = ['E:\game\Library\']
+no_match = ['E:\docs\Library\']
+
+[[case]]
+rule = "dev.unity_temp"
+tree = ['E:\game\ProjectSettings\']
+match = ['E:\game\Temp\', 'E:\game\Logs\']
+no_match = ['E:\docs\Temp\']
+
+[[case]]
+rule = "dev.unreal_intermediate"
+tree = ['E:\ue\Shooter.uproject']
+match = ['E:\ue\DerivedDataCache\', 'E:\ue\Intermediate\', 'E:\ue\Binaries\']
+no_match = ['E:\noue\Intermediate\']
+
+[[case]]
+rule = "dev.unreal_saved"
+tree = ['E:\ue\Shooter.uproject']
+match = ['E:\ue\Saved\']
+no_match = ['E:\noue\Saved\']
+
+[[case]]
+rule = "dev.unreal_shared_ddc"
+match = ['{LOCALAPPDATA}\UnrealEngine\Common\DerivedDataCache\']
+
+[[case]]
+rule = "dev.docker_disk"
+match = ['{LOCALAPPDATA}\Docker\wsl\disk\docker_data.vhdx', '{LOCALAPPDATA}\Docker\wsl\main\ext4.vhdx', '{LOCALAPPDATA}\Docker\wsl\data\ext4.vhdx']
+
+[[case]]
+rule = "dev.docker_logs"
+match = ['{LOCALAPPDATA}\Docker\log\']
+
+[[case]]
+rule = "dev.wsl_disk"
+match = ['{LOCALAPPDATA}\Packages\CanonicalGroupLimited.Ubuntu22.04LTS_79rhkp1fndgsc\LocalState\ext4.vhdx', '{WSL_DISTRO}\ext4.vhdx']
+no_match = ['{LOCALAPPDATA}\Packages\CanonicalGroupLimited.Ubuntu22.04LTS_79rhkp1fndgsc\LocalState\other.vhdx']
+
+[[case]]
+rule = "dev.wsl_disk_any"
+match = ['E:\vms\custom\ext4.vhdx']
+
+[[case]]
+rule = "dev.git"
+tree = ['E:\repo\.git\HEAD']
+match = ['E:\repo\.git\', 'E:\worktree\.git']
+no_match = ['E:\repo\.github\', 'E:\repo\.gitignore']
+
+[[case]]
+rule = "dev.git_large"
+tree = [{ path = 'E:\big\.git\objects\pack\pack-1.pack', size = "2 GiB" }, 'E:\small\.git\HEAD']
+match = ['E:\big\.git\']
+no_match = ['E:\small\.git\']
+
+# ============================================================================ games
+
+[[case]]
+rule = "games.steam.library"
+tree = ['{PROGRAMFILES_X86}\Steam\steamapps\common\', '{STEAM_LIBRARY}\steamapps\common\', 'E:\Games\SteamLibrary\steamapps\common\']
+match = ['{PROGRAMFILES_X86}\Steam\steamapps\', '{STEAM_LIBRARY}\steamapps\', 'E:\Games\SteamLibrary\steamapps\']
+no_match = ['E:\notsteam\steamapps\']
+
+[[case]]
+rule = "games.steam.game"
+match = ['{PROGRAMFILES_X86}\Steam\steamapps\common\Rust\', '{STEAM_LIBRARY}\steamapps\common\The Finals\']
+no_match = ['{STEAM_LIBRARY}\steamapps\sourcemods\Mod\']
+auto_near_miss = false
+
+[[case]]
+rule = "games.steam.shader_cache"
+match = ['{PROGRAMFILES_X86}\Steam\steamapps\shadercache\', '{STEAM_LIBRARY}\steamapps\shadercache\']
+
+[[case]]
+rule = "games.steam.leftovers"
+match = ['{PROGRAMFILES_X86}\Steam\steamapps\downloading\', '{STEAM_LIBRARY}\steamapps\temp\']
+
+[[case]]
+rule = "games.steam.workshop"
+match = ['{STEAM_LIBRARY}\steamapps\workshop\']
+
+[[case]]
+rule = "games.steam.client_caches"
+match = ['{LOCALAPPDATA}\Steam\htmlcache\', '{PROGRAMFILES_X86}\Steam\logs\', '{PROGRAMFILES_X86}\Steam\dumps\']
+no_match = ['{PROGRAMFILES_X86}\Steam\config\']
+
+[[case]]
+rule = "games.epic.game"
+match = ['{EPIC_GAME}\', '{PROGRAMFILES}\Epic Games\Fortnite\']
+no_match = ['{PROGRAMFILES}\Other Games\Fortnite\']
+auto_near_miss = false
+
+[[case]]
+rule = "games.epic.manifests"
+match = ['{PROGRAMDATA}\Epic\EpicGamesLauncher\']
+
+[[case]]
+rule = "games.epic.webcache"
+match = ['{LOCALAPPDATA}\EpicGamesLauncher\Saved\webcache_4430\']
+no_match = ['{LOCALAPPDATA}\EpicGamesLauncher\Saved\Logs\']
+auto_near_miss = false
+
+[[case]]
+rule = "games.battlenet.cache"
+match = ['{PROGRAMDATA}\Battle.net\Cache\', '{LOCALAPPDATA}\Battle.net\BrowserCache\']
+
+[[case]]
+rule = "games.ea.cache"
+match = ['{LOCALAPPDATA}\Electronic Arts\EA Desktop\cache\']
+
+[[case]]
+rule = "games.ubisoft.games"
+match = ['{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\games\Far Cry 6\']
+no_match = ['{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\savegames\1\']
+auto_near_miss = false
+
+[[case]]
+rule = "games.ubisoft.cache"
+match = ['{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\cache\', '{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\logs\']
+no_match = ['{PROGRAMFILES_X86}\Ubisoft\Ubisoft Game Launcher\savegames\']
+
+[[case]]
+rule = "games.gog.games"
+match = ['{PROGRAMFILES_X86}\GOG Galaxy\Games\Witcher 3\', '{SYSTEMDRIVE}\GOG Games\Cyberpunk\']
+no_match = ['{PROGRAMFILES_X86}\GOG Galaxy\Dependencies\']
+auto_near_miss = false
+
+[[case]]
+rule = "games.gog.cache"
+match = ['{PROGRAMDATA}\GOG.com\Galaxy\webcache\']
+
+[[case]]
+rule = "games.xbox.games"
+match = ['C:\XboxGames\', 'D:\XboxGames\']
+no_match = ['D:\backup\XboxGames\']
+
+[[case]]
+rule = "games.roblox.versions"
+match = ['{LOCALAPPDATA}\Roblox\Versions\']
+
+[[case]]
+rule = "games.roblox.logs"
+match = ['{LOCALAPPDATA}\Roblox\logs\', '{LOCALAPPDATA}\Roblox\Downloads\']
+
+# ============================================================================ media
+
+[[case]]
+rule = "media.obs.recordings"
+match = ['{OBS_RECORDINGS}\2026-01-01 10-00-00.mkv', '{OBS_RECORDINGS}\clip.mp4']
+no_match = ['{OBS_RECORDINGS}\notes.txt']
+
+[[case]]
+rule = "media.obs.logs"
+match = ['{APPDATA}\obs-studio\logs\', '{APPDATA}\obs-studio\crashes\']
+no_match = ['{APPDATA}\obs-studio\basic\']
+
+[[case]]
+rule = "media.adobe.media_cache"
+match = ['{APPDATA}\Adobe\Common\Media Cache Files\', '{APPDATA}\Adobe\Common\Peak Files\']
+
+[[case]]
+rule = "media.adobe.disk_cache"
+match = ['{APPDATA}\Adobe\Common\Disk Cache\', '{LOCALAPPDATA}\Adobe\After Effects\24.0\Disk Cache - WORKSTATION\']
+no_match = ['E:\Disk Cache\', '{LOCALAPPDATA}\Adobe\After Effects\24.0\Media\']
+auto_near_miss = false
+
+[[case]]
+rule = "media.resolve.cache"
+match = ['E:\Resolve\CacheClip\']
+
+[[case]]
+rule = "media.resolve.proxies"
+match = ['E:\Resolve\ProxyMedia\', 'E:\Resolve\OptimizedMedia\']
+
+[[case]]
+rule = "media.resolve.logs"
+match = ['{APPDATA}\Blackmagic Design\DaVinci Resolve\Support\logs\']
+
+[[case]]
+rule = "media.capcut.cache"
+match = ['{LOCALAPPDATA}\CapCut\User Data\Cache\']
+
+[[case]]
+rule = "media.capcut.projects"
+match = ['{LOCALAPPDATA}\CapCut\User Data\Projects\']
+
+[[case]]
+rule = "media.lightroom.previews"
+match = ['E:\Photos\Lightroom Catalog Previews.lrdata\', 'E:\Photos\Lightroom Catalog Smart Previews.lrdata\']
+no_match = ['E:\Photos\Lightroom Catalog.lrcat']
+
+# ============================================================================ downloads
+
+[[case]]
+rule = "downloads.old_installer"
+tree = [{ path = '{DOWNLOADS}\setup.exe', age_days = 60 }, { path = '{DOWNLOADS}\tool.msi', age_days = 45 }, '{DOWNLOADS}\fresh.exe', { path = 'E:\old\setup.exe', age_days = 60 }]
+match = ['{DOWNLOADS}\setup.exe', '{DOWNLOADS}\tool.msi']
+no_match = ['{DOWNLOADS}\fresh.exe', 'E:\old\setup.exe']
+
+[[case]]
+rule = "downloads.extracted_archive"
+tree = ['{DOWNLOADS}\pack.zip', '{DOWNLOADS}\pack\readme.txt', '{DOWNLOADS}\lonely.zip', '{DOWNLOADS}\notes.7z', '{DOWNLOADS}\notes.txt']
+match = ['{DOWNLOADS}\pack.zip']
+no_match = ['{DOWNLOADS}\lonely.zip', '{DOWNLOADS}\notes.7z']
+
+[[case]]
+rule = "downloads.disk_image"
+match = ['{DOWNLOADS}\Win11_24H2.iso', '{DOWNLOADS}\disk.vhdx']
+no_match = ['E:\isos\debian.iso']
+
+[[case]]
+rule = "downloads.partial"
+match = ['{DOWNLOADS}\big.zip.crdownload', '{DOWNLOADS}\movie.part']
+no_match = ['E:\x\big.zip.crdownload']
+
+[[case]]
+rule = "downloads.repeated"
+tree = ['{DOWNLOADS}\setup.exe', '{DOWNLOADS}\setup (1).exe', '{DOWNLOADS}\README', '{DOWNLOADS}\README (2)']
+match = ['{DOWNLOADS}\setup (1).exe', '{DOWNLOADS}\README (2)']
+no_match = ['{DOWNLOADS}\other (1).exe', '{DOWNLOADS}\setup.exe']
+
+[[case]]
+rule = "downloads.repeated_flag"
+match = ['{DOWNLOADS}\scan (3).pdf']
+no_match = ['{DOWNLOADS}\other.pdf', '{DOWNLOADS}\scan (x).pdf']
+auto_near_miss = false
+
+# ============================================================================ generic
+
+[[case]]
+rule = "generic.tmp_files"
+match = ['E:\work\a.tmp', '{DOCUMENTS}\~WRL0001.tmp']
+
+[[case]]
+rule = "generic.office_owner_files"
+match = ['E:\work\~$report.docx', '{DOCUMENTS}\~$budget.xlsx']
+no_match = ['E:\work\report.docx']
+auto_near_miss = false
+
+[[case]]
+rule = "generic.big_logs"
+tree = [{ path = '{LOCALAPPDATA}\SomeApp\app.log', size = "20 MB" }, { path = '{PROGRAMDATA}\Vendor\service.log', size = "50 MB" }, { path = '{LOCALAPPDATA}\SomeApp\small.log', size = 100 }, { path = 'E:\big.log', size = "20 MB" }]
+match = ['{LOCALAPPDATA}\SomeApp\app.log', '{PROGRAMDATA}\Vendor\service.log']
+no_match = ['{LOCALAPPDATA}\SomeApp\small.log', 'E:\big.log']
+
+[[case]]
+rule = "generic.crash_dumps"
+match = ['E:\work\app.dmp', 'E:\work\proc.mdmp']
+
+[[case]]
+rule = "generic.backup_files"
+match = ['E:\work\db.bak']
+
+[[case]]
+rule = "generic.thumbs_db"
+match = ['E:\photos\Thumbs.db']
+
+[[case]]
+rule = "generic.zero_byte_file"
+tree = [{ path = 'E:\work\empty.txt', size = 0 }]
+match = ['E:\work\empty.txt']
+no_match = ['E:\work\full.txt']
+auto_near_miss = false
+
+[[case]]
+rule = "generic.empty_folder"
+tree = ['E:\work\full\x.txt', { path = 'E:\work\denied\', flags = ["access_denied"] }]
+match = ['E:\work\emptydir\']
+no_match = ['E:\work\full\', 'E:\work\denied\']
+auto_near_miss = false
+
+[[case]]
+rule = "generic.old_large"
+tree = [{ path = 'E:\work\old.bin', size = "2 GiB", age_days = 400 }, { path = 'E:\work\new.bin', size = "2 GiB" }, { path = 'E:\work\oldsmall.bin', age_days = 400 }]
+match = ['E:\work\old.bin']
+no_match = ['E:\work\new.bin', 'E:\work\oldsmall.bin']
+auto_near_miss = false

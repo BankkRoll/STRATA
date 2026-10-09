@@ -1,0 +1,138 @@
+# Personal folders and content types. These rules only categorize: personal
+# data is never suggested for cleanup, so everything here is `careful`.
+# Folder rules use weak inheritance so any more specific rule inside (a
+# project's node_modules in Documents, an installer in Downloads) still wins.
+
+schema_version = 1
+pack = "userdata"
+version = 1
+description = "Known personal folders and generic content-type categories."
+
+[[rule]]
+id = "userdata.documents"
+name = "Documents"
+category = "documents"
+safety = "careful"
+inherit = "weak"
+explain = "Your Documents folder. Strata never suggests deleting personal files; review items individually."
+match.path = '{DOCUMENTS}'
+
+[[rule]]
+id = "userdata.desktop"
+name = "Desktop"
+category = "documents"
+safety = "careful"
+inherit = "weak"
+explain = "Files on your desktop. Review items individually."
+match.path = '{DESKTOP}'
+
+[[rule]]
+id = "userdata.pictures"
+name = "Pictures"
+category = "media"
+safety = "careful"
+inherit = "weak"
+explain = "Your Pictures folder. Personal media is never suggested for cleanup."
+match.path = '{PICTURES}'
+
+[[rule]]
+id = "userdata.music"
+name = "Music"
+category = "media"
+safety = "careful"
+inherit = "weak"
+explain = "Your Music folder. Personal media is never suggested for cleanup."
+match.path = '{MUSIC}'
+
+[[rule]]
+id = "userdata.videos"
+name = "Videos"
+category = "media"
+safety = "careful"
+inherit = "weak"
+explain = "Your Videos folder. Personal media is never suggested for cleanup."
+match.path = '{VIDEOS}'
+
+[[rule]]
+id = "userdata.downloads"
+name = "Downloads"
+category = "downloads"
+safety = "careful"
+inherit = "weak"
+explain = "Files you downloaded. Strata flags old installers, already-extracted archives and repeated downloads inside; everything else needs your review."
+match.path = '{DOWNLOADS}'
+
+[[rule]]
+id = "userdata.public"
+name = "Public folder"
+category = "documents"
+safety = "careful"
+inherit = "weak"
+explain = "Files shared between all users of this PC."
+match.path = '{PUBLIC}'
+
+[[rule]]
+id = "userdata.saved_games"
+name = "Saved games"
+category = "games"
+safety = "careful"
+inherit = "weak"
+explain = "Game saves and settings. Some games keep their only copy of your progress here."
+match.path = '{USERPROFILE}\Saved Games'
+
+[[rule]]
+id = "userdata.onedrive_root"
+name = "OneDrive folder"
+category = "cloud"
+safety = "careful"
+inherit = "weak"
+explain = "Your OneDrive folder. Deleting a synced file deletes it from the cloud too; use \"Free up space\" to keep files online-only."
+match.path_glob = '{USERPROFILE}\OneDrive*'
+
+[[rule]]
+id = "userdata.images"
+name = "Image"
+category = "media"
+safety = "careful"
+explain = "A photo or image. Personal media is never suggested for cleanup."
+match.ext = ["jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp", "heic", "heif", "avif", "raw", "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "psd", "svg"]
+
+[[rule]]
+id = "userdata.video_files"
+name = "Video"
+category = "media"
+safety = "careful"
+explain = "A video. Personal media is never suggested for cleanup."
+match.ext = ["mp4", "mkv", "mov", "avi", "wmv", "webm", "m4v", "flv", "mts", "m2ts", "3gp", "mpg", "mpeg"]
+
+[[rule]]
+id = "userdata.audio_files"
+name = "Audio"
+category = "media"
+safety = "careful"
+explain = "An audio file. Personal media is never suggested for cleanup."
+match.ext = ["mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma", "aiff", "alac"]
+
+[[rule]]
+id = "userdata.document_files"
+name = "Document"
+category = "documents"
+safety = "careful"
+explain = "A document. Personal files are never suggested for cleanup."
+match.ext = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub", "pages", "numbers", "key", "one"]
+
+[[rule]]
+id = "userdata.archive_files"
+name = "Archive"
+category = "archives"
+safety = "careful"
+explain = "A compressed archive. It may be the only copy of what it contains."
+match.ext = ["zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz", "zst", "cab"]
+
+[[rule]]
+id = "userdata.disk_images"
+name = "Disk image"
+category = "archives"
+safety = "careful"
+explain = "A disc or virtual-disk image. Often large; check whether it is still mounted or used by a virtual machine before removing it."
+match.ext = ["iso", "img", "vhd", "vhdx", "vmdk", "qcow2", "vdi", "wim", "esd"]

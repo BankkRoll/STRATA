@@ -1,0 +1,112 @@
+# Media and creator tools (SPEC §12.2 "Media / creator"). Render and media
+# caches are `safe`/`probably`; recordings and projects are user content and
+# `careful`. OBS recording folders come from OBS's config ({OBS_RECORDINGS}).
+
+schema_version = 1
+pack = "media"
+version = 1
+description = "OBS, Adobe Premiere / After Effects, DaVinci Resolve, CapCut and Lightroom."
+
+[[rule]]
+id = "media.obs.recordings"
+name = "OBS recordings"
+category = "media"
+safety = "careful"
+app = "OBS Studio"
+explain = "Videos you recorded with OBS. Your own content; review before deleting."
+match.path_glob = '{OBS_RECORDINGS}\*'
+match.ext = ["mkv", "mp4", "flv", "mov", "ts", "m3u8", "hybrid_mp4"]
+
+[[rule]]
+id = "media.obs.logs"
+name = "OBS logs and crash reports"
+category = "temp"
+safety = "safe"
+app = "OBS Studio"
+explain = "OBS session logs and crash reports."
+match.path = ['{APPDATA}\obs-studio\logs', '{APPDATA}\obs-studio\crashes', '{APPDATA}\obs-studio\profiler_data']
+
+[[rule]]
+id = "media.adobe.media_cache"
+name = "Adobe media cache"
+category = "caches"
+subcategory = "media.cache"
+safety = "safe"
+regenerable = true
+app = "Adobe Creative Cloud"
+explain = "Conformed audio, peak files and indexes Premiere Pro, After Effects and Media Encoder build from your footage. Rebuilt when projects are opened (Preferences > Media Cache can also clean it)."
+match.path = ['{APPDATA}\Adobe\Common\Media Cache Files', '{APPDATA}\Adobe\Common\Media Cache', '{APPDATA}\Adobe\Common\Peak Files', '{LOCALAPPDATA}\Adobe\Common\Media Cache Files']
+
+[[rule]]
+id = "media.adobe.disk_cache"
+name = "After Effects disk cache"
+category = "caches"
+subcategory = "media.cache"
+safety = "safe"
+regenerable = true
+app = "Adobe After Effects"
+explain = "Rendered frames After Effects caches to speed up previews. Rebuilt as you preview (Edit > Purge > All Memory & Disk Cache)."
+match.dir_name = ["Disk Cache", "Disk Cache - *", "After Effects Disk Cache"]
+match.under = ['{APPDATA}\Adobe', '{LOCALAPPDATA}\Adobe']
+
+[[rule]]
+id = "media.resolve.cache"
+name = "DaVinci Resolve render cache"
+category = "caches"
+subcategory = "media.cache"
+safety = "safe"
+regenerable = true
+app = "DaVinci Resolve"
+explain = "Render-cache clips DaVinci Resolve creates for smooth playback. Rebuilt on demand (Playback > Delete Render Cache)."
+match.dir_name = "CacheClip"
+
+[[rule]]
+id = "media.resolve.proxies"
+name = "DaVinci Resolve proxies"
+category = "caches"
+subcategory = "media.cache"
+safety = "probably"
+regenerable = true
+app = "DaVinci Resolve"
+explain = "Proxy and optimized media generated from your footage. Regenerating them takes time but loses nothing."
+match.dir_name = ["ProxyMedia", "OptimizedMedia"]
+
+[[rule]]
+id = "media.resolve.logs"
+name = "DaVinci Resolve logs"
+category = "temp"
+safety = "safe"
+app = "DaVinci Resolve"
+explain = "Resolve's diagnostic logs."
+match.path = '{APPDATA}\Blackmagic Design\DaVinci Resolve\Support\logs'
+
+[[rule]]
+id = "media.capcut.cache"
+name = "CapCut cache"
+category = "caches"
+subcategory = "media.cache"
+safety = "safe"
+regenerable = true
+app = "CapCut"
+explain = "CapCut's web, effects and render caches. Rebuilt on demand."
+match.path = ['{LOCALAPPDATA}\CapCut\User Data\Cache', '{LOCALAPPDATA}\CapCut\User Data\CacheV2']
+
+[[rule]]
+id = "media.capcut.projects"
+name = "CapCut projects"
+category = "media"
+safety = "careful"
+app = "CapCut"
+explain = "Your CapCut drafts and projects."
+match.path = '{LOCALAPPDATA}\CapCut\User Data\Projects'
+
+[[rule]]
+id = "media.lightroom.previews"
+name = "Lightroom previews"
+category = "caches"
+subcategory = "media.cache"
+safety = "probably"
+regenerable = true
+app = "Adobe Lightroom Classic"
+explain = "Preview images Lightroom Classic renders from your photos. Rebuilt as you browse; Smart Previews are needed to edit while originals are offline."
+match.dir_name = "*Previews.lrdata"

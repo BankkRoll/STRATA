@@ -1,0 +1,348 @@
+# Windows system locations (SPEC §12.2 "Windows system") and the built-in
+# defaults: everything under {WINDIR} and Program Files that no rule carves
+# out is `never`.
+
+schema_version = 1
+pack = "windows"
+version = 1
+description = "Windows system files, caches, dumps and the never-delete defaults."
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+
+[[rule]]
+id = "windows.windir"
+name = "Windows system files"
+category = "system"
+safety = "never"
+explain = "Part of Windows. Strata never deletes anything in the Windows folder except the specific temp, dump and cache locations it lists separately."
+match.path = '{WINDIR}'
+
+[[rule]]
+id = "windows.program_files"
+name = "Installed programs"
+category = "apps"
+safety = "never"
+action = "open_tool"
+tool = "app_uninstaller"
+explain = "Installed applications. Remove programs with their uninstaller (Settings > Apps); deleting their files breaks them and leaves registrations behind."
+match.path = ['{PROGRAMFILES}', '{PROGRAMFILES_X86}']
+
+[[rule]]
+id = "windows.windowsapps"
+name = "Microsoft Store app packages"
+category = "apps"
+safety = "never"
+action = "open_tool"
+tool = "app_uninstaller"
+explain = "Installed Store/MSIX packages, owned by Windows. Uninstall the app from Settings > Apps to reclaim this space."
+match.path = '{PROGRAMFILES}\WindowsApps'
+
+[[rule]]
+id = "windows.ntfs_metadata"
+name = "NTFS metadata"
+category = "ntfs_metadata"
+safety = "never"
+explain = "File-system metadata maintained by NTFS itself (the MFT, journal, security descriptors). It cannot and must not be deleted."
+match.flag = "ntfs_metadata"
+
+[[rule]]
+id = "windows.ntfs_metadata_names"
+name = "NTFS metadata"
+category = "ntfs_metadata"
+safety = "never"
+explain = "File-system metadata maintained by NTFS itself (the MFT, journal, security descriptors). It cannot and must not be deleted."
+match.name = ['$MFT', '$MFTMirr', '$LogFile', '$Volume', '$AttrDef', '$Bitmap', '$Boot', '$BadClus', '$Secure', '$UpCase', '$Extend', '$Quota', '$ObjId', '$Reparse', '$RmMetadata']
+match.volume_root = true
+
+[[rule]]
+id = "windows.system_volume_information"
+name = "System Volume Information"
+category = "system"
+safety = "never"
+action = "open_tool"
+tool = "system_protection"
+explain = "Restore points, shadow copies and indexing data. Manage restore points and their disk-space limit in System Protection instead."
+match.dir_name = "System Volume Information"
+match.volume_root = true
+
+[[rule]]
+id = "windows.recycle_bin"
+name = "Recycle Bin"
+category = "recycle_bin"
+safety = "safe"
+action = "open_tool"
+tool = "empty_recycle_bin"
+regenerable = false
+explain = "Files you already deleted. Empty the Recycle Bin to free this space; items here can still be restored until then."
+match.dir_name = '$Recycle.Bin'
+match.volume_root = true
+
+[[rule]]
+id = "windows.hiberfil"
+name = "Hibernation file"
+category = "system"
+safety = "never"
+action = "info_only"
+tool = "hibernation_guidance"
+explain = "Stores memory contents for hibernation and Fast Startup. It cannot be deleted while hibernation is on; running `powercfg /h off` in an administrator terminal removes it (and disables hibernation and Fast Startup)."
+match.file_name = "hiberfil.sys"
+match.volume_root = true
+
+[[rule]]
+id = "windows.pagefile"
+name = "Page and swap files"
+category = "system"
+safety = "never"
+explain = "Virtual memory used by Windows. Its size is managed in System Properties > Performance > Virtual memory; never delete it."
+match.file_name = ["pagefile.sys", "swapfile.sys"]
+match.volume_root = true
+
+[[rule]]
+id = "windows.boot"
+name = "Boot and recovery files"
+category = "system"
+safety = "never"
+explain = "Files Windows needs to start or repair itself."
+match.path = ['{SYSTEMDRIVE}\Boot', '{SYSTEMDRIVE}\EFI', '{SYSTEMDRIVE}\Recovery', '{SYSTEMDRIVE}\bootmgr', '{SYSTEMDRIVE}\BOOTNXT', '{SYSTEMDRIVE}\BOOTSECT.BAK', '{SYSTEMDRIVE}\$WinREAgent', '{SYSTEMDRIVE}\$SysReset']
+
+[[rule]]
+id = "windows.programdata_microsoft"
+name = "Windows and Microsoft service data"
+category = "system"
+safety = "never"
+explain = "Data used by Windows components such as Defender, crypto keys and device setup. Only specific caches inside it are cleanable."
+match.path = '{PROGRAMDATA}\Microsoft'
+
+[[rule]]
+id = "windows.registry_hives"
+name = "User registry"
+category = "system"
+safety = "never"
+explain = "Your user registry hive and its transaction logs. Deleting it destroys your Windows profile."
+match.path_glob = ['{USERPROFILE}\NTUSER.DAT*', '{USERPROFILE}\ntuser.ini', '{LOCALAPPDATA}\Microsoft\Windows\UsrClass.dat*']
+
+[[rule]]
+id = "windows.app_execution_aliases"
+name = "App execution aliases"
+category = "system"
+safety = "never"
+explain = "Zero-byte launchers Windows creates for Store apps (python.exe, winget.exe, ...). They take no space."
+match.path = '{LOCALAPPDATA}\Microsoft\WindowsApps'
+
+[[rule]]
+id = "windows.store_app_data"
+name = "Store app data"
+category = "apps"
+safety = "careful"
+explain = "Per-user data of a Microsoft Store/MSIX app (settings, local files, caches). Uninstalling the app removes it; delete only caches identified separately."
+match.path_glob = '{LOCALAPPDATA}\Packages\*'
+
+[[rule]]
+id = "windows.package_cache"
+name = "Installer package cache"
+category = "apps"
+safety = "careful"
+action = "info_only"
+explain = "Installer bundles kept so programs (Visual Studio, .NET, C++ runtimes) can be repaired or uninstalled. Deleting them can make those programs impossible to remove cleanly."
+match.path = ['{PROGRAMDATA}\Package Cache', '{LOCALAPPDATA}\Package Cache']
+
+# -----------------------------------------------------------------------------
+# Temp, dumps and caches
+# -----------------------------------------------------------------------------
+
+[[rule]]
+id = "windows.user_temp"
+name = "Your temporary files"
+category = "temp"
+safety = "safe"
+regenerable = true
+explain = "Temporary files apps create while running. Safe to delete; files currently in use are skipped."
+match.path = '{TEMP}'
+
+[[rule]]
+id = "windows.windows_temp"
+name = "Windows temporary files"
+category = "temp"
+safety = "safe"
+regenerable = true
+explain = "Temporary files from Windows services and installers. Safe to delete; files in use are skipped."
+match.path = '{WINDIR}\Temp'
+
+[[rule]]
+id = "windows.update_download_cache"
+name = "Windows Update download cache"
+category = "caches"
+safety = "probably"
+action = "open_tool"
+tool = "disk_cleanup"
+regenerable = true
+explain = "Update packages Windows already downloaded. Windows cleans it itself; Disk Cleanup's \"Windows Update Cleanup\" is the supported way. Deleting while an update is pending forces a re-download."
+match.path = '{WINDIR}\SoftwareDistribution\Download'
+
+[[rule]]
+id = "windows.delivery_optimization"
+name = "Delivery Optimization cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Update pieces cached to share with other PCs. Windows re-downloads what it needs."
+match.path = ['{WINDIR}\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache', '{WINDIR}\SoftwareDistribution\DeliveryOptimization']
+
+[[rule]]
+id = "windows.error_reporting"
+name = "Windows Error Reporting"
+category = "temp"
+safety = "safe"
+explain = "Crash and problem reports, already sent or queued. Deleting only removes the local copies."
+match.path = ['{PROGRAMDATA}\Microsoft\Windows\WER', '{LOCALAPPDATA}\Microsoft\Windows\WER']
+
+[[rule]]
+id = "windows.memory_dump"
+name = "Kernel memory dump"
+category = "temp"
+safety = "safe"
+explain = "Memory snapshot written after a blue-screen crash. Only useful for debugging that crash."
+match.path = '{WINDIR}\MEMORY.DMP'
+
+[[rule]]
+id = "windows.minidumps"
+name = "Crash minidumps"
+category = "temp"
+safety = "safe"
+explain = "Small memory dumps from system crashes. Only useful for debugging those crashes."
+match.path = ['{WINDIR}\Minidump', '{LOCALAPPDATA}\CrashDumps']
+
+[[rule]]
+id = "windows.live_kernel_reports"
+name = "Live kernel reports"
+category = "temp"
+safety = "probably"
+explain = "Diagnostic dumps Windows writes when a driver hangs without crashing. Rarely needed after the fact."
+match.path = '{WINDIR}\LiveKernelReports'
+
+[[rule]]
+id = "windows.thumbnail_cache"
+name = "Thumbnail and icon cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Explorer's thumbnail and icon databases. Windows rebuilds them as you browse (in-use files are skipped)."
+match.file_name = ['thumbcache_*.db', 'iconcache_*.db']
+match.under = '{LOCALAPPDATA}\Microsoft\Windows\Explorer'
+
+[[rule]]
+id = "windows.directx_shader_cache"
+name = "DirectX shader cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Compiled shaders. Games and apps rebuild them, so the first launch afterwards may stutter briefly."
+match.path = '{LOCALAPPDATA}\D3DSCache'
+
+[[rule]]
+id = "windows.gpu_shader_caches"
+name = "GPU driver shader caches"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Shader caches kept by the NVIDIA, AMD and Intel graphics drivers. Rebuilt automatically."
+match.path = ['{LOCALAPPDATA}\NVIDIA\DXCache', '{LOCALAPPDATA}\NVIDIA\GLCache', '{LOCALAPPDATA}\NVIDIA\OptixCache', '{LOCALAPPDATA}\NVIDIA Corporation\NV_Cache', '{PROGRAMDATA}\NVIDIA Corporation\NV_Cache', '{APPDATA}\NVIDIA\ComputeCache', '{LOCALAPPDATA}\AMD\DxCache', '{LOCALAPPDATA}\AMD\DxcCache', '{LOCALAPPDATA}\AMD\Dx9Cache', '{LOCALAPPDATA}\AMD\GLCache', '{LOCALAPPDATA}\AMD\VkCache', '{USERPROFILE}\AppData\LocalLow\Intel\ShaderCache']
+
+[[rule]]
+id = "windows.gpu_installer_leftovers"
+name = "Graphics driver installer files"
+category = "temp"
+safety = "probably"
+explain = "Extracted driver installers left by NVIDIA or AMD setup. Not needed once the driver is installed."
+match.path = ['{SYSTEMDRIVE}\NVIDIA', '{SYSTEMDRIVE}\AMD']
+
+[[rule]]
+id = "windows.previous_installation"
+name = "Previous Windows installation"
+category = "system"
+safety = "careful"
+action = "open_tool"
+tool = "disk_cleanup"
+explain = "Files kept to roll back a Windows upgrade, or left by the setup process. Remove them with Disk Cleanup (\"Previous Windows installation(s)\" / \"Temporary Windows installation files\"), which also clears the rollback registration."
+match.path = ['{SYSTEMDRIVE}\Windows.old', '{SYSTEMDRIVE}\$WINDOWS.~BT', '{SYSTEMDRIVE}\$WINDOWS.~WS', '{SYSTEMDRIVE}\$GetCurrent']
+
+[[rule]]
+id = "windows.winsxs"
+name = "Windows component store"
+category = "system"
+safety = "never"
+action = "open_tool"
+tool = "dism_component_cleanup"
+explain = "WinSxS holds every Windows component version and is mostly hard links, so Explorer overstates its size. Never delete from it; run component cleanup (DISM /Online /Cleanup-Image /StartComponentCleanup) to remove superseded versions safely."
+match.path = '{WINDIR}\WinSxS'
+
+[[rule]]
+id = "windows.installer_cache"
+name = "Windows Installer cache"
+category = "system"
+safety = "never"
+explain = "Copies of .msi/.msp packages Windows Installer needs to repair, patch and uninstall programs. Deciding which are orphaned needs the full installer database and is too risky to automate; deleting the wrong one makes a program impossible to update or remove."
+match.path = '{WINDIR}\Installer'
+
+[[rule]]
+id = "windows.prefetch"
+name = "Prefetch"
+category = "system"
+safety = "careful"
+action = "info_only"
+explain = "Launch traces Windows uses to start apps faster. Windows manages and trims this folder itself; deleting it only slows the next app launches."
+match.path = '{WINDIR}\Prefetch'
+
+[[rule]]
+id = "windows.servicing_logs"
+name = "CBS and DISM logs"
+category = "temp"
+safety = "probably"
+explain = "Logs from Windows servicing (updates, component repair). Only needed to troubleshoot a failed update."
+match.path = ['{WINDIR}\Logs\CBS', '{WINDIR}\Logs\DISM']
+
+[[rule]]
+id = "windows.font_cache"
+name = "Font cache"
+category = "caches"
+safety = "careful"
+action = "info_only"
+explain = "The font cache service's data. It is locked while Windows runs and rebuilt if missing; there is no space to gain from deleting it."
+match.path = ['{WINDIR}\ServiceProfiles\LocalService\AppData\Local\FontCache', '{WINDIR}\System32\FNTCACHE.DAT']
+
+[[rule]]
+id = "windows.inet_cache"
+name = "Internet cache"
+category = "caches"
+safety = "safe"
+regenerable = true
+explain = "Web content cached by Windows components and legacy web views. Rebuilt on demand."
+match.path = '{LOCALAPPDATA}\Microsoft\Windows\INetCache'
+
+[[rule]]
+id = "windows.web_cache_db"
+name = "Web cache database"
+category = "caches"
+safety = "careful"
+action = "info_only"
+explain = "A database used by Windows for browsing history and cookies of web views. It is always in use; clear it from Internet Options instead."
+match.path = '{LOCALAPPDATA}\Microsoft\Windows\WebCache'
+
+[[rule]]
+id = "windows.cloud_online_only"
+name = "Online-only cloud file"
+category = "cloud"
+safety = "careful"
+action = "info_only"
+explain = "A OneDrive (or other cloud) placeholder whose content is not on this PC. It uses almost no local space; deleting it deletes the file from the cloud too."
+match.flag = "cloud_online_only"
+
+[[rule]]
+id = "windows.cloud_synced"
+name = "Synced cloud file"
+category = "cloud"
+safety = "careful"
+explain = "A file synced with OneDrive or another cloud provider. Deleting it also deletes the cloud copy; use \"Free up space\" in Explorer to keep it online-only instead."
+match.flag = "cloud"

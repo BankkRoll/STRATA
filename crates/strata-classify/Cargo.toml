@@ -1,0 +1,35 @@
+[package]
+name = "strata-classify"
+description = "Rule-pack classifier, safety tiers, app attribution and content sniffing for Strata"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+toml = "1.1"
+globset = "0.4.20"
+regex = "1.13"
+rustc-hash = "2.1"
+smallvec = "1.15"
+
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6"
+windows = { workspace = true, features = [
+    "Foundation",
+    "Foundation_Collections",
+    "ApplicationModel",
+    "Management_Deployment",
+] }
+
+[dev-dependencies]
+rayon = { workspace = true }
+proptest = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,361 @@
+# Electron, chat and productivity apps (SPEC §12.2). Each app's data folder
+# is `never` (logins, messages, settings); the Chromium cache folders inside
+# are carved out as `safe`. A generic rule covers other Electron apps.
+
+schema_version = 1
+pack = "apps"
+version = 1
+description = "Discord, Slack, Teams, VS Code, Cursor, Spotify, Zoom, Notion, Figma, Obsidian, Telegram and generic Electron caches."
+
+[lists]
+electron_caches = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "ShaderCache", "GraphiteDawnCache", "CacheStorage", "ScriptCache"]
+# Folders found beside the caches in an Electron/Chromium profile.
+electron_profile_markers = ["Local Storage", "Session Storage", "Preferences", "Network", "IndexedDB", "Local State"]
+# Extra regenerable folders in VS Code-family editors.
+vscode_caches = ["CachedData", "CachedExtensionVSIXs", "CachedProfilesData", "CachedConfigurations", "logs", "Crashpad"]
+
+[[rule]]
+id = "apps.electron_cache"
+name = "App web cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+explain = "A Chromium/Electron cache folder (web, code or GPU cache) of a desktop app. The app rebuilds it; close the app first."
+match.path_glob = '**\*'
+match.dir_name = "@electron_caches"
+match.requires_sibling = "@electron_profile_markers"
+match.under = ['{APPDATA}', '{LOCALAPPDATA}']
+
+# ----------------------------------------------------------------------------- Discord
+
+[[rule]]
+id = "apps.discord.data"
+name = "Discord data"
+category = "apps"
+safety = "never"
+app = "Discord"
+explain = "Discord's login, settings and local storage. Caches inside are listed separately."
+match.path = '{APPDATA}\discord'
+
+[[rule]]
+id = "apps.discord.cache"
+name = "Discord cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Discord"
+explain = "Images, code and GPU caches Discord re-downloads as needed. Close Discord first."
+match.path_glob = '{APPDATA}\discord\**\*'
+match.dir_name = "@electron_caches"
+
+[[rule]]
+id = "apps.discord.install"
+name = "Discord app"
+category = "apps"
+safety = "careful"
+action = "open_tool"
+tool = "app_uninstaller"
+app = "Discord"
+explain = "The installed Discord app and its updater. Uninstall Discord from Settings > Apps instead of deleting it."
+match.path = '{LOCALAPPDATA}\Discord'
+
+[[rule]]
+id = "apps.squirrel_packages"
+name = "Old update packages"
+category = "caches"
+subcategory = "app.updates"
+safety = "probably"
+explain = "Full update packages kept by the app's Squirrel updater for delta updates and rollback. The app works without them; the next update may download more."
+match.path_glob = ['{LOCALAPPDATA}\*\packages']
+match.requires_sibling = "Update.exe"
+
+# ----------------------------------------------------------------------------- Slack
+
+[[rule]]
+id = "apps.slack.data"
+name = "Slack data"
+category = "apps"
+safety = "never"
+app = "Slack"
+explain = "Slack's sign-ins, settings and local storage. Caches inside are listed separately."
+match.path_glob = ['{APPDATA}\Slack', '{LOCALAPPDATA}\Packages\91750D7E.Slack_*\LocalCache\Roaming\Slack']
+
+[[rule]]
+id = "apps.slack.cache"
+name = "Slack cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Slack"
+explain = "Web, code and GPU caches Slack rebuilds. Close Slack first."
+match.path_glob = ['{APPDATA}\Slack\**\*', '{LOCALAPPDATA}\Packages\91750D7E.Slack_*\LocalCache\Roaming\Slack\**\*']
+match.dir_name = "@electron_caches"
+
+# ----------------------------------------------------------------------------- Teams
+
+[[rule]]
+id = "apps.teams.data"
+name = "Microsoft Teams data"
+category = "apps"
+safety = "never"
+app = "Microsoft Teams"
+explain = "Teams' sign-in, settings and local message store (new Teams and classic Teams). Caches inside are listed separately."
+match.path = ['{LOCALAPPDATA}\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams', '{APPDATA}\Microsoft\Teams']
+
+[[rule]]
+id = "apps.teams.cache"
+name = "Microsoft Teams cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Microsoft Teams"
+explain = "Web, code and GPU caches Teams rebuilds. Quit Teams first (including from the tray)."
+match.path_glob = ['{LOCALAPPDATA}\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\**\*', '{APPDATA}\Microsoft\Teams\**\*']
+match.dir_name = ["@electron_caches", "tmp"]
+
+# ----------------------------------------------------------------------------- VS Code / Cursor
+
+[[rule]]
+id = "apps.vscode.data"
+name = "VS Code user data"
+category = "apps"
+safety = "never"
+app = "Visual Studio Code"
+explain = "VS Code settings, keybindings, snippets, extension state and unsaved-file backups. Caches inside are listed separately."
+match.path = ['{APPDATA}\Code', '{APPDATA}\Code - Insiders']
+
+[[rule]]
+id = "apps.vscode.cache"
+name = "VS Code cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Visual Studio Code"
+explain = "Caches, cached extension packages and logs VS Code rebuilds. Close VS Code first."
+match.path_glob = ['{APPDATA}\Code\*', '{APPDATA}\Code - Insiders\*']
+match.dir_name = ["@electron_caches", "@vscode_caches"]
+
+[[rule]]
+id = "apps.vscode.extensions"
+name = "VS Code extensions"
+category = "apps"
+safety = "careful"
+app = "Visual Studio Code"
+explain = "Installed VS Code extensions. Remove extensions from VS Code's Extensions view; VS Code re-downloads anything still listed."
+match.path = ['{USERPROFILE}\.vscode\extensions', '{USERPROFILE}\.vscode-insiders\extensions']
+
+[[rule]]
+id = "apps.cursor.data"
+name = "Cursor user data"
+category = "apps"
+safety = "never"
+app = "Cursor"
+explain = "Cursor's settings, AI chat history and extension state. Caches inside are listed separately."
+match.path = '{APPDATA}\Cursor'
+
+[[rule]]
+id = "apps.cursor.cache"
+name = "Cursor cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Cursor"
+explain = "Caches, cached extension packages and logs Cursor rebuilds. Close Cursor first."
+match.path_glob = '{APPDATA}\Cursor\*'
+match.dir_name = ["@electron_caches", "@vscode_caches"]
+
+[[rule]]
+id = "apps.cursor.extensions"
+name = "Cursor extensions"
+category = "apps"
+safety = "careful"
+app = "Cursor"
+explain = "Extensions installed in Cursor. Remove them from Cursor's Extensions view."
+match.path = '{USERPROFILE}\.cursor\extensions'
+
+[[rule]]
+id = "apps.cursor.install"
+name = "Cursor app"
+category = "apps"
+safety = "careful"
+action = "open_tool"
+tool = "app_uninstaller"
+app = "Cursor"
+explain = "The installed Cursor editor. Uninstall it from Settings > Apps."
+match.path = '{LOCALAPPDATA}\Programs\cursor'
+
+# ----------------------------------------------------------------------------- Spotify
+
+[[rule]]
+id = "apps.spotify.cache"
+name = "Spotify cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Spotify"
+explain = "Streamed music Spotify caches to play songs again without downloading. Rebuilt as you listen; downloaded (offline) songs live elsewhere."
+match.path_glob = ['{LOCALAPPDATA}\Spotify\Storage', '{LOCALAPPDATA}\Packages\SpotifyAB.SpotifyMusic_*\LocalCache\Spotify\Storage']
+
+[[rule]]
+id = "apps.spotify.offline"
+name = "Spotify offline data"
+category = "media"
+safety = "probably"
+app = "Spotify"
+explain = "Spotify's data folder, including songs downloaded for offline listening. Spotify re-downloads them, but you lose offline playback until it does."
+match.path_glob = ['{LOCALAPPDATA}\Spotify\Data', '{LOCALAPPDATA}\Packages\SpotifyAB.SpotifyMusic_*\LocalCache\Spotify\Data']
+
+# ----------------------------------------------------------------------------- Zoom
+
+[[rule]]
+id = "apps.zoom.install"
+name = "Zoom"
+category = "apps"
+safety = "careful"
+app = "Zoom"
+explain = "Zoom's per-user installation and settings. Uninstall Zoom from Settings > Apps."
+match.path = '{APPDATA}\Zoom'
+
+[[rule]]
+id = "apps.zoom.data"
+name = "Zoom data"
+category = "apps"
+safety = "never"
+app = "Zoom"
+explain = "Zoom's local chat database, meeting history and sign-in. Not junk."
+match.path = '{APPDATA}\Zoom\data'
+
+[[rule]]
+id = "apps.zoom.logs"
+name = "Zoom logs"
+category = "temp"
+safety = "safe"
+app = "Zoom"
+explain = "Diagnostic logs written by Zoom."
+match.path = '{APPDATA}\Zoom\logs'
+
+# ----------------------------------------------------------------------------- Notion, Figma, Obsidian
+
+[[rule]]
+id = "apps.notion.data"
+name = "Notion data"
+category = "apps"
+safety = "never"
+app = "Notion"
+explain = "Notion's sign-in and offline page store. Caches inside are listed separately."
+match.path = ['{APPDATA}\Notion', '{APPDATA}\Notion Calendar']
+
+[[rule]]
+id = "apps.notion.cache"
+name = "Notion cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Notion"
+explain = "Web, code and GPU caches Notion rebuilds. Close Notion first."
+match.path_glob = ['{APPDATA}\Notion\**\*', '{APPDATA}\Notion Calendar\**\*']
+match.dir_name = "@electron_caches"
+
+[[rule]]
+id = "apps.figma.data"
+name = "Figma data"
+category = "apps"
+safety = "never"
+app = "Figma"
+explain = "Figma's sign-in and local settings. Caches inside are listed separately."
+match.path = '{APPDATA}\Figma'
+
+[[rule]]
+id = "apps.figma.cache"
+name = "Figma cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Figma"
+explain = "Web, code, GPU and font caches Figma rebuilds. Close Figma first."
+match.path_glob = '{APPDATA}\Figma\**\*'
+match.dir_name = ["@electron_caches", "DesktopProfile"]
+
+[[rule]]
+id = "apps.figma.install"
+name = "Figma app"
+category = "apps"
+safety = "careful"
+action = "open_tool"
+tool = "app_uninstaller"
+app = "Figma"
+explain = "The installed Figma desktop app. Uninstall it from Settings > Apps."
+match.path = '{LOCALAPPDATA}\Figma'
+
+[[rule]]
+id = "apps.obsidian.data"
+name = "Obsidian app data"
+category = "apps"
+safety = "never"
+app = "Obsidian"
+explain = "Obsidian's app settings and vault list (your notes live in your vault folders). Caches inside are listed separately."
+match.path = '{APPDATA}\obsidian'
+
+[[rule]]
+id = "apps.obsidian.cache"
+name = "Obsidian cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Obsidian"
+explain = "Web, code and GPU caches Obsidian rebuilds. Close Obsidian first."
+match.path_glob = '{APPDATA}\obsidian\**\*'
+match.dir_name = "@electron_caches"
+
+# ----------------------------------------------------------------------------- Telegram, Thunderbird
+
+[[rule]]
+id = "apps.telegram.data"
+name = "Telegram session"
+category = "apps"
+safety = "never"
+app = "Telegram Desktop"
+explain = "Telegram's sign-in keys and settings. Deleting signs you out of every chat on this PC."
+match.path = '{APPDATA}\Telegram Desktop\tdata'
+
+[[rule]]
+id = "apps.telegram.cache"
+name = "Telegram media cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Telegram Desktop"
+explain = "Photos, videos and files Telegram cached from chats. They are re-downloaded when opened (clear it from Settings > Advanced > Manage local storage)."
+match.path = ['{APPDATA}\Telegram Desktop\tdata\user_data', '{APPDATA}\Telegram Desktop\tdata\emoji']
+
+[[rule]]
+id = "apps.thunderbird.profiles"
+name = "Thunderbird mail"
+category = "documents"
+safety = "never"
+app = "Mozilla Thunderbird"
+explain = "Your Thunderbird mail, contacts and calendars. Not junk."
+match.path = '{APPDATA}\Thunderbird\Profiles'
+
+[[rule]]
+id = "apps.thunderbird.cache"
+name = "Thunderbird cache"
+category = "caches"
+subcategory = "app.cache"
+safety = "safe"
+regenerable = true
+app = "Mozilla Thunderbird"
+explain = "Thunderbird's web and startup caches."
+match.path_glob = '{LOCALAPPDATA}\Thunderbird\Profiles\*\*'
+match.dir_name = ["cache2", "startupCache"]

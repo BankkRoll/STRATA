@@ -1,0 +1,71 @@
+# Downloads folder intelligence (SPEC §12.2). Everything here applies only
+# inside the user's Downloads known folder (redirected or localized ones
+# included). Duplicates of files elsewhere are found by the duplicates view.
+
+schema_version = 1
+pack = "downloads"
+version = 1
+description = "Old installers, already-extracted archives, disk images, partial and repeated downloads."
+
+[[rule]]
+id = "downloads.old_installer"
+name = "Old installer"
+category = "downloads"
+subcategory = "downloads.installer"
+safety = "probably"
+explain = "An installer downloaded more than 30 days ago. If the program is installed you no longer need it; you can download it again from the publisher."
+match.ext = ["exe", "msi", "msix", "msixbundle", "appx", "appxbundle"]
+match.older_than_days = 30
+match.under = '{DOWNLOADS}'
+
+[[rule]]
+id = "downloads.extracted_archive"
+name = "Already-extracted archive"
+category = "downloads"
+subcategory = "downloads.archive"
+safety = "probably"
+explain = "An archive with a folder of the same name beside it, so it was probably already extracted. Check the folder has everything before deleting the archive."
+match.ext = ["zip", "7z", "rar"]
+match.requires_sibling = "{stem}"
+match.under = '{DOWNLOADS}'
+
+[[rule]]
+id = "downloads.disk_image"
+name = "Downloaded disk image"
+category = "archives"
+subcategory = "downloads.image"
+safety = "careful"
+explain = "A downloaded disc or disk image (ISO/IMG/VHD). Often large; make sure it is not mounted or used by a virtual machine."
+match.ext = ["iso", "img", "vhd", "vhdx"]
+match.under = '{DOWNLOADS}'
+
+[[rule]]
+id = "downloads.partial"
+name = "Incomplete download"
+category = "downloads"
+subcategory = "downloads.partial"
+safety = "probably"
+explain = "A download a browser or download manager never finished. Safe unless the download is still running."
+match.ext = ["crdownload", "part", "partial", "opdownload", "download", "!ut", "aria2"]
+match.under = '{DOWNLOADS}'
+
+[[rule]]
+id = "downloads.repeated"
+name = "Repeated download"
+category = "downloads"
+subcategory = "downloads.duplicate"
+safety = "probably"
+explain = "A copy like \"setup (1).exe\" whose original is in the same folder. Usually the same file downloaded twice; compare before deleting."
+match.name_regex = '^.+ \(\d{1,4}\)(\.[^.]+)?$'
+match.requires_sibling = "{original}"
+match.under = '{DOWNLOADS}'
+
+[[rule]]
+id = "downloads.repeated_flag"
+name = "Possible repeated download"
+category = "downloads"
+subcategory = "downloads.duplicate"
+safety = "careful"
+explain = "Named like a repeated download (\"name (1).ext\"), but the original is not beside it. It may be the only copy."
+match.name_regex = '^.+ \(\d{1,4}\)(\.[^.]+)?$'
+match.under = '{DOWNLOADS}'

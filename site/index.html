@@ -193,40 +193,26 @@
             <p class="kicker"><span class="kicker__n">02</span>Benchmarks</p>
             <div>
               <h2 id="bench-title" class="section__title">Measured, not promised.</h2>
-              <p class="section__lede">Every figure comes from the repository’s own benchmark suite, as ranges across runs rather than best cases, set against the target each component was designed to.</p>
+              <p class="section__lede">Every figure comes from Strata’s own benchmark suite and is reported as the spread across runs, not the best one. Each says what was measured and on what kind of data.</p>
+              <p class="bench-machine"><!--bench:machine--></p>
             </div>
           </header>
 
-          <ul class="stats reveal" aria-label="Headline results"><!--bench:stats--></ul>
-
-          <div class="block reveal">
-            <header class="block__head">
-              <div>
-                <h3 class="block__title">Against target</h3>
-                <p class="block__sub">Further left is better: each bar is the share of its target budget used, from the fastest run to the slowest. The scale is logarithmic, so every gridline is ten times less of the budget.</p>
-              </div>
-              <ul class="key" aria-label="Chart key">
-                <li><span class="key__range" aria-hidden="true"></span>Range across runs</li>
-                <li><span class="key__bound" aria-hidden="true"></span>Upper bound only</li>
-                <li><span class="key__target" aria-hidden="true"></span>Target</li>
-              </ul>
-            </header>
-            <!--bench:range-->
-            <ol class="notes"><!--bench:notes--></ol>
-            <div class="disclosures">
-              <details class="disclosure">
-                <summary>Methodology<span class="disclosure__icon" aria-hidden="true"></span></summary>
-                <!--bench:method-->
-              </details>
-              <details class="disclosure">
-                <summary>How to reproduce<span class="disclosure__icon" aria-hidden="true"></span></summary>
-                <!--bench:reproduce-->
-              </details>
-            </div>
-            <p class="block__foot"><a class="link" href="<!--bench:link-->">Full methodology in docs/BENCHMARKS.md<span aria-hidden="true"> ↗</span></a></p>
-          </div>
-
           <!--bench:versus-->
+
+          <div class="bgroups"><!--bench:groups--></div>
+
+          <div class="disclosures">
+            <details class="disclosure">
+              <summary>How these were measured<span class="disclosure__icon" aria-hidden="true"></span></summary>
+              <div class="disclosure__body">
+                <!--bench:method-->
+                <h3 class="disclosure__sub">Reproduce</h3>
+                <!--bench:reproduce-->
+              </div>
+            </details>
+          </div>
+          <p class="bench-foot"><a class="link" href="<!--bench:link-->">Every result, with its workload, in docs/BENCHMARKS.md<span aria-hidden="true"> ↗</span></a></p>
         </div>
       </section>
 

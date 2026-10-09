@@ -7,115 +7,264 @@
     "Synthetic data where a result must be reproducible and machine-independent: deterministic generators with fixed seeds model dependency trees, WinSxS-style hardlink farms, media libraries and hex-named caches.",
     "Index data averages 11.4% directories and about 16.5 name bytes per entry; layout trees use fan-out 16, 20% directories, depth 12 and log-uniform sizes from 1 B to 4 GiB with 2% empty files.",
     "Real data where the operating system is the cost: the standard scanner is timed on a real system volume (about 4.6 million entries) and a generated 1-million-file tree.",
-    "MFT parsing is measured on in-memory NTFS images built byte-exactly by the test-image builder, isolating CPU cost from disk speed.",
+    "MFT parsing is measured on in-memory NTFS images built byte-exactly by the test-image builder, isolating CPU cost from disk speed. Full-drive scans are timed separately with the command-line scanner.",
     "UI frame times come from a headless Chromium (the WebView2 engine) on the real GPU through ANGLE/D3D11. Headless Chromium paces animation frames at 100 Hz, so 100 fps is the ceiling of that measurement."
   ],
   "reproduce": [
     { "area": "MFT parse", "command": "cargo bench -p strata-ntfs --bench parse" },
-    { "area": "MFT scan, real volume (elevated terminal)", "command": "cargo build --release -p strata-cli\ntarget\\release\\strata-cli scan C:" },
+    { "area": "MFT scan, real volume (elevated terminal)", "command": "cargo run --release -p strata-cli -- scan C:" },
     { "area": "Standard scanner", "command": "cargo run --release -p strata-walk --example walkbench -- <root> [dirinfo|find] [alloc 0|1] [threads]" },
     { "area": "Standard scanner test tree", "command": "cargo run --release -p strata-walk --example mktree -- <root> 1000000" },
     { "area": "Index, search, live updates, cache", "command": "cargo bench -p strata-index" },
     { "area": "Layout and picking", "command": "cargo bench -p strata-layout" },
-    { "area": "Pipe throughput and codec", "command": "cargo bench -p strata-ipc" },
-    { "area": "Classifier", "command": "cargo run --release -p strata-classify --example bench_classify" },
     { "area": "Live updates", "command": "cargo bench -p strata-live" },
     { "area": "Duplicates", "command": "cargo bench -p strata-dupes" },
     { "area": "Activity tracking", "command": "cargo bench -p strata-etw" },
-    { "area": "History store", "command": "cargo test -p strata-store --release --test bench -- --ignored --nocapture" },
-    { "area": "UI rendering", "command": "pnpm --dir ui fixtures:large\npnpm --dir ui dev\nnode ui/scripts/run-harness.mjs large treemap" }
+    { "area": "UI rendering", "command": "pnpm --dir ui fixtures:large\npnpm --dir ui dev\nnode ui/scripts/run-harness.mjs large treemap" },
+    { "area": "Head-to-head (elevated PowerShell)", "command": "powershell -ExecutionPolicy Bypass -File bench\\verify-elevated.ps1" }
   ],
-  "areas": [
-    { "id": "scan", "label": "Scan" },
-    { "id": "index", "label": "Index & search" },
-    { "id": "layout", "label": "Layout & rendering" },
-    { "id": "live", "label": "Live updates" },
-    { "id": "dupes", "label": "Duplicates & activity" },
-    { "id": "ipc", "label": "IPC & storage" }
-  ],
-  "metrics": [
-    { "id": "mft-parse", "area": "scan", "group": "MFT scanner", "label": "Parse 1M MFT records, parallel", "detail": "fixups + parse + assemble, in memory", "text": "155–291", "unit": "ms", "min": 155, "max": 291, "aside": "3.4–6.4 M records/s", "lowerIsBetter": true, "target": 3000, "targetText": "≤ 3 s per 1M files", "note": "Parse only, from memory; the 3 s target covers a full end-to-end scan." },
-    { "id": "mft-parse-1t", "area": "scan", "group": "MFT scanner", "label": "Parse 1M MFT records, single thread", "detail": "in memory", "text": "0.64–1.02", "unit": "s", "min": 0.64, "max": 1.02, "lowerIsBetter": true },
-    { "id": "mft-pipeline", "area": "scan", "group": "MFT scanner", "label": "Scan pipeline end to end", "detail": "in-memory image: I/O thread, channel, parser, sink", "text": "0.85–1.1", "unit": "M records/s", "min": 0.85, "max": 1.1, "lowerIsBetter": false },
-    { "id": "walk-system", "area": "scan", "group": "Standard scanner", "label": "System volume, full accuracy", "detail": "allocation pass on, per 1M entries", "text": "20–23", "unit": "s", "min": 20, "max": 23, "lowerIsBetter": true, "target": 30, "targetText": "≤ 30 s per 1M" },
-    { "id": "walk-system-list", "area": "scan", "group": "Standard scanner", "label": "System volume, listing only", "detail": "allocation pass off, per 1M entries", "text": "2.5–3.0", "unit": "s", "min": 2.5, "max": 3.0, "lowerIsBetter": true },
-    { "id": "walk-tree", "area": "scan", "group": "Standard scanner", "label": "Generated 1M-file tree, full accuracy", "detail": "allocation pass on", "text": "13.2", "unit": "s", "min": 13.2, "max": 13.2, "lowerIsBetter": true, "target": 30, "targetText": "≤ 30 s" },
-    { "id": "walk-tree-list", "area": "scan", "group": "Standard scanner", "label": "Generated 1M-file tree, listing only", "detail": "allocation pass off", "text": "0.34", "unit": "s", "min": 0.34, "max": 0.34, "lowerIsBetter": true },
-    { "id": "walk-cancel", "area": "scan", "group": "Standard scanner", "label": "Cancel to return", "detail": "standard scanner", "text": "48–180", "unit": "ms", "min": 48, "max": 180, "lowerIsBetter": true },
-
-    { "id": "index-mem-1m", "area": "index", "group": "Index", "label": "Memory per entry, 1M entries", "detail": "names excluded", "text": "58.7", "unit": "B", "min": 58.7, "max": 58.7, "lowerIsBetter": true, "target": 64, "targetText": "≤ 64 B" },
-    { "id": "index-mem-5m", "area": "index", "group": "Index", "label": "Memory per entry, 5M entries", "detail": "names excluded", "text": "59.2", "unit": "B", "min": 59.2, "max": 59.2, "lowerIsBetter": true, "target": 64, "targetText": "≤ 64 B" },
-    { "id": "index-mem-lite", "area": "index", "group": "Index", "label": "Memory per entry, lite index", "detail": "names excluded", "text": "42.7", "unit": "B", "min": 42.7, "max": 42.7, "lowerIsBetter": true },
-    { "id": "index-build", "area": "index", "group": "Index", "label": "Build, 1M entries", "detail": "stage + finish", "text": "0.60", "unit": "s", "min": 0.6, "max": 0.6, "lowerIsBetter": true },
-    { "id": "index-updates", "area": "index", "group": "Index", "label": "Live updates applied, 1M index", "detail": "mixed batches of 1,000", "text": "216k–334k", "unit": "updates/s", "min": 216000, "max": 334000, "lowerIsBetter": false },
-    { "id": "index-cache-size", "area": "index", "group": "Index", "label": "Cache file size, 1M entries", "detail": "1M-entry index", "text": "75.2", "unit": "MB", "min": 75.2, "max": 75.2, "lowerIsBetter": true },
-    { "id": "index-cache-save", "area": "index", "group": "Index", "label": "Cache save, 1M entries", "detail": "1M-entry cache file", "text": "42–51", "unit": "ms", "min": 42, "max": 51, "lowerIsBetter": true },
-    { "id": "index-cache-load", "area": "index", "group": "Index", "label": "Cache load, 1M entries", "detail": "load + full validation", "text": "26–43", "unit": "ms", "min": 26, "max": 43, "lowerIsBetter": true },
-    { "id": "index-children", "area": "index", "group": "Index", "label": "Children of a 100k-entry folder", "detail": "first 200 by size", "text": "8.0", "unit": "ms", "min": 8, "max": 8, "lowerIsBetter": true },
-    { "id": "index-top", "area": "index", "group": "Index", "label": "Top 100 largest files", "detail": "5M entries", "text": "12.2", "unit": "ms", "min": 12.2, "max": 12.2, "lowerIsBetter": true },
-    { "id": "search-first", "area": "index", "group": "Search", "label": "First search results", "detail": "5M names, any query", "text": "≤ 1.1", "unit": "ms", "min": null, "max": 1.1, "lowerIsBetter": true, "target": 50, "targetText": "≤ 50 ms" },
-    { "id": "search-complete", "area": "index", "group": "Search", "label": "Complete search pass", "detail": "5M names; substring, prefix, wildcard, path, regex, filters", "text": "≤ 28", "unit": "ms", "min": null, "max": 28, "lowerIsBetter": true },
-    { "id": "classify-entry", "area": "index", "group": "Classifier", "label": "Classification per entry", "detail": "single thread", "text": "150", "unit": "ns", "min": 150, "max": 150, "lowerIsBetter": true },
-    { "id": "classify-tree", "area": "index", "group": "Classifier", "label": "Classify a 3.83M-entry tree", "detail": "16 threads", "text": "0.18", "unit": "s", "min": 0.18, "max": 0.18, "lowerIsBetter": true },
-    { "id": "classify-compile", "area": "index", "group": "Classifier", "label": "Compile 240 built-in rules", "detail": "rule packs", "text": "~4", "unit": "ms", "min": 4, "max": 4, "lowerIsBetter": true },
-
-    { "id": "layout-relayout", "area": "layout", "group": "Layout", "label": "Treemap relayout", "detail": "100k-entry subtree", "text": "3.2", "unit": "ms", "min": 3.2, "max": 3.2, "lowerIsBetter": true, "target": 50, "targetText": "≤ 50 ms" },
-    { "id": "layout-treemap-1m", "area": "layout", "group": "Layout", "label": "Treemap, 1M-entry tree", "detail": "default level of detail", "text": "6.8", "unit": "ms", "min": 6.8, "max": 6.8, "aside": "7.1 ms with cushions", "lowerIsBetter": true },
-    { "id": "layout-sunburst", "area": "layout", "group": "Layout", "label": "Sunburst, 1M-entry tree", "detail": "default level of detail", "text": "0.39", "unit": "ms", "min": 0.39, "max": 0.39, "lowerIsBetter": true },
-    { "id": "layout-icicle", "area": "layout", "group": "Layout", "label": "Icicle, 1M-entry tree", "detail": "default level of detail", "text": "1.8", "unit": "ms", "min": 1.8, "max": 1.8, "lowerIsBetter": true },
-    { "id": "layout-circles", "area": "layout", "group": "Layout", "label": "Circle packing, 1M-entry tree", "detail": "default level of detail", "text": "0.70", "unit": "ms", "min": 0.7, "max": 0.7, "lowerIsBetter": true },
-    { "id": "pick", "area": "layout", "group": "Layout", "label": "Hit test (pick)", "detail": "503k-rect layout", "text": "0.12", "unit": "µs", "min": 0.12, "max": 0.12, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 ms" },
-    { "id": "pick-ancestors", "area": "layout", "group": "Layout", "label": "Hit test with ancestor chain", "detail": "503k-rect layout", "text": "0.29", "unit": "µs", "min": 0.29, "max": 0.29, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 ms" },
-    { "id": "pick-folder", "area": "layout", "group": "Layout", "label": "Hit test, one folder of 1M files", "detail": "single flat folder", "text": "0.20", "unit": "µs", "min": 0.2, "max": 0.2, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 ms" },
-    { "id": "layout-drill", "area": "layout", "group": "Layout", "label": "Drill-down transition matching", "detail": "39k rects", "text": "7.4", "unit": "ms", "min": 7.4, "max": 7.4, "lowerIsBetter": true },
-    { "id": "ui-fps", "area": "layout", "group": "UI", "label": "Frame rate, hover / zoom / pan", "detail": "503,464 instances, LOD off, no dropped frames", "text": "100", "unit": "fps", "min": 100, "max": 100, "lowerIsBetter": false, "target": 60, "targetText": "≥ 60 fps", "note": "Headless Chromium paces frames at 100 Hz, so 100 fps is the ceiling of this measurement, not of the renderer." },
-    { "id": "ui-p95", "area": "layout", "group": "UI", "label": "Frame time, p95", "detail": "503,464 instances, LOD off", "text": "10.1", "unit": "ms", "min": 10.1, "max": 10.1, "lowerIsBetter": true },
-    { "id": "ui-p99", "area": "layout", "group": "UI", "label": "Frame time, p99", "detail": "503,464 instances, LOD off", "text": "10.2", "unit": "ms", "min": 10.2, "max": 10.2, "lowerIsBetter": true },
-    { "id": "ui-draw", "area": "layout", "group": "UI", "label": "Draw-call CPU per frame", "detail": "503,464 instances", "text": "0.03", "unit": "ms", "min": 0.03, "max": 0.03, "lowerIsBetter": true },
-    { "id": "ui-pick", "area": "layout", "group": "UI", "label": "Pick in the UI", "detail": "including DOM measurement", "text": "18–26", "unit": "µs", "min": 18, "max": 26, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 ms" },
-    { "id": "ui-ingest", "area": "layout", "group": "UI", "label": "Frame ingest, once per layout", "detail": "skip table, grids, GPU upload", "text": "15", "unit": "ms", "min": 15, "max": 15, "lowerIsBetter": true },
-    { "id": "ui-bundle", "area": "layout", "group": "UI", "label": "Entry bundle", "detail": "gzip, enforced by the build", "text": "121.7", "unit": "kB", "min": 121.7, "max": 121.7, "lowerIsBetter": true, "target": 130, "targetText": "≤ 130 kB" },
-
-    { "id": "live-latency", "area": "live", "group": "Live updates", "label": "Journal record to UI change set", "detail": "USN journal, end to end", "text": "251–265", "unit": "ms", "min": 251, "max": 265, "lowerIsBetter": true, "target": 1000, "targetText": "≤ 1 s" },
-    { "id": "live-throughput", "area": "live", "group": "Live updates", "label": "Throughput into a 1M-entry index", "detail": "journal records", "text": "~316k", "unit": "records/s", "min": 316000, "max": 316000, "lowerIsBetter": false },
-    { "id": "live-burst", "area": "live", "group": "Live updates", "label": "500k files created at once: drain", "detail": "whole burst", "text": "1.9", "unit": "s", "min": 1.9, "max": 1.9, "lowerIsBetter": true, "targetText": "UI stays responsive" },
-    { "id": "live-burst-tick", "area": "live", "group": "Live updates", "label": "500k burst: slowest tick", "detail": "during the drain", "text": "66", "unit": "ms", "min": 66, "max": 66, "lowerIsBetter": true },
-    { "id": "live-burst-lock", "area": "live", "group": "Live updates", "label": "500k burst: longest index lock", "detail": "during the drain", "text": "24", "unit": "ms", "min": 24, "max": 24, "lowerIsBetter": true },
-    { "id": "live-idle", "area": "live", "group": "Live updates", "label": "Wake-ups while idle", "detail": "3 s window", "text": "0", "unit": "wake-ups", "min": 0, "max": 0, "lowerIsBetter": true, "targetText": "≈ 0% CPU" },
-
-    { "id": "dupes-group", "area": "dupes", "group": "Duplicates", "label": "Size grouping", "detail": "1M candidates", "text": "76–86", "unit": "ms", "min": 76, "max": 86, "lowerIsBetter": true },
-    { "id": "dupes-hash-1", "area": "dupes", "group": "Duplicates", "label": "Hashing, 1 thread", "detail": "data in OS cache", "text": "2.7", "unit": "GB/s", "min": 2.7, "max": 2.7, "lowerIsBetter": false },
-    { "id": "dupes-hash-2", "area": "dupes", "group": "Duplicates", "label": "Hashing, 2 threads", "detail": "data in OS cache", "text": "4.4", "unit": "GB/s", "min": 4.4, "max": 4.4, "lowerIsBetter": false },
-    { "id": "dupes-hash-4", "area": "dupes", "group": "Duplicates", "label": "Hashing, 4 threads", "detail": "data in OS cache", "text": "5.6", "unit": "GB/s", "min": 5.6, "max": 5.6, "lowerIsBetter": false },
-    { "id": "dupes-rerun", "area": "dupes", "group": "Duplicates", "label": "Rerun from the hash cache", "detail": "0 bytes read", "text": "< 1", "unit": "ms", "min": null, "max": 1, "lowerIsBetter": true },
-    { "id": "etw-decode", "area": "dupes", "group": "Activity tracking", "label": "Decode + aggregate", "detail": "ETW consumer", "text": "0.71–0.93", "unit": "M events/s", "min": 0.71, "max": 0.93, "aside": "1.05–1.26 µs per event", "lowerIsBetter": false },
-    { "id": "etw-cpu", "area": "dupes", "group": "Activity tracking", "label": "CPU at 10k events/s", "detail": "share of one core", "text": "~1.1", "unit": "%", "min": 1.1, "max": 1.1, "lowerIsBetter": true, "target": 2, "targetText": "≤ 2% (sampling above)" },
-
-    { "id": "ipc-pipe", "area": "ipc", "group": "IPC", "label": "Named pipe, 1M scan records", "detail": "8,192-record batches", "text": "3.20", "unit": "M records/s", "min": 3.2, "max": 3.2, "aside": "279 MB/s", "lowerIsBetter": false },
-    { "id": "ipc-wire", "area": "ipc", "group": "IPC", "label": "Wire size per scan record", "detail": "postcard encoding", "text": "85.8", "unit": "B", "min": 85.8, "max": 85.8, "lowerIsBetter": true },
-    { "id": "ipc-encode", "area": "ipc", "group": "IPC", "label": "Encode per record", "detail": "postcard", "text": "170", "unit": "ns", "min": 170, "max": 170, "lowerIsBetter": true },
-    { "id": "ipc-decode", "area": "ipc", "group": "IPC", "label": "Decode per record", "detail": "postcard", "text": "280", "unit": "ns", "min": 280, "max": 280, "lowerIsBetter": true },
-    { "id": "store-first", "area": "ipc", "group": "History store", "label": "Commit, first snapshot", "detail": "50,000 directories", "text": "147–215", "unit": "ms", "min": 147, "max": 215, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 s" },
-    { "id": "store-later", "area": "ipc", "group": "History store", "label": "Commit, later snapshots", "detail": "50,000 directories, median", "text": "53–65", "unit": "ms", "min": 53, "max": 65, "lowerIsBetter": true, "target": 1000, "targetText": "< 1 s" },
-    { "id": "store-size", "area": "ipc", "group": "History store", "label": "Storage per snapshot", "detail": "per directory", "text": "12.0", "unit": "B", "min": 12, "max": 12, "lowerIsBetter": true },
-    { "id": "store-diff", "area": "ipc", "group": "History store", "label": "Diff of two snapshots", "detail": "50,000 directories", "text": "14–35", "unit": "ms", "min": 14, "max": 35, "lowerIsBetter": true },
-    { "id": "installer", "area": "ipc", "group": "Installer", "label": "x64 NSIS installer", "detail": "installer package", "text": "~3", "unit": "MB", "min": 3, "max": 3, "lowerIsBetter": true, "target": 15, "targetText": "≤ 15 MB" }
-  ],
-  "stats": [
-    { "value": "≤ 1.1", "unit": "ms", "label": "First search results", "detail": "Name search over 5 million names. Target ≤ 50 ms." },
-    { "value": "59.2", "unit": "B", "label": "Per indexed entry", "detail": "At 5M entries, names excluded. Target ≤ 64 B." },
-    { "value": "251–265", "unit": "ms", "label": "Journal to screen", "detail": "USN record to UI change set. Target ≤ 1 s." },
-    { "value": "3.20", "unit": "M/s", "label": "Records over the pipe", "detail": "From the elevated helper, 8,192 per batch." }
+  "groups": [
+    {
+      "id": "open",
+      "title": "Open a drive",
+      "lede": "With admin rights, Strata reads the drive’s Master File Table directly. Without them, a parallel folder scanner fills the same index.",
+      "outcomes": [
+        {
+          "id": "mft-parse",
+          "value": "155–291",
+          "unit": "ms",
+          "label": "to parse a million file records from the Master File Table",
+          "detail": "All cores, 3.4–6.4 million records per second. This is parsing speed: reading the table off the drive adds disk time.",
+          "scope": "In-memory NTFS images",
+          "source": "docs/BENCHMARKS.md › Results › MFT scanner › Parse 1M MFT records, parallel: 155–291 ms (3.4–6.4 M records/s)"
+        },
+        {
+          "id": "walk-system",
+          "value": "20–23",
+          "unit": "s",
+          "label": "per million files without admin rights",
+          "detail": "Standard scanner with exact on-disk sizes, on a real system volume of about 4.6 million entries. A generated 1-million-file tree takes 13.2 s.",
+          "scope": "Real system volume",
+          "source": "docs/BENCHMARKS.md › Results › Standard scanner › System volume, full accuracy: 20–23 s per 1M entries; Generated 1M-file tree, allocation pass on: 13.2 s"
+        }
+      ],
+      "chart": {
+        "kind": "strip",
+        "title": "Parsing one million MFT records",
+        "caption": "Spread across runs, fastest to slowest. In-memory NTFS images, so disk speed is excluded.",
+        "scale": "linear",
+        "min": 0,
+        "max": 1200,
+        "unit": "ms",
+        "ticks": [
+          { "at": 0, "label": "0" },
+          { "at": 400, "label": "400 ms" },
+          { "at": 800, "label": "800 ms" },
+          { "at": 1200, "label": "1.2 s" }
+        ],
+        "rows": [
+          { "label": "All cores", "detail": "fixups, parse and assemble in parallel", "min": 155, "max": 291, "text": "155–291 ms", "highlight": true, "source": "docs/BENCHMARKS.md › MFT scanner › Parse 1M MFT records, parallel: 155–291 ms" },
+          { "label": "One thread", "detail": "same work, single core", "min": 640, "max": 1020, "text": "0.64–1.02 s", "source": "docs/BENCHMARKS.md › MFT scanner › Parse 1M MFT records, single thread: 0.64–1.02 s" }
+        ]
+      }
+    },
+    {
+      "id": "find",
+      "title": "Find anything",
+      "lede": "Search, the largest-files list and folder listings answer from the in-memory index, never from the disk.",
+      "outcomes": [
+        {
+          "id": "search",
+          "value": "≤ 1.1",
+          "unit": "ms",
+          "label": "to the first search results across 5 million file names",
+          "detail": "The complete pass finishes in ≤ 28 ms for every query type tried: substring, prefix, wildcard, path, regex and filters.",
+          "scope": "Synthetic index",
+          "source": "docs/BENCHMARKS.md › Results › Search (5M names) › First results: ≤ 1.1 ms; Complete scan, any query tried: ≤ 28 ms"
+        },
+        {
+          "id": "dupes-rerun",
+          "value": "0",
+          "unit": "bytes",
+          "label": "read from disk when re-checking duplicates",
+          "detail": "Unchanged files are answered from the hash cache in under 1 ms. Fresh hashing runs at 2.7, 4.4 and 5.6 GB/s on 1, 2 and 4 threads with data in the OS cache.",
+          "scope": "Synthetic files",
+          "source": "docs/BENCHMARKS.md › Results › Duplicates › Rerun served from the hash cache: 0 bytes read, < 1 ms; Hashing, data in OS cache, 1 / 2 / 4 threads: 2.7 / 4.4 / 5.6 GB/s"
+        }
+      ],
+      "chart": {
+        "kind": "strip",
+        "title": "Answer times from the index",
+        "caption": "Search and the largest-files list over 5 million entries; a folder listing over a 100,000-entry folder. Bars that start at zero are upper bounds.",
+        "scale": "linear",
+        "min": 0,
+        "max": 30,
+        "unit": "ms",
+        "ticks": [
+          { "at": 0, "label": "0" },
+          { "at": 10, "label": "10 ms" },
+          { "at": 20, "label": "20 ms" },
+          { "at": 30, "label": "30 ms" }
+        ],
+        "rows": [
+          { "label": "First search results", "detail": "5M names, any query", "min": null, "max": 1.1, "text": "≤ 1.1 ms", "highlight": true, "source": "docs/BENCHMARKS.md › Search (5M names) › First results: ≤ 1.1 ms" },
+          { "label": "Open a 100,000-item folder", "detail": "largest 200 first", "min": 8, "max": 8, "text": "8.0 ms", "source": "docs/BENCHMARKS.md › Index › Children of a 100k-entry folder, first 200 by size: 8.0 ms" },
+          { "label": "Top 100 largest files", "detail": "5M entries", "min": 12.2, "max": 12.2, "text": "12.2 ms", "source": "docs/BENCHMARKS.md › Index › Top 100 largest files, 5M entries: 12.2 ms" },
+          { "label": "Complete search pass", "detail": "5M names, slowest query type", "min": null, "max": 28, "text": "≤ 28 ms", "source": "docs/BENCHMARKS.md › Search (5M names) › Complete scan, any query tried: ≤ 28 ms" }
+        ]
+      }
+    },
+    {
+      "id": "live",
+      "title": "Stay current",
+      "lede": "Strata follows the NTFS change journal, so open views update in place instead of rescanning.",
+      "outcomes": [
+        {
+          "id": "live-latency",
+          "value": "251–265",
+          "unit": "ms",
+          "label": "from a file changing on disk to an updated view",
+          "detail": "Change-journal record to the change set the UI applies, end to end.",
+          "scope": "Live-update benchmark",
+          "source": "docs/BENCHMARKS.md › Results › Live updates (USN journal) › Journal record to UI change set: 251–265 ms"
+        },
+        {
+          "id": "live-burst",
+          "value": "1.9",
+          "unit": "s",
+          "label": "to absorb 500,000 files created at once",
+          "detail": "The slowest UI tick during the burst took 66 ms and the index was never locked for more than 24 ms. Sustained intake is about 316,000 journal records per second into a 1-million-entry index.",
+          "scope": "Live-update benchmark",
+          "source": "docs/BENCHMARKS.md › Results › Live updates › 500k files created at once: drained in 1.9 s; slowest tick 66 ms; longest index lock 24 ms; Throughput into a 1M-entry index: ~316k journal records/s"
+        }
+      ],
+      "chart": {
+        "kind": "strip",
+        "title": "Live-update timings",
+        "caption": "One change measured end to end; burst figures from 500,000 files created at once.",
+        "scale": "linear",
+        "min": 0,
+        "max": 2000,
+        "unit": "ms",
+        "ticks": [
+          { "at": 0, "label": "0" },
+          { "at": 500, "label": "0.5 s" },
+          { "at": 1000, "label": "1 s" },
+          { "at": 1500, "label": "1.5 s" },
+          { "at": 2000, "label": "2 s" }
+        ],
+        "rows": [
+          { "label": "One change, disk to view", "detail": "journal record to UI change set", "min": 251, "max": 265, "text": "251–265 ms", "highlight": true, "source": "docs/BENCHMARKS.md › Live updates › Journal record to UI change set: 251–265 ms" },
+          { "label": "Longest index lock", "detail": "during the 500k burst", "min": 24, "max": 24, "text": "24 ms", "source": "docs/BENCHMARKS.md › Live updates › 500k files created at once: longest index lock 24 ms" },
+          { "label": "Slowest UI tick", "detail": "during the 500k burst", "min": 66, "max": 66, "text": "66 ms", "source": "docs/BENCHMARKS.md › Live updates › 500k files created at once: slowest tick 66 ms" },
+          { "label": "Whole burst absorbed", "detail": "500,000 new files", "min": 1900, "max": 1900, "text": "1.9 s", "source": "docs/BENCHMARKS.md › Live updates › 500k files created at once: drained in 1.9 s" }
+        ]
+      }
+    },
+    {
+      "id": "explore",
+      "title": "Explore without lag",
+      "lede": "Maps draw on the GPU from layout buffers computed in Rust, so hovering, zooming and drilling stay smooth on very large folders.",
+      "outcomes": [
+        {
+          "id": "ui-fps",
+          "value": "100",
+          "unit": "fps",
+          "label": "with 503,464 blocks on screen and no dropped frames",
+          "detail": "Hover, zoom and pan sweeps; frame time p95 10.1 ms, p99 10.2 ms. Headless Chromium paces frames at 100 Hz, so 100 fps is the ceiling of the measurement, not of the renderer.",
+          "scope": "Headless Chromium, real GPU",
+          "source": "docs/BENCHMARKS.md › Results › UI (503,464 instances, LOD off) › Frame rate during hover, zoom and pan sweeps: 100 fps, no dropped frames (harness ceiling); Frame time p95 / p99: 10.1 / 10.2 ms"
+        }
+      ],
+      "chart": {
+        "kind": "strip",
+        "title": "Every interaction, on one scale",
+        "caption": "Logarithmic: each gridline is ten times the one before. Layout and hover figures use synthetic trees.",
+        "scale": "log",
+        "min": 0.1,
+        "max": 30000,
+        "unit": "µs",
+        "ticks": [
+          { "at": 0.1, "label": "0.1 µs" },
+          { "at": 1, "label": "1 µs" },
+          { "at": 10, "label": "10 µs" },
+          { "at": 100, "label": "100 µs" },
+          { "at": 1000, "label": "1 ms" },
+          { "at": 10000, "label": "10 ms" }
+        ],
+        "rows": [
+          { "label": "Find the block under the cursor", "detail": "503k-block map", "min": 0.12, "max": 0.12, "text": "0.12 µs", "source": "docs/BENCHMARKS.md › Layout › Pick (hit test), 503k-rect layout: 0.12 µs" },
+          { "label": "Hover, end to end in the UI", "detail": "including DOM measurement", "min": 18, "max": 26, "text": "18–26 µs", "source": "docs/BENCHMARKS.md › UI › Pick in the UI, including DOM measurement: 18–26 µs" },
+          { "label": "Re-lay out a folder", "detail": "100,000 items", "min": 3200, "max": 3200, "text": "3.2 ms", "source": "docs/BENCHMARKS.md › Layout › Treemap relayout, 100k-entry subtree: 3.2 ms" },
+          { "label": "Lay out a whole treemap", "detail": "1 million entries", "min": 6800, "max": 6800, "text": "6.8 ms", "source": "docs/BENCHMARKS.md › Layout › Treemap, 1M-entry tree, default level of detail: 6.8 ms" },
+          { "label": "Frame time, p99", "detail": "503,464 blocks", "min": 10200, "max": 10200, "text": "10.2 ms", "highlight": true, "source": "docs/BENCHMARKS.md › UI › Frame time p95 / p99: 10.1 / 10.2 ms" }
+        ]
+      }
+    },
+    {
+      "id": "light",
+      "title": "Light on your PC",
+      "lede": "A small native app that holds the index compactly and sleeps while nothing changes.",
+      "outcomes": [
+        {
+          "id": "memory",
+          "value": "59.2",
+          "unit": "B",
+          "label": "of memory per file, plus its name",
+          "detail": "At 5 million entries; 58.7 B at 1 million. Names average 16.5 bytes in the test data.",
+          "scope": "Synthetic index",
+          "source": "docs/BENCHMARKS.md › Results › Index › Memory per entry, names excluded: 58.7 B at 1M, 59.2 B at 5M; Methodology: about 16.5 name bytes per entry"
+        },
+        {
+          "id": "installer",
+          "value": "~3",
+          "unit": "MB",
+          "label": "installer download",
+          "detail": "The x64 installer package.",
+          "scope": "Release build",
+          "source": "docs/BENCHMARKS.md › Results › Installer › x64 NSIS installer: ~3 MB"
+        },
+        {
+          "id": "idle",
+          "value": "0",
+          "unit": "wake-ups",
+          "label": "while idle",
+          "detail": "No CPU wake-ups in a 3-second idle window. Optional activity tracking costs about 1.1% of one core at 10,000 events per second.",
+          "scope": "Live-update and activity benchmarks",
+          "source": "docs/BENCHMARKS.md › Results › Live updates › Wake-ups while idle (3 s): 0; Activity tracking › CPU at 10k events/s: ~1.1% of one core"
+        }
+      ],
+      "chart": {
+        "kind": "stack",
+        "title": "Index memory as the drive grows",
+        "caption": "Index memory is measured per entry at 1 and 5 million entries; names are added at the test data’s average of 16.5 bytes. The 10-million bar is estimated from measured per-entry memory.",
+        "min": 0,
+        "max": 800,
+        "unit": "MB",
+        "ticks": [
+          { "at": 0, "label": "0" },
+          { "at": 200, "label": "200 MB" },
+          { "at": 400, "label": "400 MB" },
+          { "at": 600, "label": "600 MB" },
+          { "at": 800, "label": "800 MB" }
+        ],
+        "series": [
+          { "id": "index", "label": "Index, 58.7–59.2 B per entry" },
+          { "id": "names", "label": "Names, 16.5 B average" }
+        ],
+        "rows": [
+          { "label": "1 million files", "values": [58.7, 16.5], "text": "75.2 MB", "source": "58.7 B × 1M + 16.5 B × 1M (docs/BENCHMARKS.md › Index › Memory per entry; Methodology)" },
+          { "label": "5 million files", "values": [296, 82.5], "text": "378.5 MB", "source": "59.2 B × 5M + 16.5 B × 5M (docs/BENCHMARKS.md › Index › Memory per entry; Methodology)" },
+          { "label": "10 million files", "detail": "estimated", "values": [592, 165], "text": "≈ 0.76 GB", "estimate": true, "source": "Estimate: 59.2 B × 10M + 16.5 B × 10M, from the 5M measurement (docs/BENCHMARKS.md › Index › Memory per entry; Methodology)" }
+        ]
+      }
+    }
   ],
   "comparison": {
     "release": null,
     "measuredOn": null,
     "machine": null,
-    "methodology": [
-      "Same machine, same volume, cold cache (reboot between runs), elevated session for every tool.",
-      "Wall-clock time from launch to a complete size total; median of five runs.",
-      "Each tool at its latest public release, default settings."
-    ],
+    "methodology": [],
     "results": []
   }
 }

@@ -23,7 +23,8 @@ Append `?nogl` to the URL to see the SVG fallback used when WebGL2 is unavailabl
 - **Benchmarks** come from `data/benchmarks.json` and are rendered into the HTML at build time
   (`build/benchmarks.ts` documents and validates the schema). Every number must trace to
   `docs/BENCHMARKS.md`. The head-to-head block appears only once
-  `comparison.results` has entries, so publishing competitor measurements is a data-only change.
+  `comparison.results` has entries; publishing a head-to-head is a data-only change: paste the
+  `comparison` block that `bench/verify-elevated.ps1` prints.
 - **Social image:** `public/og.png` is rendered from `build/og.svg` with a headless browser
   screenshot at 1200×630.
 

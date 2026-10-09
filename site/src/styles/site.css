@@ -32,6 +32,9 @@
   --link: #8fb0ff;
   --focus: #8fb0ff;
   --warn: #e0a64a;
+  --accent-mark: #5b86f0;
+  --accent-soft: rgb(91 134 240 / 0.38);
+  --bar-other: rgb(255 255 255 / 0.26);
 
   --radius: 8px;
   --radius-sm: 6px;
@@ -56,6 +59,9 @@
     --link: #2350c8;
     --focus: #2350c8;
     --warn: #8a5300;
+    --accent-mark: #3467e8;
+    --accent-soft: rgb(52 103 232 / 0.32);
+    --bar-other: rgb(0 0 0 / 0.24);
   }
 }
 
@@ -96,6 +102,7 @@ h1,
 h2,
 h3,
 h4,
+h5,
 p {
   margin: 0;
 }
@@ -836,78 +843,510 @@ li > p code {
 }
 
 /* -----------------------------------------------------------------------------
- * Benchmarks: shared blocks
+ * Benchmarks: outcome groups
  * -------------------------------------------------------------------------- */
 
-.stats {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1px;
-  margin: 0 0 48px;
-  padding: 0;
-  list-style: none;
-  border-block: 1px solid var(--line);
-  background: var(--line);
-}
-
-.stat {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  padding: 24px 24px 24px 0;
-  background: var(--page);
-}
-
-.stat__value {
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 1.6rem + 1.2vw, 2.75rem);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-}
-
-.stat__unit {
-  margin-left: 6px;
-  font: 500 14px var(--font-mono);
-  letter-spacing: 0;
+.bench-machine {
+  margin-top: 16px;
+  font: 12px/1.5 var(--font-mono);
+  letter-spacing: 0.02em;
   color: var(--ink-3);
 }
 
-.stat__label {
+.bgroups {
+  border-top: 1px solid var(--line);
+}
+
+.bgroup {
+  display: grid;
+  gap: 20px;
+  padding: 40px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.bgroup__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.bgroup__lede {
+  max-width: 44ch;
   margin-top: 8px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.bgroup__body {
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .bgroup {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+    gap: 32px;
+    padding: 56px 0;
+  }
+}
+
+.outcomes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outcome {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+.outcome__figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.outcome__value {
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 1.8rem + 1.4vw, 3rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.outcome__unit {
+  font: 500 14px var(--font-mono);
+  color: var(--ink-3);
+}
+
+.outcome__label {
+  max-width: 34ch;
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.outcome__detail {
+  max-width: 48ch;
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.outcome__scope {
+  margin-top: 12px;
+  font: 11px/1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@media (min-width: 640px) {
+  .outcomes--2,
+  .outcomes--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .outcomes--2 .outcome + .outcome,
+  .outcomes--3 .outcome + .outcome {
+    padding-left: 24px;
+    border-left: 1px solid var(--line);
+  }
+
+  .outcomes--2 .outcome:first-child,
+  .outcomes--3 .outcome:first-child {
+    padding-right: 24px;
+  }
+
+  /* Two columns: the third outcome wraps to a full-width row. */
+  .outcomes--3 .outcome:nth-child(3) {
+    grid-column: 1 / -1;
+    margin-top: 24px;
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (min-width: 1100px) {
+  .outcomes--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .outcomes--3 .outcome {
+    padding-right: 24px;
+  }
+
+  .outcomes--3 .outcome:nth-child(3) {
+    grid-column: auto;
+    margin-top: 0;
+    padding: 0 0 0 24px;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Benchmarks: charts
+ * -------------------------------------------------------------------------- */
+
+.chart {
+  --chart-cols: minmax(0, 1fr) auto;
+  margin: 28px 0 0;
+  padding: 20px clamp(16px, 2.4vw, 24px) 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.chart__head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.chart__title {
   font-size: 14px;
   font-weight: 600;
 }
 
-.stat__detail {
+.chart__caption {
   color: var(--ink-3);
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
+/* Phones: label and value share a line, the plot runs full width beneath. */
+.chart__row {
+  display: grid;
+  grid-template-columns: var(--chart-cols);
+  grid-template-areas:
+    "label value"
+    "plot plot";
+  align-items: center;
+  gap: 6px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.chart__row:first-child {
+  border-top: 0;
+}
+
+.chart__label {
+  grid-area: label;
+  display: grid;
+  min-width: 0;
+}
+
+.chart__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.chart__detail {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chart__value {
+  grid-area: value;
+  font: 500 13px var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chart__row.is-highlight .chart__value {
+  color: var(--ink);
+}
+
+.chart__plot {
+  grid-area: plot;
+  position: relative;
+  height: 20px;
+}
+
+.chart__grid {
+  position: absolute;
+  inset-block: 0;
+  left: var(--x);
+  width: 1px;
+  background: var(--line);
+}
+
+
+.chart__axis {
+  display: grid;
+  grid-template-columns: var(--chart-cols);
+  column-gap: 16px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line-2);
+}
+
+.chart__ticks {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 18px;
+  font: 11px/18px var(--font-mono);
+  color: var(--ink-3);
+}
+
+.chart__ticks > span {
+  position: absolute;
+  left: var(--x);
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.chart__ticks > span:first-child {
+  translate: 0 0;
+}
+
+.chart__ticks > span:last-child {
+  translate: -100% 0;
+}
+
+@media (max-width: 479px) {
+  .chart--dense .chart__ticks > span:nth-child(even) {
+    display: none;
+  }
+}
+
 @media (min-width: 640px) {
-  .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .chart {
+    --chart-cols: minmax(150px, 3fr) minmax(0, 7fr) minmax(84px, auto);
   }
 
-  .stat {
-    padding: 24px;
+  .chart__row {
+    grid-template-areas: "label plot value";
+    column-gap: 20px;
+  }
+
+  .chart__axis {
+    column-gap: 20px;
+  }
+
+  .chart__ticks {
+    grid-column: 2;
+  }
+
+  /* Gridlines run through the row padding so the axis reads as one plot. */
+  .chart__grid {
+    inset-block: -10px;
+  }
+
+  .chart__row:first-child .chart__grid {
+    top: 0;
   }
 }
 
-@media (min-width: 1000px) {
-  .stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .stat:first-child {
-    padding-left: 0;
-  }
+/* Range strip marks. */
+.strip__mark {
+  position: absolute;
+  top: 50%;
+  left: var(--a);
+  translate: 0 -50%;
 }
+
+.strip__mark.is-range {
+  width: max(4px, calc(var(--b) - var(--a)));
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ink-2);
+}
+
+.strip__mark.is-point {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-2);
+  translate: -50% -50%;
+}
+
+/* Only an upper bound is known: a dashed lead from zero to a cap. */
+.strip__mark.is-bound {
+  width: calc(var(--b) - var(--a));
+  min-width: 2px;
+  height: 0;
+  border-top: 1.5px dashed var(--ink-3);
+}
+
+.strip__mark.is-bound::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -6.75px;
+  width: 2px;
+  height: 12px;
+  background: var(--ink-2);
+}
+
+.chart__row.is-highlight .strip__mark.is-range,
+.chart__row.is-highlight .strip__mark.is-point,
+.chart__row.is-highlight .strip__mark.is-bound::after {
+  background: var(--accent-mark);
+}
+
+.chart__row.is-highlight .strip__mark.is-bound {
+  border-top-color: var(--accent-mark);
+}
+
+/* Stacked bars. */
+.stack__seg {
+  position: absolute;
+  top: 50%;
+  left: var(--a);
+  width: calc(var(--b) - var(--a));
+  height: 12px;
+  translate: 0 -50%;
+}
+
+.stack__seg--0 {
+  background: var(--accent-mark);
+}
+
+.stack__seg--1 {
+  background: var(--accent-soft);
+}
+
+.stack__seg--0 {
+  border-radius: 2px 0 0 2px;
+}
+
+.stack__seg:last-child {
+  border-radius: 0 2px 2px 0;
+}
+
+.chart__row.is-estimate .stack__seg {
+  background: transparent;
+  border: 1px dashed var(--accent-mark);
+}
+
+.chart__row.is-estimate .stack__seg--1 {
+  border-left: 0;
+  border-color: var(--ink-3);
+}
+
+.chart__row.is-estimate .chart__value {
+  color: var(--ink-2);
+}
+
+/* Bars draw in when their group scrolls into view. */
+.js .reveal .strip__mark,
+.js .reveal .stack__seg,
+.js .reveal .vs__bar {
+  transition: clip-path 600ms var(--ease) 120ms;
+}
+
+.js .reveal:not(.is-in) .strip__mark,
+.js .reveal:not(.is-in) .stack__seg,
+.js .reveal:not(.is-in) .vs__bar {
+  clip-path: inset(-2px 100% -2px 0);
+}
+
+/* Chart keys. */
+.chart__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.chart__key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart__key i {
+  display: inline-block;
+  flex: none;
+}
+
+.key__range {
+  width: 18px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ink-2);
+}
+
+.key__point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-2);
+}
+
+.key__bound {
+  width: 18px;
+  height: 0;
+  border-top: 1.5px dashed var(--ink-3);
+}
+
+.key__seg {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.key__seg--0 {
+  background: var(--accent-mark);
+}
+
+.key__seg--1 {
+  background: var(--accent-soft);
+}
+
+.key__seg--estimate {
+  border: 1px dashed var(--ink-3);
+}
+
+.key__bar {
+  width: 18px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--bar-other);
+}
+
+.key__bar--self {
+  background: var(--accent-mark);
+}
+
+.key__bar--alt {
+  background: var(--accent-soft);
+}
+
+.key__first {
+  width: 2px;
+  height: 14px;
+  background: var(--ink-2);
+}
+
+/* -----------------------------------------------------------------------------
+ * Benchmarks: head-to-head
+ * -------------------------------------------------------------------------- */
 
 .block {
-  margin-top: 48px;
-  padding: clamp(20px, 3vw, 32px);
+  margin-bottom: clamp(40px, 5vw, 56px);
+  padding: clamp(16px, 3vw, 32px);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -918,19 +1357,20 @@ li > p code {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px 32px;
-  margin-bottom: 24px;
+  gap: 12px 32px;
 }
 
 .block__title {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1rem + 0.8vw, 26px);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .block__sub {
   max-width: 68ch;
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--ink-2);
   font-size: 14px;
 }
@@ -940,478 +1380,241 @@ li > p code {
   color: var(--ink-3);
 }
 
-.block__foot {
+.vs__key {
+  margin: 16px 0 0;
+}
+
+.vs__volume {
   margin-top: 24px;
-  font-size: 14px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 
-.key {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 12px;
-  color: var(--ink-2);
-}
-
-.key li {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.key__range,
-.key__bound,
-.key__target {
-  display: inline-block;
-}
-
-.key__range {
-  width: 20px;
-  height: 6px;
-  border-radius: 1px;
-  background: var(--ink);
-}
-
-.key__bound {
-  width: 20px;
-  height: 0;
-  border-top: 1px dashed var(--ink-2);
-  position: relative;
-}
-
-.key__bound::after {
-  content: "";
-  position: absolute;
-  right: -1px;
-  top: -4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink);
-}
-
-.key__target {
-  width: 0;
-  height: 14px;
-  border-left: 1px solid var(--ink);
-}
-
-.fn a {
-  margin-left: 2px;
-  color: var(--link);
-  font: 500 10px var(--font-mono);
-  text-decoration: none;
-}
-
-/* -----------------------------------------------------------------------------
- * Benchmarks: range chart
- * -------------------------------------------------------------------------- */
-
-.rng,
-.rng__axis {
-  --cols: minmax(0, 1fr);
-}
-
-.rng {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--line-2);
-}
-
-.rng__axis {
-  display: grid;
-  grid-template-columns: var(--cols);
-  padding-bottom: 8px;
-  font: 11px var(--font-mono);
-  color: var(--ink-3);
-}
-
-.rng__axis-title {
-  display: none;
-}
-
-.rng__scale {
-  position: relative;
-  height: 32px;
-}
-
-.rng__scale > span {
-  position: absolute;
-  left: var(--x);
-  translate: -50% 0;
-  white-space: nowrap;
-}
-
-.rng__scale > span:first-child {
-  translate: 0 0;
-}
-
-/* The target label stacks a second line so it never collides with "10%". */
-.rng__scale > span:last-child {
-  translate: -100% 0;
-  text-align: right;
-  color: var(--ink);
-}
-
-.rng__scale-sub {
-  display: block;
-  color: var(--ink-3);
-}
-
-.rng__rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rng__group-title {
-  display: block;
-  padding: 16px 0 4px;
-  font: 500 11px/1.6 var(--font-mono);
+.vs__where {
+  font: 500 12px/1.4 var(--font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
 
-.rng__row {
-  display: grid;
-  grid-template-columns: var(--cols);
-  border-bottom: 1px solid var(--line);
+.vs__chart + .vs__chart {
+  margin-top: 28px;
 }
 
-.rng__group:last-child .rng__row:last-child {
-  border-bottom: 0;
-}
-
-.rng__label {
-  display: grid;
-  align-content: center;
-  padding: 12px 0 4px;
-}
-
-.rng__name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.rng__detail {
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
-.rng__plot {
-  position: relative;
-  min-height: 24px;
-}
-
-.rng__tick {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--x);
-  width: 0;
-  border-left: 1px solid var(--line);
-}
-
-.rng__tick:last-of-type {
-  border-left-color: var(--ink-2);
-}
-
-.rng__bar {
-  position: absolute;
-  top: 50%;
-  left: var(--a);
-  width: max(2px, calc(var(--b) - var(--a)));
-  height: 6px;
-  translate: 0 -50%;
-  border-radius: 1px;
-  background: var(--ink);
-}
-
-/* A single run (or identical runs) is a dot, not a bar. */
-.rng__bar.is-point,
-.rng__bar.is-bound {
-  width: 8px;
-  height: 8px;
-  translate: -50% -50%;
-  border-radius: 50%;
-}
-
-/* Only an upper bound is known: a dashed lead-in to the left of the dot. */
-.rng__bar.is-bound::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: 28px;
-  border-top: 1px dashed var(--ink-2);
-}
-
-.rng__value {
+.vs__chart-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 12px;
-  padding: 4px 0 12px;
+  margin: 12px 0 4px;
 }
 
-.rng__measured {
-  font: 500 14px var(--font-mono);
+.vs__chart-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.vs__chart-sub {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.vs__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "tool value"
+    "plot plot";
+  align-items: center;
+  gap: 6px 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.vs__rows > .vs__row:first-child {
+  border-top: 0;
+}
+
+.vs__tool {
+  grid-area: tool;
+  display: grid;
+  min-width: 0;
+}
+
+.vs__name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.vs__row.is-self .vs__name,
+.vs__row.is-self-alt .vs__name {
+  font-weight: 600;
+}
+
+.vs__ver {
+  display: block;
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--ink-3);
   white-space: nowrap;
 }
 
-.rng__target {
+.vs__note {
   color: var(--ink-3);
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.rng__margin {
-  font: 12px var(--font-mono);
-  color: var(--ink-2);
+.vs__plot {
+  grid-area: plot;
+  position: relative;
+  height: 22px;
+}
+
+.vs__bar {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: max(2px, var(--w));
+  height: 14px;
+  translate: 0 -50%;
+  border-radius: 2px;
+  background: var(--bar-other);
+}
+
+.vs__row.is-self .vs__bar {
+  background: var(--accent-mark);
+}
+
+.vs__row.is-self-alt .vs__bar {
+  background: var(--accent-soft);
+}
+
+.vs__first {
+  position: absolute;
+  top: 50%;
+  left: var(--x);
+  width: 2px;
+  height: 22px;
+  translate: -1px -50%;
+  background: var(--ink-2);
+}
+
+.vs__value {
+  grid-area: value;
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+
+.vs__num {
+  font-size: 16px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-@media (min-width: 900px) {
-  .rng,
-  .rng__axis {
-    --cols: minmax(220px, 4fr) minmax(0, 6fr) minmax(176px, 2.4fr);
-    column-gap: 32px;
-  }
-
-  .rng__row {
-    column-gap: 32px;
-  }
-
-  .rng__axis-title {
-    display: block;
-  }
-
-  .rng__axis-title--end {
-    text-align: right;
-  }
-
-  .rng__label,
-  .rng__value {
-    padding: 12px 0;
-  }
-
-  .rng__value {
-    display: grid;
-    justify-items: end;
-    align-content: center;
-    gap: 2px;
-    text-align: right;
-  }
-}
-
-/* -----------------------------------------------------------------------------
- * Benchmarks: head-to-head
- * -------------------------------------------------------------------------- */
-
-.h2h__scroll {
-  overflow-x: auto;
-}
-
-.h2h__table {
-  width: 100%;
-  min-width: 640px;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.h2h__table th,
-.h2h__table td {
-  padding: 16px 16px 16px 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-.h2h__table thead th {
-  padding-top: 0;
-  border-bottom-color: var(--line-2);
-  font-weight: 600;
-  vertical-align: bottom;
-}
-
-.h2h__table thead th:first-child {
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.h2h__table tbody th {
-  width: 28%;
-  font-weight: 600;
-}
-
-.h2h__ver {
-  display: block;
-  font: 400 11px var(--font-mono);
-  color: var(--ink-3);
-}
-
-.h2h__table thead th.is-self::before {
-  content: "";
-  display: block;
-  width: 16px;
-  height: 2px;
-  margin-bottom: 8px;
-  background: var(--accent);
-}
-
-.h2h__cell {
-  display: table-cell;
-}
-
-.h2h__val {
-  display: block;
-  font: 500 14px var(--font-mono);
-}
-
-.h2h__bar {
-  position: relative;
-  display: block;
-  height: 4px;
-  margin: 8px 0 6px;
-  background: var(--line);
-}
-
-.h2h__bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--w);
-  background: var(--ink-3);
-}
-
-.h2h__cell.is-self .h2h__bar i {
-  background: var(--accent);
-}
-
-.h2h__rel {
-  font: 11px var(--font-mono);
-  color: var(--ink-3);
-}
-
-.h2h__cell.is-best .h2h__rel {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* Phones: each metric becomes a stacked card with one labelled line per tool. */
-@media (max-width: 639px) {
-  .h2h__table,
-  .h2h__table tbody,
-  .h2h__table tr,
-  .h2h__table th,
-  .h2h__table td {
-    display: block;
-    min-width: 0;
-    width: auto;
-  }
-
-  .h2h__table thead {
-    display: none;
-  }
-
-  .h2h__table tbody tr {
-    padding: 16px 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .h2h__table tbody th,
-  .h2h__table td {
-    padding: 0;
-    border: 0;
-  }
-
-  .h2h__table tbody th {
-    width: auto;
-    margin-bottom: 12px;
-  }
-
-  .h2h__table td {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: 12px;
-    padding: 4px 0;
-  }
-
-  .h2h__table td::before {
-    content: attr(data-tool);
-    font-size: 13px;
-    color: var(--ink-2);
-  }
-
-  .h2h__table td.is-self::before {
-    color: var(--ink);
-    font-weight: 600;
-  }
-
-  .h2h__table td.is-best::before {
-    content: attr(data-tool) " · best";
-  }
-
-  .h2h__val {
-    grid-column: 3;
-    grid-row: 1;
-    text-align: right;
-  }
-
-  .h2h__bar {
-    grid-column: 2;
-    grid-row: 1;
-    margin: 0;
-  }
-
-  .h2h__rel {
-    display: none;
-  }
-}
-
-/* -----------------------------------------------------------------------------
- * Benchmarks: shared cells, notes, disclosures
- * -------------------------------------------------------------------------- */
-
-.rt__detail {
-  display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
+.vs__num.is-none {
+  font-size: 13px;
   font-weight: 400;
   color: var(--ink-3);
 }
 
-.rt__none {
+.vs__rel {
+  font-size: 12px;
   color: var(--ink-3);
 }
 
-.notes {
-  display: grid;
-  gap: 4px;
-  margin: 20px 0 0;
-  padding-left: 20px;
-  color: var(--ink-3);
-  font-size: 13px;
+.vs__row.is-best .vs__rel {
+  color: var(--ink);
+  font-weight: 500;
 }
 
-.notes li::marker {
+.vs__firstval {
+  grid-area: first;
   font: 12px var(--font-mono);
-  color: var(--ink-2);
+  text-align: right;
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 
-.fn__label {
-  color: var(--ink-2);
+.vs__rows.has-first .vs__row {
+  grid-template-areas:
+    "tool value"
+    "tool first"
+    "plot plot";
+}
+
+.vs__cols {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  /* Every chart shares one column template so bars line up across charts. */
+  .vs__row,
+  .vs__cols {
+    grid-template-columns: minmax(170px, 3fr) minmax(0, 7fr) 112px 96px;
+    grid-template-areas: "tool plot value value";
+    column-gap: 24px;
+  }
+
+  .vs__rows.has-first .vs__row,
+  .vs__cols {
+    grid-template-areas: "tool plot value first";
+  }
+
+  .vs__cols {
+    display: grid;
+    column-gap: 24px;
+    padding-bottom: 6px;
+    font: 11px/1.4 var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: right;
+  }
+
+  .vs__cols > span:first-child {
+    grid-area: value;
+  }
+
+  .vs__cols > span:last-child {
+    grid-area: first;
+  }
+
+  .vs__firstlabel {
+    display: none;
+  }
+
+  .vs__cols + .vs__row {
+    border-top: 0;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Benchmarks: notes, disclosures
+ * -------------------------------------------------------------------------- */
+
+.bench-foot {
+  margin-top: 24px;
+  font-size: 14px;
 }
 
 .disclosures {
   margin-top: 32px;
   border-top: 1px solid var(--line);
+}
+
+/* The last group already draws the rule above the disclosure. */
+.bgroups + .disclosures {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.disclosure__sub {
+  margin: 8px 0 16px;
+  font: 500 12px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 .disclosure {
@@ -2009,11 +2212,24 @@ li > p code {
 }
 
 @media (forced-colors: active) {
-  .rng__bar,
-  .h2h__bar i,
+  .strip__mark.is-range,
+  .strip__mark.is-point,
+  .strip__mark.is-bound::after,
+  .stack__seg,
+  .vs__bar,
+  .vs__first,
   .key__range,
-  .key__bound::after {
+  .key__point,
+  .key__seg,
+  .key__bar,
+  .key__first {
     forced-color-adjust: none;
     background: CanvasText;
+  }
+
+  .vs__row.is-self .vs__bar,
+  .key__bar--self,
+  .chart__row.is-highlight .strip__mark {
+    background: Highlight;
   }
 }

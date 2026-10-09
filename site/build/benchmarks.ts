@@ -5,60 +5,98 @@
  * ships as static markup. The page script only adds copy buttons.
  *
  * Responsibilities:
- * - Validate the data file, so a typo fails the build instead of the page.
- * - Render the headline stats, the log-scale range chart grouped by area (every
- *   metric with a numeric target), its footnotes, methodology and reproduction
- *   commands.
- * - Render the competitor head-to-head only when measured results exist.
+ * - Validate the data file, so a typo or an out-of-scale value fails the build
+ *   instead of the page.
+ * - Render the outcome groups: headline figures phrased as user outcomes, each
+ *   with one chart (a range strip on a linear or log scale, or a stacked
+ *   scaling chart) plus an equivalent table for assistive technology.
+ * - Render the head-to-head against other tools only when measured results
+ *   exist, grouped per volume: full scan time with the first run of the
+ *   session marked, and peak memory.
+ * - Render the measurement notes and reproduction commands.
  *
- * Every number in the data file must trace to `docs/BENCHMARKS.md`.
+ * Every number in the data file must trace to `docs/BENCHMARKS.md`; each
+ * outcome and chart row carries a `source` note saying where.
  *
  * Schema of `benchmarks.json`:
  *
  * ```jsonc
  * {
  *   "methodologyUrl": string,          // link to docs/BENCHMARKS.md
- *   "machine": string,                 // reference machine
+ *   "machine": string,                 // reference machine, generic hardware only
  *   "noise": string,                   // run-to-run noise statement
  *   "methodology": string[],           // one bullet each
  *   "reproduce": [{ "area": string, "command": string }], // "\n" separates commands
- *   "areas": [{ "id": string, "label": string }], // display order of the chart groups
- *   "metrics": [{
- *     "id": string,                    // unique, stable
- *     "area": string,                  // an areas[].id
- *     "group": string,                 // sub-heading in BENCHMARKS.md, e.g. "MFT scanner"
- *     "label": string,
- *     "detail": string,                // workload, e.g. "5M names"
- *     "text": string,                  // value as printed, without unit: "155–291", "≤ 1.1", "~3"
- *     "unit": string,                  // "ms", "B", "M records/s", ...
- *     "min": number | null,            // fastest run; null when only an upper bound is known
- *     "max": number,                   // slowest run (same as min for a single value)
- *     "aside"?: string,                // secondary reading, e.g. "3.4–6.4 M records/s"
- *     "lowerIsBetter": boolean,
- *     "target"?: number,               // numeric target, in `unit`; enables the range chart
- *     "targetText"?: string,           // target as printed; may exist without a number
- *     "note"?: string                  // numbered footnote
+ *   "groups": [{                       // display order
+ *     "id": string,                    // unique, stable; used for element ids
+ *     "title": string,                 // user-facing outcome, e.g. "Find anything"
+ *     "lede": string,
+ *     "outcomes": [{                   // headline figures, 1–3 per group
+ *       "id": string,
+ *       "value": string,               // as printed, without unit: "155–291", "≤ 1.1", "~3"
+ *       "unit": string,
+ *       "label": string,               // completes the sentence "<value> <unit> …"
+ *       "detail": string,              // workload and secondary readings
+ *       "scope": string,               // small print: what kind of measurement this is
+ *       "source": string               // where in docs/BENCHMARKS.md the number comes from
+ *     }],
+ *     "chart": StripChart | StackChart
  *   }],
- *   "stats": [{ "value": string, "unit": string, "label": string, "detail": string }],
  *   "comparison": {
  *     "release": string | null,        // Strata version measured, e.g. "v1.0.0"
  *     "measuredOn": string | null,     // ISO date of the run
- *     "machine": string | null,
+ *     "machine": string | null,        // generic hardware description
  *     "methodology": string[],
  *     "results": [{                    // empty: the head-to-head is not rendered at all
- *       "metric": string,              // e.g. "Full scan, system volume"
- *       "detail": string,              // e.g. "1.2M entries, cold cache"
- *       "unit": string,                // e.g. "s"
+ *       "metric": string,              // "Full scan, <where>" | "First scan of the session, <where>"
+ *                                      // | "Peak memory, <where>"; anything else gets its own chart
+ *       "detail": string,              // e.g. "4.6M entries, NVMe SSD, median of 3 runs"
+ *       "unit": string,                // "s", "MiB"
  *       "lowerIsBetter": boolean,
- *       "values": [{ "tool": string, "version": string, "value": number }]
+ *       "values": [{
+ *         "tool": string,              // "Strata" | "Strata (MFT)" | "Strata (standard scanner)"
+ *                                      // | "WizTree <ver>" | "Windows File Explorer" | …
+ *         "version"?: string,          // shown when the tool name doesn't already include it
+ *         "value": number | null,      // null: not measured
+ *         "detail"?: string            // scope caveat, e.g. "Explorer counts C:\\Users only"
+ *       }]
  *     }]
  *   }
  * }
+ *
+ * // A range strip: one horizontal mark per row on a shared axis.
+ * StripChart = {
+ *   "kind": "strip", "title": string, "caption": string,
+ *   "scale": "linear" | "log", "min": number, "max": number, "unit": string,
+ *   "ticks": [{ "at": number, "label": string }],
+ *   "rows": [{
+ *     "label": string, "detail"?: string,
+ *     "min": number | null,            // null: only an upper bound ("≤") is known
+ *     "max": number,                   // same as min for a single reading
+ *     "text": string,                  // value as printed, with unit
+ *     "highlight"?: boolean,           // the row behind the group's headline figure
+ *     "source": string
+ *   }]
+ * }
+ *
+ * // A stacked bar per row, e.g. index memory and name storage per drive size.
+ * StackChart = {
+ *   "kind": "stack", "title": string, "caption": string,
+ *   "min": 0, "max": number, "unit": string,
+ *   "ticks": [{ "at": number, "label": string }],
+ *   "series": [{ "id": string, "label": string }],
+ *   "rows": [{
+ *     "label": string, "detail"?: string,
+ *     "values": number[],              // one per series
+ *     "text": string,
+ *     "estimate"?: boolean,            // derived, not measured; drawn outlined
+ *     "source": string
+ *   }]
+ * }
  * ```
  *
- * Publishing competitor measurements is a data-only change: fill
- * `comparison.results` (with `release`, `measuredOn` and `machine`) and the
- * head-to-head appears on the next build.
+ * Publishing a head-to-head is a data-only change: copy the `comparison` block
+ * that `bench/verify-elevated.ps1` prints and it appears on the next build.
  */
 import { readFileSync } from "node:fs";
 
@@ -66,43 +104,97 @@ import { readFileSync } from "node:fs";
 // Data model
 // -----------------------------------------------------------------------------
 
-/** One benchmark area: a labelled group in the range chart. */
-export interface Area {
-  id: string;
+/** One tick on a chart axis, in the chart's unit. */
+export interface Tick {
+  at: number;
   label: string;
 }
 
-/** One measured result. */
-export interface Metric {
-  id: string;
-  area: string;
-  /** Sub-heading in `docs/BENCHMARKS.md` the result traces to. */
-  group: string;
+/** One row of a range strip. */
+export interface StripRow {
   label: string;
-  /** Workload, e.g. "5M names". */
-  detail: string;
-  /** Value exactly as printed in the docs, without the unit. */
-  text: string;
-  unit: string;
+  detail?: string;
   /** Fastest run; `null` when only an upper bound was recorded. */
   min: number | null;
-  /** Slowest run. */
+  /** Slowest run, or the single reading. */
   max: number;
-  /** Secondary reading of the same run. */
-  aside?: string;
-  lowerIsBetter: boolean;
-  /** Numeric target in `unit`; only metrics with one appear on the page. */
-  target?: number;
-  targetText?: string;
-  note?: string;
+  /** Value as printed, with its unit. */
+  text: string;
+  /** Marks the row behind the group's headline figure. */
+  highlight?: boolean;
+  /** Where in `docs/BENCHMARKS.md` the number comes from. */
+  source: string;
 }
 
-/** One headline figure. */
-export interface Stat {
+/** Range strip: one mark per row on a shared linear or logarithmic axis. */
+export interface StripChart {
+  kind: "strip";
+  title: string;
+  caption: string;
+  scale: "linear" | "log";
+  min: number;
+  max: number;
+  unit: string;
+  ticks: Tick[];
+  rows: StripRow[];
+}
+
+/** One stacked bar. */
+export interface StackRow {
+  label: string;
+  detail?: string;
+  /** One value per series, in the chart's unit. */
+  values: number[];
+  text: string;
+  /** Derived from measurements rather than measured; drawn outlined. */
+  estimate?: boolean;
+  source: string;
+}
+
+/** Stacked bars on a linear axis from zero. */
+export interface StackChart {
+  kind: "stack";
+  title: string;
+  caption: string;
+  min: number;
+  max: number;
+  unit: string;
+  ticks: Tick[];
+  series: { id: string; label: string }[];
+  rows: StackRow[];
+}
+
+/** One headline figure, phrased as what a user gets. */
+export interface Outcome {
+  id: string;
+  /** Value exactly as printed in the docs, without the unit. */
   value: string;
   unit: string;
+  /** Completes the sentence "<value> <unit> …". */
   label: string;
   detail: string;
+  /** Small print: what kind of measurement produced the figure. */
+  scope: string;
+  source: string;
+}
+
+/** A group of related outcomes with one chart. */
+export interface Group {
+  id: string;
+  title: string;
+  lede: string;
+  outcomes: Outcome[];
+  chart: StripChart | StackChart;
+}
+
+/** One tool's reading in a head-to-head measurement. */
+export interface ComparisonValue {
+  tool: string;
+  version?: string;
+  /** `null` when the tool was not measured on this row. */
+  value: number | null;
+  /** Scope caveat, e.g. "Explorer counts C:\Users only". */
+  detail?: string;
 }
 
 /** One head-to-head measurement across tools. */
@@ -111,7 +203,16 @@ export interface ComparisonResult {
   detail: string;
   unit: string;
   lowerIsBetter: boolean;
-  values: { tool: string; version: string; value: number }[];
+  values: ComparisonValue[];
+}
+
+/** Head-to-head block, as emitted by `bench/verify-elevated.ps1`. */
+export interface Comparison {
+  release: string | null;
+  measuredOn: string | null;
+  machine: string | null;
+  methodology: string[];
+  results: ComparisonResult[];
 }
 
 /** The whole data file. */
@@ -121,28 +222,17 @@ export interface BenchmarkData {
   noise: string;
   methodology: string[];
   reproduce: { area: string; command: string }[];
-  areas: Area[];
-  metrics: Metric[];
-  stats: Stat[];
-  comparison: {
-    release: string | null;
-    measuredOn: string | null;
-    machine: string | null;
-    methodology: string[];
-    results: ComparisonResult[];
-  };
+  groups: Group[];
+  comparison: Comparison;
 }
 
 /** Rendered fragments, keyed by their `<!--bench:*-->` placeholder. */
 export interface BenchmarkHtml {
-  stats: string;
-  range: string;
+  machine: string;
   versus: string;
-  notes: string;
+  groups: string;
   method: string;
   reproduce: string;
-  machine: string;
-  noise: string;
   link: string;
 }
 
@@ -152,140 +242,368 @@ export interface BenchmarkHtml {
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-/** Thin space between a number and its unit; "%" sticks to the number. */
-const withUnit = (text: string, unit: string): string => (unit === "%" ? `${esc(text)}%` : `${esc(text)}<span class="u"> ${esc(unit)}</span>`);
-
-/**
- * Share of the target budget the worst run used: slowest run for
- * lower-is-better metrics, lowest run for higher-is-better ones.
- */
-function budgetUsed(m: Metric): number | null {
-  if (m.target === undefined) return null;
-  if (m.lowerIsBetter) return m.max / m.target;
-  const worst = m.min ?? m.max;
-  return worst > 0 ? m.target / worst : null;
-}
-
-/** Thousands separators, then two significant figures above 1,000 so ±30% noise isn't overstated. */
-function ratioText(r: number): string {
-  if (r < 10) return r.toFixed(1).replace(/\.0$/, "");
-  if (r < 1000) return Math.round(r).toLocaleString("en-US");
-  const p = 10 ** (Math.floor(Math.log10(r)) - 1);
-  return (Math.round(r / p) * p).toLocaleString("en-US");
-}
-
-/**
- * Margin against target in words, e.g. "16× under target" or "7% under target".
- *
- * @returns `null` for metrics without a numeric target.
- */
-export function margin(m: Metric): { text: string; short: string; ratio: number } | null {
-  const used = budgetUsed(m);
-  if (used === null || used <= 0) return null;
-  const ratio = 1 / used;
-  const word = m.lowerIsBetter ? "under" : "over";
-  const amount = ratio >= 2 ? `${ratioText(ratio)}×` : `${Math.round(m.lowerIsBetter ? (1 - used) * 100 : (ratio - 1) * 100)}%`;
-  const short = `${amount} ${word}`;
-  return { text: `${short} target`, short, ratio };
-}
-
-/** Log-scale domain of the range chart, as a share of target: 0.01% … 100%. */
-const LOG_MIN = -4;
-const LOG_MAX = 0;
-const TICKS = [
-  { at: -4, label: "0.01%" },
-  { at: -3, label: "0.1%" },
-  { at: -2, label: "1%" },
-  { at: -1, label: "10%" },
-  { at: 0, label: `Target<span class="rng__scale-sub">100% of budget</span>` },
-];
-
-const logPos = (fraction: number): number => {
-  const v = Math.log10(Math.max(10 ** LOG_MIN, Math.min(10 ** LOG_MAX, fraction)));
-  return ((v - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100;
-};
-
 const pct = (n: number): string => `${n.toFixed(2)}%`;
 
+/** Words that describe internal goals, never results; the build rejects them in page copy. */
+const INTERNAL_WORDS = /\b(targets?|budgets?)\b/i;
+
+/** Position of `v` on a chart axis, as a percentage of the plot width. */
+function position(chart: { min: number; max: number; scale?: "linear" | "log" }, v: number): number {
+  if (chart.scale === "log") {
+    const lo = Math.log10(chart.min);
+    return ((Math.log10(v) - lo) / (Math.log10(chart.max) - lo)) * 100;
+  }
+  return ((v - chart.min) / (chart.max - chart.min)) * 100;
+}
+
+function fail(where: string, problem: string): never {
+  throw new Error(`benchmarks.json: ${where} ${problem}`);
+}
+
+function validateTicks(where: string, chart: StripChart | StackChart): void {
+  if (!(chart.max > chart.min)) fail(where, "has an empty axis");
+  if (chart.kind === "stack" && chart.min !== 0) fail(where, "must start at zero");
+  if (chart.kind === "strip" && chart.scale === "log" && !(chart.min > 0)) fail(where, "needs a positive minimum on a log scale");
+  for (const t of chart.ticks) if (t.at < chart.min || t.at > chart.max) fail(where, `has tick ${t.at} outside its axis`);
+}
+
 function validate(data: BenchmarkData): void {
-  const areas = new Set(data.areas.map((a) => a.id));
   const ids = new Set<string>();
-  for (const m of data.metrics) {
-    const where = `benchmarks.json: metric "${m.id}"`;
-    if (ids.has(m.id)) throw new Error(`${where} is duplicated`);
-    ids.add(m.id);
-    if (!areas.has(m.area)) throw new Error(`${where} has unknown area "${m.area}"`);
-    if (!Number.isFinite(m.max) || (m.min !== null && (!Number.isFinite(m.min) || m.min > m.max))) throw new Error(`${where} has an invalid range`);
-    if (m.target !== undefined && !(m.target > 0)) throw new Error(`${where} has a non-positive target`);
-    if (m.target !== undefined && !m.targetText) throw new Error(`${where} has a target without targetText`);
+  const unique = (id: string, where: string) => {
+    if (!/^[a-z0-9-]+$/.test(id)) fail(where, "needs a lowercase id");
+    if (ids.has(id)) fail(where, "is duplicated");
+    ids.add(id);
+  };
+  for (const g of data.groups) {
+    const where = `group "${g.id}"`;
+    unique(g.id, where);
+    if (g.outcomes.length === 0) fail(where, "has no outcomes");
+    for (const o of g.outcomes) {
+      unique(o.id, `outcome "${o.id}"`);
+      if (!o.source || !o.scope) fail(`outcome "${o.id}"`, "needs a source and a scope");
+    }
+    const c = g.chart;
+    const cw = `chart of group "${g.id}"`;
+    validateTicks(cw, c);
+    if (c.rows.length === 0) fail(cw, "has no rows");
+    if (c.kind === "strip") {
+      for (const r of c.rows) {
+        const rw = `${cw}, row "${r.label}",`;
+        if (!r.source) fail(rw, "needs a source");
+        if (!Number.isFinite(r.max) || (r.min !== null && (!Number.isFinite(r.min) || r.min > r.max))) fail(rw, "has an invalid range");
+        if ((r.min ?? r.max) < c.min || r.max > c.max) fail(rw, "falls outside the axis");
+      }
+    } else {
+      for (const r of c.rows) {
+        const rw = `${cw}, row "${r.label}",`;
+        if (!r.source) fail(rw, "needs a source");
+        if (r.values.length !== c.series.length) fail(rw, "needs one value per series");
+        if (r.values.some((v) => !(v >= 0))) fail(rw, "has a negative value");
+        if (r.values.reduce((a, b) => a + b, 0) > c.max) fail(rw, "falls outside the axis");
+      }
+    }
   }
   for (const r of data.comparison.results) {
-    if (r.values.length < 2) throw new Error(`benchmarks.json: comparison "${r.metric}" needs at least two tools`);
+    const where = `comparison "${r.metric}"`;
+    if (r.values.length === 0) fail(where, "has no values");
+    for (const v of r.values) {
+      if (!v.tool) fail(where, "has a value without a tool");
+      if (v.value !== null && !(Number.isFinite(v.value) && v.value >= 0)) fail(where, `has an invalid value for ${v.tool}`);
+    }
   }
 }
 
-// -----------------------------------------------------------------------------
-// Fragments
-// -----------------------------------------------------------------------------
-
-/** Footnote numbers, in metric order, for the metrics the range chart shows. */
-function footnotes(data: BenchmarkData): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const m of data.metrics) if (m.note && m.target !== undefined) out.set(m.id, out.size + 1);
-  return out;
+/** Fails the build if internal-goal vocabulary reaches visible page text. */
+function checkCopy(html: string): void {
+  const text = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+  const hit = INTERNAL_WORDS.exec(text);
+  if (hit) throw new Error(`benchmarks.json: page copy must describe results, not goals; found "${hit[0]}" in "${text.slice(Math.max(0, hit.index - 40), hit.index + 40).trim()}"`);
 }
 
-const sup = (n: number | undefined): string => (n ? `<sup class="fn"><a href="#bench-note-${n}" aria-label="Note ${n}">${n}</a></sup>` : "");
+// -----------------------------------------------------------------------------
+// Charts
+// -----------------------------------------------------------------------------
 
-function stats(data: BenchmarkData): string {
-  return data.stats
+function axis(chart: StripChart | StackChart): string {
+  const ticks = chart.ticks.map((t) => `<span style="--x:${pct(position(chart, t.at))}">${esc(t.label)}</span>`).join("");
+  return `<div class="chart__axis"><div class="chart__ticks">${ticks}</div></div>`;
+}
+
+const grid = (chart: StripChart | StackChart): string => chart.ticks.map((t) => `<i class="chart__grid" style="--x:${pct(position(chart, t.at))}"></i>`).join("");
+
+const rowLabel = (label: string, detail?: string): string =>
+  `<div class="chart__label"><span class="chart__name">${esc(label)}</span>${detail ? `<span class="chart__detail">${esc(detail)}</span>` : ""}</div>`;
+
+function srTable(caption: string, head: string[], rows: string[][]): string {
+  return `<table class="visually-hidden"><caption>${esc(caption)}</caption><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows
+    .map((r) => `<tr><th scope="row">${esc(r[0] ?? "")}</th>${r
+      .slice(1)
+      .map((c) => `<td>${esc(c)}</td>`)
+      .join("")}</tr>`)
+    .join("")}</tbody></table>`;
+}
+
+function strip(chart: StripChart): string {
+  const rows = chart.rows.map((r) => {
+    const a = position(chart, r.min ?? chart.min);
+    const b = position(chart, r.max);
+    const kind = r.min === null ? "is-bound" : r.min === r.max ? "is-point" : "is-range";
+    return `<div class="chart__row${r.highlight ? " is-highlight" : ""}">
+  ${rowLabel(r.label, r.detail)}
+  <div class="chart__plot">${grid(chart)}<span class="strip__mark ${kind}" style="--a:${pct(a)};--b:${pct(b)}"></span></div>
+  <span class="chart__value">${esc(r.text)}</span>
+</div>`;
+  });
+  const range = chart.rows.some((r) => r.min !== null && r.min !== r.max);
+  const bound = chart.rows.some((r) => r.min === null);
+  const key = [range ? `<li><i class="key__range"></i>Spread across runs</li>` : "", `<li><i class="key__point"></i>Single reading</li>`, bound ? `<li><i class="key__bound"></i>Upper bound</li>` : ""].join("");
+  return `<div class="chart__plotarea" aria-hidden="true">${rows.join("\n")}${axis(chart)}</div>
+<ul class="chart__key" aria-hidden="true">${key}</ul>
+${srTable(
+  chart.title,
+  ["Measurement", "Result"],
+  chart.rows.map((r) => [r.detail ? `${r.label}, ${r.detail}` : r.label, r.text]),
+)}`;
+}
+
+function stack(chart: StackChart): string {
+  const rows = chart.rows.map((r) => {
+    let start = 0;
+    const segs = r.values
+      .map((v, i) => {
+        const seg = `<span class="stack__seg stack__seg--${i}" style="--a:${pct(position(chart, start))};--b:${pct(position(chart, start + v))}"></span>`;
+        start += v;
+        return seg;
+      })
+      .join("");
+    return `<div class="chart__row${r.estimate ? " is-estimate" : ""}">
+  ${rowLabel(r.label, r.detail)}
+  <div class="chart__plot">${grid(chart)}${segs}</div>
+  <span class="chart__value">${esc(r.text)}</span>
+</div>`;
+  });
+  const key = chart.series.map((s, i) => `<li><i class="key__seg key__seg--${i}"></i>${esc(s.label)}</li>`).join("");
+  const estimate = chart.rows.some((r) => r.estimate) ? `<li><i class="key__seg key__seg--estimate"></i>Estimated</li>` : "";
+  const fmt = (v: number) => `${v.toLocaleString("en-US", { maximumFractionDigits: 1 })} ${chart.unit}`;
+  return `<div class="chart__plotarea" aria-hidden="true">${rows.join("\n")}${axis(chart)}</div>
+<ul class="chart__key" aria-hidden="true">${key}${estimate}</ul>
+${srTable(
+  chart.title,
+  ["Drive size", ...chart.series.map((s) => s.label), "Total"],
+  chart.rows.map((r) => [r.estimate ? `${r.label} (estimated)` : r.label, ...r.values.map(fmt), r.text]),
+)}`;
+}
+
+function chart(c: StripChart | StackChart): string {
+  return `<figure class="chart chart--${c.kind}${c.ticks.length > 4 ? " chart--dense" : ""}">
+  <figcaption class="chart__head"><span class="chart__title">${esc(c.title)}</span><span class="chart__caption">${esc(c.caption)}</span></figcaption>
+  ${c.kind === "strip" ? strip(c) : stack(c)}
+</figure>`;
+}
+
+// -----------------------------------------------------------------------------
+// Outcome groups
+// -----------------------------------------------------------------------------
+
+function outcome(o: Outcome): string {
+  return `<li class="outcome">
+  <p class="outcome__figure"><span class="outcome__value">${esc(o.value)}</span><span class="outcome__unit">${esc(o.unit)}</span></p>
+  <p class="outcome__label">${esc(o.label)}</p>
+  <p class="outcome__detail">${esc(o.detail)}</p>
+  <p class="outcome__scope">${esc(o.scope)}</p>
+</li>`;
+}
+
+function groups(data: BenchmarkData): string {
+  return data.groups
     .map(
-      (s) => `<li class="stat">
-  <span class="stat__value">${esc(s.value)}<span class="stat__unit">${esc(s.unit)}</span></span>
-  <span class="stat__label">${esc(s.label)}</span>
-  <span class="stat__detail">${esc(s.detail)}</span>
-</li>`,
+      (g) => `<section class="bgroup reveal" aria-labelledby="bg-${g.id}">
+  <header class="bgroup__head">
+    <h3 class="bgroup__title" id="bg-${g.id}">${esc(g.title)}</h3>
+    <p class="bgroup__lede">${esc(g.lede)}</p>
+  </header>
+  <div class="bgroup__body">
+    <ul class="outcomes outcomes--${g.outcomes.length}">${g.outcomes.map(outcome).join("\n")}</ul>
+    ${chart(g.chart)}
+  </div>
+</section>`,
     )
     .join("\n");
 }
 
-function range(data: BenchmarkData, notes: Map<string, number>): string {
-  const row = (m: Metric): string => {
-    const target = m.target as number;
-    const share = (v: number) => (m.lowerIsBetter ? v / target : target / v);
-    const hi = share(m.lowerIsBetter ? m.max : (m.min ?? m.max));
-    const lo = m.min === null ? null : share(m.lowerIsBetter ? m.min : m.max);
-    const a = logPos(lo ?? hi);
-    const b = logPos(hi);
-    const kind = m.min === null ? " is-bound" : a === b ? " is-point" : "";
-    const mg = margin(m);
-    return `<li class="rng__row">
-  <div class="rng__label"><span class="rng__name">${esc(m.label)}${sup(notes.get(m.id))}</span><span class="rng__detail">${esc(m.detail)}</span></div>
-  <div class="rng__plot" aria-hidden="true">${TICKS.map((t) => `<i class="rng__tick" style="--x:${pct(((t.at - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100)}"></i>`).join("")}<span class="rng__bar${kind}" style="--a:${pct(Math.min(a, b))};--b:${pct(Math.max(a, b))}"></span></div>
-  <div class="rng__value"><span class="rng__measured">${withUnit(m.text, m.unit)}</span>${mg ? `<span class="rng__margin">${esc(mg.text)}</span>` : ""}<span class="rng__target">target ${esc(m.targetText ?? "")}</span></div>
-</li>`;
-  };
-  const groups = data.areas
-    .map((area) => {
-      const rows = data.metrics.filter((m) => m.area === area.id && m.target !== undefined);
-      if (rows.length === 0) return "";
-      return `<li class="rng__group"><span class="rng__group-title" id="rng-${area.id}">${esc(area.label)}</span><ol class="rng__rows" aria-labelledby="rng-${area.id}">${rows.map(row).join("\n")}</ol></li>`;
-    })
-    .join("\n");
-  const axis = TICKS.map((t) => `<span style="--x:${pct(((t.at - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100)}">${t.label}</span>`).join("");
-  return `<div class="rng__axis" aria-hidden="true"><span class="rng__axis-title">Budget used, less is better</span><div class="rng__scale">${axis}</div><span class="rng__axis-title rng__axis-title--end">Result</span></div>
-<ol class="rng" aria-label="Measured results against their targets, by area">${groups}</ol>`;
+// -----------------------------------------------------------------------------
+// Head-to-head
+// -----------------------------------------------------------------------------
+
+/** Display order: Strata's scanners first, then other tools in a fixed order. */
+function toolRank(tool: string): number {
+  if (tool === "Strata" || tool === "Strata (MFT)") return 0;
+  if (tool.startsWith("Strata")) return 1;
+  if (tool.startsWith("WizTree")) return 2;
+  if (/explorer/i.test(tool)) return 3;
+  return 4;
 }
 
-function notesHtml(data: BenchmarkData, notes: Map<string, number>): string {
-  return data.metrics
-    .filter((m) => notes.has(m.id))
-    .map((m) => `<li id="bench-note-${notes.get(m.id)}"><span class="fn__label">${esc(m.label)}.</span> ${esc(m.note ?? "")}</li>`)
-    .join("");
+/** The current script emits plain "Strata" for the MFT scan. */
+const toolName = (tool: string): string => (tool === "Strata" ? "Strata (MFT)" : tool);
+
+/** Short family name for the block title. */
+function family(tool: string): string {
+  if (tool.startsWith("Strata")) return "Strata";
+  if (tool.startsWith("WizTree")) return "WizTree";
+  if (/explorer/i.test(tool)) return "File Explorer";
+  return tool;
 }
+
+/** Precision follows magnitude, so a 412 s run isn't printed as 412.37 s. */
+function num(v: number): string {
+  const digits = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits });
+}
+
+const factor = (f: number): string => (f < 10 ? f.toFixed(1) : Math.round(f).toLocaleString("en-US"));
+
+type Kind = "full" | "first" | "memory";
+
+const KINDS: [Kind, RegExp][] = [
+  ["full", /^Full scan, (.+)$/],
+  ["first", /^First scan of the session, (.+)$/],
+  ["memory", /^Peak memory, (.+)$/],
+];
+
+interface Panel {
+  where: string;
+  full?: ComparisonResult;
+  first?: ComparisonResult;
+  memory?: ComparisonResult;
+}
+
+function panels(results: ComparisonResult[]): { panels: Panel[]; other: ComparisonResult[] } {
+  const byWhere = new Map<string, Panel>();
+  const other: ComparisonResult[] = [];
+  for (const r of results) {
+    const hit = KINDS.map(([k, re]) => [k, re.exec(r.metric)?.[1]] as const).find(([, w]) => w);
+    if (!hit?.[1]) {
+      other.push(r);
+      continue;
+    }
+    const [kind, where] = hit;
+    const p = byWhere.get(where) ?? { where };
+    p[kind] = r;
+    byWhere.set(where, p);
+  }
+  return { panels: [...byWhere.values()], other };
+}
+
+const sentence = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * One bar chart: a row per tool, scaled to the largest reading. A matching
+ * first-run result is drawn as a marker on the same scale.
+ */
+function bars(title: string, r: ComparisonResult, first?: ComparisonResult): string {
+  const vals = [...r.values].sort((a, b) => toolRank(a.tool) - toolRank(b.tool));
+  const firstOf = (tool: string) => first?.values.find((v) => v.tool === tool)?.value ?? null;
+  const measured = vals.flatMap((v) => (v.value === null ? [] : [v.value]));
+  const scale = Math.max(...measured, ...vals.map((v) => firstOf(v.tool) ?? 0));
+  const best = measured.length > 0 ? (r.lowerIsBetter ? Math.min(...measured) : Math.max(...measured)) : null;
+  const memory = /mib|gib|mb|gb/i.test(r.unit);
+  const bestWord = r.lowerIsBetter ? (memory ? "Least memory" : "Fastest") : "Highest";
+  const unit = (v: number) => `${num(v)} ${r.unit}`;
+
+  const rel = (v: number): string => {
+    if (best === null || v === best) return bestWord;
+    if (best === 0 || v === 0) return "";
+    const f = r.lowerIsBetter ? v / best : best / v;
+    return r.lowerIsBetter ? `${factor(f)}× ${memory ? "more" : "longer"}` : `${factor(f)}× lower`;
+  };
+
+  const rows = vals.map((v) => {
+    const name = toolName(v.tool);
+    const ver = v.version && !name.includes(v.version) ? v.version : "";
+    const f = firstOf(v.tool);
+    const rank = toolRank(v.tool);
+    const cls = `vs__row${rank === 0 ? " is-self" : rank === 1 ? " is-self-alt" : ""}${v.value !== null && v.value === best ? " is-best" : ""}${v.value === null ? " is-missing" : ""}`;
+    const bar =
+      v.value === null
+        ? ""
+        : `<span class="vs__bar" style="--w:${pct(scale > 0 ? (v.value / scale) * 100 : 0)}"></span>${f !== null && scale > 0 ? `<span class="vs__first" style="--x:${pct((f / scale) * 100)}"></span>` : ""}`;
+    return `<div class="${cls}">
+  <div class="vs__tool"><span class="vs__name">${esc(name)}${ver ? ` <span class="vs__ver">${esc(ver)}</span>` : ""}</span>${v.detail ? `<span class="vs__note">${esc(v.detail)}</span>` : ""}</div>
+  <div class="vs__plot">${bar}</div>
+  <div class="vs__value">${
+    v.value === null
+      ? `<span class="vs__num is-none">Not measured</span>`
+      : `<span class="vs__num">${esc(num(v.value))}<span class="u"> ${esc(r.unit)}</span></span><span class="vs__rel">${esc(rel(v.value))}</span>`
+  }</div>${first ? `<div class="vs__firstval"><span class="vs__firstlabel">first run </span>${f === null ? "—" : esc(unit(f))}</div>` : ""}
+</div>`;
+  });
+
+  const head = ["Tool", r.lowerIsBetter ? `${sentence(r.metric)} (lower is better)` : sentence(r.metric)];
+  if (first) head.push("First run of the session");
+  head.push("Note");
+  const table = srTable(
+    `${title}: ${r.detail}`,
+    head,
+    vals.map((v) => {
+      const cells = [toolName(v.tool) + (v.version && !toolName(v.tool).includes(v.version) ? ` ${v.version}` : ""), v.value === null ? "Not measured" : unit(v.value)];
+      if (first) {
+        const f = firstOf(v.tool);
+        cells.push(f === null ? "Not measured" : unit(f));
+      }
+      cells.push(v.detail ?? "");
+      return cells;
+    }),
+  );
+
+  return `<div class="vs__chart">
+  <div class="vs__chart-head"><h5 class="vs__chart-title">${esc(title)}</h5><span class="vs__chart-sub">${esc(r.detail)}${r.lowerIsBetter ? " · lower is better" : ""}</span></div>
+  <div class="vs__rows${first ? " has-first" : ""}" aria-hidden="true">${first ? `<div class="vs__cols"><span>Median</span><span>First run</span></div>` : ""}${rows.join("\n")}</div>
+  ${table}
+</div>`;
+}
+
+function versus(c: Comparison): string {
+  if (c.results.length === 0) return "";
+  const { panels: ps, other } = panels(c.results);
+  const tools = [...new Set(c.results.flatMap((r) => r.values.map((v) => v.tool)))].sort((a, b) => toolRank(a) - toolRank(b));
+  const families = [...new Set(tools.map(family))];
+  const meta = [c.release ? `Strata ${c.release}` : null, c.measuredOn, c.machine].filter((x): x is string => !!x);
+  const hasFirst = ps.some((p) => p.first);
+
+  const volume = (p: Panel): string => {
+    const charts = [p.full ? bars("Full scan time", p.full, p.first) : p.first ? bars("First scan of the session", p.first) : "", p.memory ? bars("Peak memory", p.memory) : ""].join("\n");
+    return `<article class="vs__volume">
+  <h4 class="vs__where">${esc(sentence(p.where))}</h4>
+  ${charts}
+</article>`;
+  };
+
+  const key = `<ul class="chart__key vs__key" aria-hidden="true">${tools.some((t) => toolRank(t) === 0) ? `<li><i class="key__bar key__bar--self"></i>Strata, MFT scan</li>` : ""}${tools.some((t) => toolRank(t) === 1) ? `<li><i class="key__bar key__bar--alt"></i>Strata, standard scanner</li>` : ""}<li><i class="key__bar"></i>Other tools</li>${hasFirst ? `<li><i class="key__first"></i>First run of the session, no cache dropped</li>` : ""}</ul>`;
+
+  return `<div class="block vs reveal" id="head-to-head">
+  <header class="block__head">
+    <div>
+      <h3 class="block__title">${esc(families.join(" vs. "))}</h3>
+      <p class="block__sub">Complete scans of the same volume on the same machine, timed from launch to a full size total.</p>
+    </div>
+    ${meta.length > 0 ? `<p class="block__meta">${meta.map(esc).join(" · ")}</p>` : ""}
+  </header>
+  ${key}
+  ${ps.map(volume).join("\n")}
+  ${other.length > 0 ? `<article class="vs__volume">${other.map((r) => bars(sentence(r.metric), r)).join("\n")}</article>` : ""}
+  ${c.methodology.length > 0 ? `<ul class="method method--compact">${c.methodology.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
+</div>`;
+}
+
+// -----------------------------------------------------------------------------
+// Method
+// -----------------------------------------------------------------------------
 
 function method(data: BenchmarkData): string {
-  return `<ul class="method">${data.methodology.map((m) => `<li>${esc(m)}</li>`).join("")}<li>Reference machine: ${esc(data.machine)}.</li><li>${esc(data.noise)}</li></ul>`;
+  return `<ul class="method">${data.methodology.map((m) => `<li>${esc(m)}</li>`).join("")}<li>${esc(data.noise)}</li></ul>`;
 }
 
 function reproduce(data: BenchmarkData): string {
@@ -299,73 +617,25 @@ function reproduce(data: BenchmarkData): string {
     .join("")}</ul>`;
 }
 
-function versus(c: BenchmarkData["comparison"]): string {
-  if (c.results.length === 0) return "";
-  const tools: string[] = [];
-  const versions = new Map<string, string>();
-  for (const r of c.results) {
-    for (const v of r.values) {
-      if (!tools.includes(v.tool)) tools.push(v.tool);
-      if (!versions.has(v.tool)) versions.set(v.tool, v.version);
-    }
-  }
-  tools.sort((a, b) => (a === "Strata" ? -1 : b === "Strata" ? 1 : 0));
-  const meta = [c.release ? `Strata ${c.release}` : null, c.measuredOn, c.machine].filter((x): x is string => !!x);
-  const head = tools
-    .map((t) => `<th scope="col" class="${t === "Strata" ? "is-self" : ""}">${esc(t)}<span class="h2h__ver">${esc(versions.get(t) ?? "")}</span></th>`)
-    .join("");
-  const rows = c.results.map((r) => {
-    const vals = r.values.map((v) => v.value);
-    const best = r.lowerIsBetter ? Math.min(...vals) : Math.max(...vals);
-    const max = Math.max(...vals);
-    const cells = tools.map((t) => {
-      const v = r.values.find((x) => x.tool === t);
-      if (!v) return `<td class="h2h__cell is-missing" data-tool="${esc(t)}"><span class="rt__none">—</span></td>`;
-      const isBest = v.value === best;
-      const factor = best > 0 ? (r.lowerIsBetter ? v.value / best : best / v.value) : 1;
-      const rel = isBest ? "Best" : `${factor < 10 ? factor.toFixed(1) : Math.round(factor)}× ${r.lowerIsBetter ? "slower" : "lower"}`;
-      return `<td class="h2h__cell${isBest ? " is-best" : ""}${t === "Strata" ? " is-self" : ""}" data-tool="${esc(t)}">
-  <span class="h2h__val">${withUnit(v.value.toLocaleString("en-US"), r.unit)}</span>
-  <span class="h2h__bar" aria-hidden="true"><i style="--w:${pct(max > 0 ? Math.max(1, (v.value / max) * 100) : 0)}"></i></span>
-  <span class="h2h__rel">${rel}</span>
-</td>`;
-    });
-    return `<tr><th scope="row">${esc(r.metric)}<span class="rt__detail">${esc(r.detail)} · ${r.lowerIsBetter ? "lower" : "higher"} is better</span></th>${cells.join("")}</tr>`;
-  });
-  return `<div class="block h2h" id="head-to-head">
-  <header class="block__head">
-    <div><h3 class="block__title">Head-to-head</h3><p class="block__sub">Same machine, same volume, each tool at its public release.</p></div>
-    ${meta.length > 0 ? `<p class="block__meta">${meta.map(esc).join(" · ")}</p>` : ""}
-  </header>
-  <div class="h2h__scroll"><table class="h2h__table">
-    <caption class="visually-hidden">Strata compared with other disk-space tools</caption>
-    <thead><tr><th scope="col">Metric</th>${head}</tr></thead>
-    <tbody>${rows.join("\n")}</tbody>
-  </table></div>
-  ${c.methodology.length > 0 ? `<ul class="method method--compact">${c.methodology.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
-</div>`;
-}
-
 /**
  * Reads, validates and renders the benchmark data file.
  *
  * @param file - Path to `benchmarks.json`.
  * @returns HTML fragments for each placeholder.
- * @throws If the data file is inconsistent (unknown area, bad range, missing target text).
+ * @throws If the data file is inconsistent (duplicate id, value outside its
+ *   axis, missing source) or its copy mentions internal goals.
  */
 export function renderBenchmarks(file: string): BenchmarkHtml {
   const data = JSON.parse(readFileSync(file, "utf8")) as BenchmarkData;
   validate(data);
-  const notes = footnotes(data);
-  return {
-    stats: stats(data),
-    range: range(data, notes),
+  const out: BenchmarkHtml = {
+    machine: `Measured on ${/^[aeiou8]/i.test(data.machine) ? "an" : "a"} ${esc(data.machine)}.`,
     versus: versus(data.comparison),
-    notes: notesHtml(data, notes),
+    groups: groups(data),
     method: method(data),
     reproduce: reproduce(data),
-    machine: esc(data.machine),
-    noise: esc(data.noise),
     link: esc(data.methodologyUrl),
   };
+  checkCopy(out.machine + out.versus + out.groups + out.method);
+  return out;
 }

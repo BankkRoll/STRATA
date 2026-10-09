@@ -59,7 +59,23 @@ computed in Rust and streamed to the WebView as binary buffers that WebGL2 draws
 ## Privacy
 
 No telemetry. Scans, history, settings and the undo log stay on your machine; file names and
-paths never leave it. The only network request is the update check.
+paths never leave it. The app only contacts GitHub Releases to check for and download updates;
+the installer may download the WebView2 runtime. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [Requirements](docs/REQUIREMENTS.md) | System requirements, administrator rights, filesystems, build tools |
+| [User data & privacy](docs/PRIVACY.md) | What is stored where, network access, removing data, uninstalling |
+| [FAQ](docs/FAQ.md) | Sizes vs. Explorer, admin rights, OneDrive, deletion and restore |
+| [Architecture](docs/ARCHITECTURE.md) | Processes and trust boundary, data flow, size accounting, deletion safety |
+| [Benchmarks](docs/BENCHMARKS.md) | Methodology, reproduction commands, results |
+| [Rule packs](docs/RULES.md) | Rule-pack schema and authoring |
+| [Releasing](docs/RELEASING.md) | Building, signing and publishing releases |
+| [Contributing](CONTRIBUTING.md) | Building, testing and conventions |
+| [Security](SECURITY.md) | Reporting a vulnerability |
+| [Changelog](CHANGELOG.md) | Changes per release |
 
 ## Build from source
 

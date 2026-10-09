@@ -7,55 +7,66 @@ Per-track details (API, benchmarks, decisions) live in `docs/tracks/<track>.md`.
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Foundations | **Done.** CI green on x64 + ARM64 (run 37966756973) |
-| M1 | MFT scanner CLI | In progress (ntfs track) |
-| M2 | Fallback walker | In progress (walk track) |
-| M3 | Index + helper + IPC | In progress (index, platform tracks); helper binary after M1 merges |
-| M4 | Treemap + list + detail | Layout engine **merged** (`strata-layout`); WebGL renderer + UI not started |
-| M5 | Live updates | Incremental index API in progress (index track) |
-| M6 | Classifier + attribution | In progress (classify track) |
-| M7 | Cleanup | Safety core in progress (clean track) |
-| M8 | Search + palette | Search engine in progress (index track) |
-| M9 | Other views | Sunburst, icicle/flame, circle packing, mind map layouts **merged**; UI not started |
-| M10 | Duplicates | Hash cache storage merged (`strata-store`); pipeline not started |
-| M11 | History + timeline | Storage, diffs, retention **merged** (`strata-store`); UI not started |
+| M0 | Foundations | **Done.** CI green on x64 + ARM64 |
+| M1 | MFT scanner CLI | Engine + CLI merged, tested on synthetic images. Needs an elevated run: real-volume timing, reconciliation, VHDX golden data |
+| M2 | Fallback walker | **Merged.** C:\ at 20–23 s per 1M entries (target ≤ 30 s). MFT-vs-walker reconciliation pending fixtures |
+| M3 | Index + helper + IPC | Index, Win32 layer and secured pipe merged. Helper binary + app streaming not started |
+| M4 | Treemap + list + detail | Layout engine merged; WebGL UI in progress (ui track) |
+| M5 | Live updates | Index live-update API merged (property-tested). USN tailing, cache catch-up not started |
+| M6 | Classifier + attribution | Engine, 240 rules, app catalog merged. Apps/category views not started |
+| M7 | Cleanup | Safety core merged (never-list, TOCTOU, locks, Recycle Bin + restore). Queue UI not started |
+| M8 | Search + palette | Search engine merged (first batch ~1 ms over 5M). Palette UI in progress |
+| M9 | Other views | Layouts merged; renderers in progress (ui track) |
+| M10 | Duplicates | Hash cache storage merged; pipeline not started |
+| M11 | History + timeline | Storage, diffs, retention merged; UI not started |
 | M12 | ETW | Rollup storage merged; tracing not started |
-| M13 | Settings, tray, service | Settings model + persistence merged; UI/tray/service not started |
+| M13 | Settings, tray, service | Settings model merged; UI/tray/service not started |
 | M14 | Licensing, installer, updater | License storage merged; rest not started |
 | M15 | Polish + hardening | Not started |
 
-## Done
+## Merged crates
 
-- M0: workspace, Tauri 2.12 shell (single instance, Mica/solid backdrop), themed empty home
-  screen, `strata-core` shared types, docs, CI (parallel jobs, SHA-pinned actions, Dependabot).
-- `strata-layout`: squarified treemap with LOD + viewport culling, picking (<1 µs), transitions,
-  cushion coefficients, sunburst, icicle/flame, circle packing, mind map. 100k relayout 3.2 ms,
-  1M tree 6.8 ms. 75 tests. See `docs/tracks/layout.md` for byte-exact buffer formats.
-- `strata-store`: two SQLite files (`history.db` rebuildable, `state.db` durable), versioned
-  migrations, corruption recovery, compact snapshot blobs (12 B/dir), diffs, retention, settings
-  (all §19 keys), write-ahead undo log, activity rollups, hash cache, license storage. 109 tests.
+| Crate | Purpose | Tests |
+|---|---|---|
+| `strata-core` | Shared types and contracts | 26 |
+| `strata-ntfs` + `strata-cli` | Raw MFT scanner, USN parser, CLI | 84 |
+| `strata-walk` | Unelevated parallel walker | 56 |
+| `strata-index` | SoA index, aggregates, live updates, search, cache | 79 |
+| `strata-layout` | Treemap, sunburst, icicle, packing, mind map, picking | 75 |
+| `strata-classify` | Rule engine, 240 rules, app catalog, sniffing | 68 |
+| `strata-clean` | Never-list, pre-flight, deletes, restore, locks | 119 |
+| `strata-store` | SQLite history, settings, undo log, caches | 109 |
+| `strata-win` | Volumes, known folders, elevation, signatures | 57 |
+| `strata-ipc` | Helper protocol, framing, secured named pipe | 39 |
 
 ## Running
 
-Parallel tracks in worktrees: ntfs, walk, index, classify, clean, platform.
+- ui track: WebGL renderers, app shell, list/detail panels, home screen, palette.
 
 ## Next
 
-- Merge remaining tracks as they finish; apply core change requests.
-- Implement `LayoutSource` on the index; stream layout buffers over a Tauri Channel.
-- Helper binary (after ntfs + platform merge).
+- Apply pending core change requests (see "Core change requests" in each track doc):
+  `FolderSource`, `LocalAppDataLow`/`SavedGames`, `Sizes::attr_overhead`, `Category::key()`.
+- `strata-helper` binary (wiring steps in `docs/tracks/platform.md`).
+- App backend: scan → index → classify → layout → Tauri Channel.
 
 ## Known issues
 
 - `cargo test --workspace` must exclude `strata-app` (tauri-build stub msvcrt.lib leaks into
   doctests); test it separately. See CLAUDE.md.
+- cargo-fuzz targets build but libFuzzer doesn't run on this Windows toolchain; run on Linux/WSL.
+  Stable proptest never-panic suites cover the same inputs.
 
 ## Benchmarks
 
 | Area | Metric | Result | Target |
 |---|---|---|---|
+| NTFS | Parse, 1M records (parallel, in memory) | 155–291 ms | ≤ 3 s end to end |
+| Walker | C:\ default walk | 20–23 s per 1M | ≤ 30 s |
+| Index | Bytes per entry (names excluded) | 58.7–59.2 | ≤ 64 |
+| Search | First results, 5M names | ≤ 1.1 ms | ≤ 50 ms |
 | Layout | 100k-entry subtree relayout | 3.2 ms | ≤ 50 ms |
-| Layout | 1M-node treemap with LOD | 6.8 ms | 60 fps |
 | Layout | Pick (hit test) | 0.12–0.29 µs | < 1 ms |
+| Classify | Per entry | ~150 ns | — |
+| IPC | Named pipe throughput | 3.2 M records/s | — |
 | Store | Snapshot commit, 50k dirs | 53–215 ms | < 1 s |
-| CI | Full pipeline (cold cache) | ~11 min wall (was 25+) | fast |

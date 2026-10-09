@@ -33,6 +33,24 @@ const REAL_SID = /S-1-5-21-\d{6,}-\d{6,}-\d{6,}/;
 
 const WORKTREE_PATH = /\.claude[\\/]worktrees/;
 
+/** A GUID on a line that talks about volumes; group 1 is the GUID body. */
+const VOLUME_GUID = /\{([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}/gi;
+const VOLUME_CONTEXT = /volume|guid/i;
+
+/**
+ * Whether a GUID looks randomly generated rather than hand-written.
+ * Placeholders like `11111111-1111-4111-8111-111111111111` use few distinct
+ * digits; real volume GUIDs use most of the hex alphabet.
+ *
+ * @param {string} guid - GUID without braces.
+ * @returns {boolean}
+ */
+function looksReal(guid) {
+  const hex = guid.toLowerCase().replaceAll("-", "");
+  if (hex.includes("12345678") || hex.includes("abcdef")) return false;
+  return new Set(hex).size >= 10;
+}
+
 /**
  * Returns the privacy problems found on one line.
  *
@@ -50,6 +68,11 @@ function problemsIn(line) {
   }
   if (REAL_SID.test(line)) found.push("real account SID");
   if (WORKTREE_PATH.test(line)) found.push("local worktree path");
+  if (VOLUME_CONTEXT.test(line)) {
+    for (const m of line.matchAll(VOLUME_GUID)) {
+      if (looksReal(m[1])) found.push(`real-looking volume GUID (${m[0]})`);
+    }
+  }
   return found;
 }
 

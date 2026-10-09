@@ -663,6 +663,7 @@ pub struct ImageBuilder {
     mft_fragments: usize,
     mft_extension: Option<u64>,
     mft_attr_list_nonresident: bool,
+    mft_bitmap_split: bool,
     system_files: bool,
     serial: u64,
 }
@@ -708,6 +709,7 @@ impl ImageBuilder {
             mft_fragments: 1,
             mft_extension: None,
             mft_attr_list_nonresident: false,
+            mft_bitmap_split: false,
             system_files: false,
             serial: 0x1234_5678_9ABC_DEF0,
         }
@@ -739,6 +741,15 @@ impl ImageBuilder {
     #[must_use]
     pub fn mft_data_in_extension(mut self, record: u64) -> Self {
         self.mft_extension = Some(record);
+        self
+    }
+
+    /// Also splits `$MFT:$BITMAP`, holding its second half in the `$MFT`
+    /// extension record, as Windows does once the MFT grows large. Requires
+    /// [`ImageBuilder::mft_data_in_extension`].
+    #[must_use]
+    pub fn mft_bitmap_in_extension(mut self) -> Self {
+        self.mft_bitmap_split = true;
         self
     }
 
@@ -874,7 +885,25 @@ impl ImageBuilder {
         let mft_runs = self.alloc_fragmented(clusters, self.mft_fragments);
         let mirror_runs = self.alloc((4 * rs).div_ceil(cs));
         let bitmap_bytes = record_count.div_ceil(8).next_multiple_of(8);
-        let mft_bitmap_runs = self.alloc(bitmap_bytes.div_ceil(cs));
+        let split_bitmap = self.mft_bitmap_split && self.mft_extension.is_some();
+        let bitmap_clusters = bitmap_bytes
+            .div_ceil(cs)
+            .max(if split_bitmap { 2 } else { 1 });
+        let mft_bitmap_runs = self.alloc(bitmap_clusters);
+        let (bitmap_head, bitmap_tail) = if split_bitmap {
+            let r = mft_bitmap_runs[0];
+            let h = r.len.div_ceil(2);
+            (
+                vec![Run { len: h, ..r }],
+                vec![Run {
+                    vcn: h,
+                    lcn: r.lcn.map(|l| l + h),
+                    len: r.len - h,
+                }],
+            )
+        } else {
+            (mft_bitmap_runs.clone(), Vec::new())
+        };
         let mft_bytes = record_count * rs;
 
         // Record 0 ($MFT), optionally with $DATA split into an extension record.
@@ -919,13 +948,21 @@ impl ImageBuilder {
                 (ext + 1) * rs <= head_end * cs,
                 "$MFT extension record {ext} is not inside the runs held by record 0"
             );
-            let list = attr_list_value(&[
+            let mut entries = vec![
                 AttrListSpec::new(AT_STANDARD_INFORMATION, 0, mft_ref),
                 AttrListSpec::new(AT_FILE_NAME, 0, mft_ref),
                 AttrListSpec::new(AT_DATA, 0, mft_ref),
                 AttrListSpec::new(AT_DATA, head_end, FileRef::from_parts(ext, 1)),
                 AttrListSpec::new(AT_BITMAP, 0, mft_ref),
-            ]);
+            ];
+            if let Some(first) = bitmap_tail.first() {
+                entries.push(AttrListSpec::new(
+                    AT_BITMAP,
+                    first.vcn,
+                    FileRef::from_parts(ext, 1),
+                ));
+            }
+            let list = attr_list_value(&entries);
             rec0 = if self.mft_attr_list_nonresident {
                 let runs = self.alloc((list.len() as u64).div_ceil(cs));
                 self.write_runs(&runs, &list);
@@ -942,12 +979,18 @@ impl ImageBuilder {
             } else {
                 rec0.attr(AT_ATTRIBUTE_LIST, "", 0, AttrValue::Resident(list))
             };
-            self.insert(
-                ext,
-                RecordBuilder::new(1)
-                    .extension_of(mft_ref)
-                    .data_nonresident("", 0, NonResidentSpec::continuation(tail)),
-            );
+            let mut ext_rec = RecordBuilder::new(1)
+                .extension_of(mft_ref)
+                .data_nonresident("", 0, NonResidentSpec::continuation(tail));
+            if !bitmap_tail.is_empty() {
+                ext_rec = ext_rec.attr(
+                    AT_BITMAP,
+                    "",
+                    0,
+                    AttrValue::NonResident(NonResidentSpec::continuation(bitmap_tail.clone())),
+                );
+            }
+            self.insert(ext, ext_rec);
         }
         rec0 = rec0
             .name(ROOT, "$MFT", NS_WIN32_AND_DOS)
@@ -956,11 +999,15 @@ impl ImageBuilder {
                 AT_BITMAP,
                 "",
                 0,
-                AttrValue::NonResident(NonResidentSpec::new(
-                    mft_bitmap_runs.clone(),
-                    bitmap_bytes,
-                    g.cluster_size,
-                )),
+                AttrValue::NonResident(NonResidentSpec {
+                    start_vcn: 0,
+                    runs: bitmap_head,
+                    allocated: bitmap_clusters * cs,
+                    real: bitmap_bytes,
+                    initialized: bitmap_bytes,
+                    total_allocated: None,
+                    compression_unit: 0,
+                }),
             );
         self.records.insert(0, Slot::Built(rec0));
 

@@ -248,6 +248,41 @@ fn mft_bitmap_option_skips_unused_records_with_identical_output() {
 }
 
 #[test]
+fn split_mft_bitmap_in_an_extension_record_still_scans() {
+    // Large, nearly full system volumes hold the second half of $MFT:$BITMAP
+    // in an $MFT extension record; that continuation must not stop the scan.
+    let mut b = ImageBuilder::new(Geometry::default())
+        .with_system_files()
+        .min_records(20_000)
+        .mft_fragments(4)
+        .mft_data_in_extension(17)
+        .mft_bitmap_in_extension();
+    for n in [30u64, 31, 9000, 19_999] {
+        b.insert(
+            n,
+            RecordBuilder::file(1, ROOT, &format!("f{n}")).data("", b"x"),
+        );
+    }
+    let image = b.finish();
+    let (full, full_stats) = scan(image.clone());
+    for n in [30u64, 31, 9000, 19_999] {
+        assert!(full.contains_key(&n), "record {n} missing");
+    }
+    let opts = ScanOptions {
+        use_mft_bitmap: true,
+        chunk_bytes: 64 * 1024,
+        ..ScanOptions::default()
+    };
+    let (fast, fast_stats) = scan_with(image, &opts);
+    assert_eq!(full, fast);
+    assert_eq!(
+        fast_stats.skipped_by_bitmap, 0,
+        "a split bitmap is not used for skipping"
+    );
+    assert_eq!(fast_stats.in_use, full_stats.in_use);
+}
+
+#[test]
 fn cancellation_stops_early_with_partial_results() {
     let mut b = ImageBuilder::new(Geometry::default())
         .with_system_files()

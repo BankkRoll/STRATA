@@ -497,6 +497,7 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
     let mut pieces = unnamed(&base);
     let mut bitmap = base.bitmap.clone();
     let mut pending: BTreeSet<u64> = BTreeSet::new();
+    let mut bitmap_split = false;
     if let Some(list) = &base.attr_list {
         let bytes = match list {
             ValueLoc::Resident(v) => v.clone(),
@@ -513,6 +514,13 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
         };
         let entries = parse_attr_list(&bytes)
             .map_err(|e| NtfsError::Mft(format!("$MFT attribute list: {e}")))?;
+        // A bitmap held in more than one piece is not captured whole, so the
+        // scan reads every record instead of skipping by bitmap.
+        bitmap_split = entries
+            .iter()
+            .filter(|e| e.type_code == AT_BITMAP && e.name.is_empty())
+            .count()
+            > 1;
         pending = entries
             .iter()
             .filter(|e| matches!(e.type_code, AT_DATA | AT_BITMAP) && e.name.is_empty())
@@ -565,6 +573,9 @@ fn bootstrap_mft<R: ReadAt + ?Sized>(
         .ok_or_else(|| NtfsError::Mft("$MFT:$DATA pieces overlap or have gaps".into()))?;
     if vcn0.logical < rs {
         return Err(NtfsError::Mft("$MFT is smaller than one record".into()));
+    }
+    if bitmap_split {
+        bitmap = None;
     }
     Ok((
         MftLayout {

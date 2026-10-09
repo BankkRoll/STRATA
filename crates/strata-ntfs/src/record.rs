@@ -359,7 +359,12 @@ pub fn parse_fixed_record(
                 if let AttrForm::NonResident(nr) = form {
                     p.other_allocated = p.other_allocated.saturating_add(vcn0_on_disk(&nr));
                 }
-                if opts.capture_bitmap && attr.is_unnamed() {
+                // NOTE: a large $MFT:$BITMAP is split across records once the
+                // MFT grows; only the piece starting at VCN 0 is captured here,
+                // and the MFT loader detects the split from the attribute list.
+                let continuation =
+                    matches!(attr.form, AttrForm::NonResident(nr) if nr.start_vcn != 0);
+                if opts.capture_bitmap && attr.is_unnamed() && !continuation {
                     p.bitmap = Some(value_loc(&attr, opts)?);
                 }
             }

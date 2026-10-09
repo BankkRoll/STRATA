@@ -1,0 +1,29 @@
+[package]
+name = "strata-index"
+description = "Struct-of-arrays in-memory index, live updates, queries, search and cache file for Strata"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+memchr = "2.8.3"
+regex = "1.13.1"
+hashbrown = "0.17.1"
+xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "index"
+harness = false
+
+[lints]
+workspace = true

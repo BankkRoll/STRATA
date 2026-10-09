@@ -26,12 +26,12 @@
     { "area": "UI rendering", "command": "pnpm --dir ui fixtures:large\npnpm --dir ui dev\nnode ui/scripts/run-harness.mjs large treemap" }
   ],
   "areas": [
-    { "id": "scan", "label": "Scan", "summary": "Raw MFT parsing and the unelevated directory walker." },
-    { "id": "index", "label": "Index & search", "summary": "The in-memory index, its cache file, name search and the classifier." },
-    { "id": "layout", "label": "Layout & rendering", "summary": "Layout engines, hit testing and the WebGL2 view at 503k instances." },
-    { "id": "live", "label": "Live updates", "summary": "USN journal tailing into a 1M-entry index." },
-    { "id": "dupes", "label": "Duplicates & activity", "summary": "Duplicate finding and the ETW activity consumer." },
-    { "id": "ipc", "label": "IPC & storage", "summary": "The helper pipe, the history store and the installer." }
+    { "id": "scan", "label": "Scan" },
+    { "id": "index", "label": "Index & search" },
+    { "id": "layout", "label": "Layout & rendering" },
+    { "id": "live", "label": "Live updates" },
+    { "id": "dupes", "label": "Duplicates & activity" },
+    { "id": "ipc", "label": "IPC & storage" }
   ],
   "metrics": [
     { "id": "mft-parse", "area": "scan", "group": "MFT scanner", "label": "Parse 1M MFT records, parallel", "detail": "fixups + parse + assemble, in memory", "text": "155–291", "unit": "ms", "min": 155, "max": 291, "aside": "3.4–6.4 M records/s", "lowerIsBetter": true, "target": 3000, "targetText": "≤ 3 s per 1M files", "note": "Parse only, from memory; the 3 s target covers a full end-to-end scan." },

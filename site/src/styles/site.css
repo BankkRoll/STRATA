@@ -913,12 +913,6 @@ li > p code {
   background: var(--surface);
 }
 
-.block--flush {
-  padding: 0;
-  border: 0;
-  background: none;
-}
-
 .block__head {
   display: flex;
   flex-wrap: wrap;
@@ -1042,23 +1036,30 @@ li > p code {
 
 .rng__scale {
   position: relative;
-  height: 16px;
+  height: 32px;
 }
 
-.rng__scale span {
+.rng__scale > span {
   position: absolute;
   left: var(--x);
   translate: -50% 0;
   white-space: nowrap;
 }
 
-.rng__scale span:first-child {
+.rng__scale > span:first-child {
   translate: 0 0;
 }
 
-.rng__scale span:last-child {
+/* The target label stacks a second line so it never collides with "10%". */
+.rng__scale > span:last-child {
   translate: -100% 0;
+  text-align: right;
   color: var(--ink);
+}
+
+.rng__scale-sub {
+  display: block;
+  color: var(--ink-3);
 }
 
 .rng__rows {
@@ -1205,188 +1206,6 @@ li > p code {
     gap: 2px;
     text-align: right;
   }
-}
-
-/* -----------------------------------------------------------------------------
- * Benchmarks: area panels
- * -------------------------------------------------------------------------- */
-
-.panels {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-@media (min-width: 960px) {
-  .panels {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.panel__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 4px 16px;
-}
-
-.panel__title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.panel__count {
-  font: 11px var(--font-mono);
-  color: var(--ink-3);
-}
-
-.panel__summary {
-  grid-column: 1 / -1;
-  color: var(--ink-2);
-  font-size: 13px;
-}
-
-.ptable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.ptable th,
-.ptable td {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-  font-weight: 400;
-}
-
-.ptable th + th,
-.ptable td,
-.ptable th + td {
-  padding-left: 16px;
-}
-
-.ptable thead th {
-  padding-top: 0;
-  border-bottom-color: var(--line-2);
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.ptable tbody tr:last-child > * {
-  border-bottom: 0;
-}
-
-.ptable .num {
-  text-align: right;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-}
-
-.ptable thead .num {
-  font-size: 11px;
-}
-
-.pt__name {
-  display: block;
-}
-
-.pt__bar {
-  position: relative;
-  display: block;
-  height: 2px;
-  margin-top: 8px;
-  background: var(--line-2);
-}
-
-.pt__bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: max(2px, var(--w));
-  background: var(--ink);
-}
-
-.ptable .pt__target {
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  color: var(--ink-3);
-}
-
-.pt__margin {
-  color: var(--ink);
-}
-
-/* Phones: each target row becomes name + bar, then measured · target · margin. */
-@media (max-width: 559px) {
-  .panel {
-    padding: 20px 16px;
-  }
-
-  .ptable--targets thead {
-    display: none;
-  }
-
-  .ptable--targets tbody,
-  .ptable--targets tr {
-    display: block;
-  }
-
-  .ptable--targets tr {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    column-gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .ptable--targets tbody tr:last-child {
-    border-bottom: 0;
-  }
-
-  .ptable--targets th,
-  .ptable--targets td {
-    padding: 0;
-    border: 0;
-  }
-
-  .ptable--targets th {
-    grid-column: 1 / -1;
-    margin-bottom: 8px;
-  }
-
-  .ptable--targets td {
-    padding-left: 0;
-  }
-
-  .ptable--targets .pt__target {
-    text-align: left;
-  }
-}
-
-.panel__more {
-  margin-top: auto;
-  color: var(--ink-2);
-  font-size: 13px;
-  text-decoration: none;
-}
-
-.panel__more:hover {
-  color: var(--ink);
 }
 
 /* -----------------------------------------------------------------------------
@@ -1557,132 +1376,8 @@ li > p code {
 }
 
 /* -----------------------------------------------------------------------------
- * Benchmarks: results table, notes, disclosures
+ * Benchmarks: shared cells, notes, disclosures
  * -------------------------------------------------------------------------- */
-
-/* The full table lives in its own scroll box with a sticky header, so 60+ rows
-   stay a reference tool instead of pushing the page several screens down. */
-.rt__scroll {
-  max-height: min(70vh, 640px);
-  overflow: auto;
-  border-block: 1px solid var(--line-2);
-  overscroll-behavior: contain;
-}
-
-.rt {
-  width: 100%;
-  min-width: 760px;
-  /* separate, not collapse: collapsed borders scroll away from a sticky header */
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 14px;
-}
-
-.rt th,
-.rt td {
-  padding: 10px 16px 10px 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: baseline;
-  font-weight: 400;
-}
-
-.rt th:last-child,
-.rt td:last-child {
-  padding-right: 0;
-}
-
-.rt thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-block: 12px;
-  background: var(--surface);
-  border-bottom-color: var(--line-2);
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-.rt .num {
-  text-align: right;
-}
-
-.rt tbody tr {
-  transition: background-color var(--fast) var(--ease);
-}
-
-.rt tbody tr:hover {
-  background: var(--surface-2);
-}
-
-.sort {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-}
-
-.sort:hover {
-  color: var(--ink);
-}
-
-.sort svg {
-  width: 10px;
-  height: 10px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.2;
-  opacity: 0.6;
-}
-
-th[aria-sort] .sort {
-  color: var(--ink);
-}
-
-th[aria-sort="ascending"] .sort svg path {
-  d: path("M2.5 6.5 5 4 7.5 6.5");
-}
-
-th[aria-sort="descending"] .sort svg path {
-  d: path("M2.5 3.5 5 6 7.5 3.5");
-}
-
-th[aria-sort] .sort svg {
-  opacity: 1;
-}
-
-.rt__area {
-  width: 15%;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
-.rt th:first-child,
-.rt td:first-child {
-  padding-left: 0;
-}
-
-.rt__group {
-  display: block;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-
-.rt .rt__metric {
-  width: 38%;
-  font-weight: 500;
-}
 
 .rt__detail {
   display: block;
@@ -1690,30 +1385,6 @@ th[aria-sort] .sort svg {
   font-size: 12.5px;
   font-weight: 400;
   color: var(--ink-3);
-}
-
-.rt__value {
-  font: 500 14px var(--font-mono);
-  white-space: nowrap;
-}
-
-.rt__unit {
-  width: 9%;
-  padding-left: 6px;
-  font: 12px var(--font-mono);
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-.rt__target {
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
-.rt__margin {
-  font: 12.5px var(--font-mono);
-  color: var(--ink-2);
-  white-space: nowrap;
 }
 
 .rt__none {
@@ -2339,7 +2010,6 @@ th[aria-sort] .sort svg {
 
 @media (forced-colors: active) {
   .rng__bar,
-  .pt__bar i,
   .h2h__bar i,
   .key__range,
   .key__bound::after {

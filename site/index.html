@@ -203,7 +203,7 @@
             <header class="block__head">
               <div>
                 <h3 class="block__title">Against target</h3>
-                <p class="block__sub">Each bar spans the fastest to the slowest run, as a share of its target budget. The scale is logarithmic: every gridline is ten times less of the budget.</p>
+                <p class="block__sub">Further left is better: each bar is the share of its target budget used, from the fastest run to the slowest. The scale is logarithmic, so every gridline is ten times less of the budget.</p>
               </div>
               <ul class="key" aria-label="Chart key">
                 <li><span class="key__range" aria-hidden="true"></span>Range across runs</li>
@@ -212,28 +212,6 @@
               </ul>
             </header>
             <!--bench:range-->
-          </div>
-
-          <div class="block block--flush reveal">
-            <header class="block__head">
-              <div>
-                <h3 class="block__title">By area</h3>
-                <p class="block__sub">Measured against target, with the margin taken from the slowest run.</p>
-              </div>
-            </header>
-            <div class="panels"><!--bench:panels--></div>
-          </div>
-
-          <!--bench:versus-->
-
-          <div class="block reveal" id="results">
-            <header class="block__head">
-              <div>
-                <h3 class="block__title">All results</h3>
-                <p class="block__sub"><!--bench:count--> measurements. Release builds; synthetic data with fixed seeds unless noted.</p>
-              </div>
-            </header>
-            <div class="rt__scroll"><!--bench:table--></div>
             <ol class="notes"><!--bench:notes--></ol>
             <div class="disclosures">
               <details class="disclosure">
@@ -247,6 +225,8 @@
             </div>
             <p class="block__foot"><a class="link" href="<!--bench:link-->">Full methodology in docs/BENCHMARKS.md<span aria-hidden="true"> ↗</span></a></p>
           </div>
+
+          <!--bench:versus-->
         </div>
       </section>
 

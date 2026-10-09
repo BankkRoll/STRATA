@@ -2,12 +2,13 @@
  * Build-time rendering of the benchmark section from `site/data/benchmarks.json`.
  * `vite.config.ts` calls {@link renderBenchmarks} and splices the fragments
  * into the `<!--bench:*-->` placeholders of `index.html`, so every number
- * ships as static markup. The page script only adds sorting and copy buttons.
+ * ships as static markup. The page script only adds copy buttons.
  *
  * Responsibilities:
  * - Validate the data file, so a typo fails the build instead of the page.
- * - Render the headline stats, the log-scale range chart, one panel per area,
- *   the full results table, footnotes, methodology and reproduction commands.
+ * - Render the headline stats, the log-scale range chart grouped by area (every
+ *   metric with a numeric target), its footnotes, methodology and reproduction
+ *   commands.
  * - Render the competitor head-to-head only when measured results exist.
  *
  * Every number in the data file must trace to `docs/BENCHMARKS.md`.
@@ -21,7 +22,7 @@
  *   "noise": string,                   // run-to-run noise statement
  *   "methodology": string[],           // one bullet each
  *   "reproduce": [{ "area": string, "command": string }], // "\n" separates commands
- *   "areas": [{ "id": string, "label": string, "summary": string }], // display order
+ *   "areas": [{ "id": string, "label": string }], // display order of the chart groups
  *   "metrics": [{
  *     "id": string,                    // unique, stable
  *     "area": string,                  // an areas[].id
@@ -65,18 +66,17 @@ import { readFileSync } from "node:fs";
 // Data model
 // -----------------------------------------------------------------------------
 
-/** One benchmark area (a panel on the page). */
+/** One benchmark area: a labelled group in the range chart. */
 export interface Area {
   id: string;
   label: string;
-  summary: string;
 }
 
 /** One measured result. */
 export interface Metric {
   id: string;
   area: string;
-  /** Sub-heading of the results table in `docs/BENCHMARKS.md`. */
+  /** Sub-heading in `docs/BENCHMARKS.md` the result traces to. */
   group: string;
   label: string;
   /** Workload, e.g. "5M names". */
@@ -91,7 +91,7 @@ export interface Metric {
   /** Secondary reading of the same run. */
   aside?: string;
   lowerIsBetter: boolean;
-  /** Numeric target in `unit`; metrics with one appear in the range chart. */
+  /** Numeric target in `unit`; only metrics with one appear on the page. */
   target?: number;
   targetText?: string;
   note?: string;
@@ -137,16 +137,13 @@ export interface BenchmarkData {
 export interface BenchmarkHtml {
   stats: string;
   range: string;
-  panels: string;
   versus: string;
-  table: string;
   notes: string;
   method: string;
   reproduce: string;
   machine: string;
   noise: string;
   link: string;
-  count: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -200,7 +197,7 @@ const TICKS = [
   { at: -3, label: "0.1%" },
   { at: -2, label: "1%" },
   { at: -1, label: "10%" },
-  { at: 0, label: "Target" },
+  { at: 0, label: `Target<span class="rng__scale-sub">100% of budget</span>` },
 ];
 
 const logPos = (fraction: number): number => {
@@ -231,10 +228,10 @@ function validate(data: BenchmarkData): void {
 // Fragments
 // -----------------------------------------------------------------------------
 
-/** Footnote numbers in metric order. */
+/** Footnote numbers, in metric order, for the metrics the range chart shows. */
 function footnotes(data: BenchmarkData): Map<string, number> {
   const out = new Map<string, number>();
-  for (const m of data.metrics) if (m.note) out.set(m.id, out.size + 1);
+  for (const m of data.metrics) if (m.note && m.target !== undefined) out.set(m.id, out.size + 1);
   return out;
 }
 
@@ -276,88 +273,13 @@ function range(data: BenchmarkData, notes: Map<string, number>): string {
     })
     .join("\n");
   const axis = TICKS.map((t) => `<span style="--x:${pct(((t.at - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100)}">${t.label}</span>`).join("");
-  return `<div class="rng__axis" aria-hidden="true"><span class="rng__axis-title">Budget used</span><div class="rng__scale">${axis}</div><span class="rng__axis-title rng__axis-title--end">Result</span></div>
+  return `<div class="rng__axis" aria-hidden="true"><span class="rng__axis-title">Budget used, less is better</span><div class="rng__scale">${axis}</div><span class="rng__axis-title rng__axis-title--end">Result</span></div>
 <ol class="rng" aria-label="Measured results against their targets, by area">${groups}</ol>`;
-}
-
-const PANEL_EXTRAS = 4;
-
-function panels(data: BenchmarkData, notes: Map<string, number>): string {
-  return data.areas
-    .map((area) => {
-      const metrics = data.metrics.filter((m) => m.area === area.id);
-      const targeted = metrics.filter((m) => m.target !== undefined);
-      const others = metrics.filter((m) => m.target === undefined);
-      const shown = others.slice(0, PANEL_EXTRAS);
-      const more = others.length - shown.length;
-      const targetRows = targeted
-        .map((m) => {
-          const used = budgetUsed(m) ?? 0;
-          const mg = margin(m);
-          return `<tr>
-  <th scope="row"><span class="pt__name">${esc(m.label)}${sup(notes.get(m.id))}</span><span class="pt__bar" aria-hidden="true"><i style="--w:${pct(Math.min(100, used * 100))}"></i></span></th>
-  <td class="num">${withUnit(m.text, m.unit)}</td>
-  <td class="num pt__target">${esc(m.targetText ?? "")}</td>
-  <td class="num pt__margin">${mg ? esc(mg.short) : "—"}</td>
-</tr>`;
-        })
-        .join("");
-      const otherRows = shown
-        .map((m) => `<tr><th scope="row">${esc(m.label)}${sup(notes.get(m.id))}</th><td class="num">${withUnit(m.text, m.unit)}</td></tr>`)
-        .join("");
-      return `<article class="panel" aria-labelledby="panel-${area.id}">
-  <header class="panel__head">
-    <h4 id="panel-${area.id}" class="panel__title">${esc(area.label)}</h4>
-    <span class="panel__count">${metrics.length} results</span>
-    <p class="panel__summary">${esc(area.summary)}</p>
-  </header>
-  <table class="ptable ptable--targets">
-    <caption class="visually-hidden">${esc(area.label)}: measured against target</caption>
-    <thead><tr><th scope="col">Against target</th><th scope="col" class="num">Measured</th><th scope="col" class="num">Target</th><th scope="col" class="num">Margin</th></tr></thead>
-    <tbody>${targetRows}</tbody>
-  </table>
-  ${
-    shown.length > 0
-      ? `<table class="ptable">
-    <caption class="visually-hidden">${esc(area.label)}: other results</caption>
-    <thead><tr><th scope="col">Also measured</th><th scope="col" class="num">Result</th></tr></thead>
-    <tbody>${otherRows}</tbody>
-  </table>`
-      : ""
-  }
-  ${more > 0 ? `<a class="panel__more" href="#results" data-area-link="${esc(area.id)}">${more} more in the full table<span aria-hidden="true"> ↓</span></a>` : ""}
-</article>`;
-    })
-    .join("\n");
-}
-
-function table(data: BenchmarkData, notes: Map<string, number>): string {
-  const order = new Map(data.areas.map((a, i) => [a.id, i]));
-  const rows = data.metrics.map((m, i) => {
-    const area = data.areas.find((a) => a.id === m.area);
-    const mg = margin(m);
-    const rank = (order.get(m.area) ?? 0) * 1000 + i;
-    return `<tr data-area="${rank}" data-metric="${esc(m.label.toLowerCase())}" data-margin="${mg ? mg.ratio.toFixed(4) : "-1"}">
-  <td class="rt__area">${esc(area?.label ?? m.area)}<span class="rt__group">${esc(m.group)}</span></td>
-  <th scope="row" class="rt__metric">${esc(m.label)}${sup(notes.get(m.id))}<span class="rt__detail">${esc(m.detail)}${m.aside ? ` · ${esc(m.aside)}` : ""}</span></th>
-  <td class="num rt__value">${esc(m.text)}</td>
-  <td class="rt__unit">${esc(m.unit)}</td>
-  <td class="rt__target">${m.targetText ? esc(m.targetText) : '<span class="rt__none">—</span>'}</td>
-  <td class="num rt__margin">${mg ? esc(mg.short) : '<span class="rt__none">—</span>'}</td>
-</tr>`;
-  });
-  const sortable = (key: string, label: string, cls = "") =>
-    `<th scope="col"${cls ? ` class="${cls}"` : ""} data-sort="${key}"${key === "area" ? ' aria-sort="ascending"' : ""}><button type="button" class="sort">${label}<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 4 5 1.5 7.5 4M2.5 6 5 8.5 7.5 6" /></svg></button></th>`;
-  return `<table class="rt" data-results>
-  <caption class="visually-hidden">All ${data.metrics.length} benchmark results. Column headers with buttons sort the table.</caption>
-  <thead><tr>${sortable("area", "Area")}${sortable("metric", "Metric")}<th scope="col" class="num">Result</th><th scope="col"><span class="visually-hidden">Unit</span></th><th scope="col">Target</th>${sortable("margin", "Margin", "num")}</tr></thead>
-  <tbody>${rows.join("\n")}</tbody>
-</table>`;
 }
 
 function notesHtml(data: BenchmarkData, notes: Map<string, number>): string {
   return data.metrics
-    .filter((m) => m.note)
+    .filter((m) => notes.has(m.id))
     .map((m) => `<li id="bench-note-${notes.get(m.id)}"><span class="fn__label">${esc(m.label)}.</span> ${esc(m.note ?? "")}</li>`)
     .join("");
 }
@@ -438,15 +360,12 @@ export function renderBenchmarks(file: string): BenchmarkHtml {
   return {
     stats: stats(data),
     range: range(data, notes),
-    panels: panels(data, notes),
     versus: versus(data.comparison),
-    table: table(data, notes),
     notes: notesHtml(data, notes),
     method: method(data),
     reproduce: reproduce(data),
     machine: esc(data.machine),
     noise: esc(data.noise),
     link: esc(data.methodologyUrl),
-    count: String(data.metrics.length),
   };
 }

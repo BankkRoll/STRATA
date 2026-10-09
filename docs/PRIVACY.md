@@ -16,7 +16,7 @@ Strata's data lives under `%LOCALAPPDATA%\app.strata.desktop\`, named after the 
 
 Snapshots store aggregate sizes of folders above a minimum size (16 MB by default), not
 individual files. Snapshots are thinned to one per week after 30 days and deleted after 90 days
-by default (Settings → History).
+by default (Settings → Data & privacy).
 
 ## Activity tracking is opt-in
 
@@ -47,7 +47,7 @@ network share you enable reads that share, as any file browser would.
 
 | Data | How |
 |---|---|
-| Old snapshots | Lower "Keep snapshots for" in Settings → History; older snapshots are deleted at the next daily maintenance |
+| Old snapshots | Lower "Keep snapshots for" in Settings → Data & privacy; older snapshots are deleted at the next daily maintenance |
 | Activity data | Turn off activity tracking, or lower "Keep activity for" in Settings → Activity tracking |
 | Everything | Uninstall and tick **Delete the application data**, or delete `%LOCALAPPDATA%\app.strata.desktop\` while Strata is closed |
 

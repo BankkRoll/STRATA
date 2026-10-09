@@ -166,6 +166,10 @@ pub struct WalkStats {
     pub access_denied_dirs: u64,
     /// Directories flagged `PARTIAL` (cancelled, timed out, or unreadable).
     pub partial_dirs: u64,
+    /// Files flagged `PARTIAL`: the allocation pass could not open them or
+    /// read their stream list, so their sizes come from the listing and
+    /// their alternate data streams are unknown.
+    pub partial_files: u64,
     /// Records whose allocation is still an estimate.
     pub estimated_allocations: u64,
     /// Extra hardlink names merged into an existing record.
@@ -175,7 +179,7 @@ pub struct WalkStats {
     /// Whether the walk was cancelled.
     pub cancelled: bool,
     /// Whether any part of the tree is missing (cancelled, partial or denied
-    /// directories). The totals are then a lower bound.
+    /// directories, partial files). The totals are then incomplete.
     pub partial: bool,
     /// Volume facts, when they could be read.
     pub volume: Option<VolumeStats>,

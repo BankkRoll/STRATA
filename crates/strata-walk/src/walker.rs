@@ -30,7 +30,7 @@ use crate::alloc::{self, Query};
 use crate::hardlink::{HardlinkTable, SeenIds};
 use crate::parse::{DirInfoClass, RawEntry, StreamEntry, parse_reparse_target, parse_streams};
 use crate::path;
-use crate::record::{self, BuildCtx};
+use crate::record::{self, BuildCtx, RECALL_BITS};
 use crate::stats::AtomicErrorCounts;
 use crate::sys::{self, AlignedBuf, DirChunk, OpenMode};
 use crate::timed;
@@ -107,6 +107,8 @@ pub(crate) struct Hooks {
     pub before_list: Option<PathHook>,
     /// Called with a directory's path just before its files are probed.
     pub before_refine: Option<PathHook>,
+    /// Replaces [`sys::STREAM_INFO_MAX`] for file probes.
+    pub stream_info_cap: Option<usize>,
 }
 
 #[cfg(test)]
@@ -177,10 +179,7 @@ impl Walker {
         let volume = sys::volume_facts(&self.root).ok();
         let network = path::is_unc(&self.root) || volume.as_ref().is_some_and(|v| v.is_remote);
         let fs = volume.as_ref().map(|v| v.filesystem.to_ascii_uppercase());
-        // NOTE: only NTFS and ReFS ids are stable, unique and shared by all
-        // links of a file. FAT ids encode the directory-entry position and
-        // SMB servers may synthesise them, so those volumes get synthetic ids.
-        let real_ids = !network && matches!(fs.as_deref(), Some("NTFS" | "REFS"));
+        let real_ids = trusts_file_ids(network, fs.as_deref());
 
         let root_task = self.root_task(&display)?;
 
@@ -200,10 +199,17 @@ impl Walker {
             dir_class: AtomicU8::new(DirInfoClass::IdExtd as u8),
             dir_fallback: AtomicBool::new(false),
             hardlinks: HardlinkTable::new(),
-            seen: (!self.opts.allocation_pass && real_ids).then(SeenIds::new),
+            // NOTE: one id per record seen, so this grows with the walk;
+            // real ids are only unique per record if every one is checked.
+            seen: real_ids.then(SeenIds::new),
             errors: AtomicErrorCounts::default(),
             access_denied_dirs: AtomicU64::new(0),
             partial_dirs: AtomicU64::new(0),
+            partial_files: AtomicU64::new(0),
+            #[cfg(not(test))]
+            stream_cap: sys::STREAM_INFO_MAX,
+            #[cfg(test)]
+            stream_cap: self.hooks.stream_info_cap.unwrap_or(sys::STREAM_INFO_MAX),
             #[cfg(test)]
             hooks: self.hooks.clone(),
         };
@@ -216,6 +222,7 @@ impl Walker {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
             .thread_name(|i| format!("strata-walk-{i}"))
+            .start_handler(|_| std::mem::forget(sys::expose_placeholders()))
             .build()
             .map_err(|e| WalkError::Threads(e.to_string()))?;
 
@@ -236,6 +243,7 @@ impl Walker {
         let errors = ctx.errors.snapshot();
         let access_denied_dirs = ctx.access_denied_dirs.load(Ordering::Relaxed);
         let partial_dirs = ctx.partial_dirs.load(Ordering::Relaxed);
+        let partial_files = ctx.partial_files.load(Ordering::Relaxed);
         let cancelled = cancel.is_cancelled();
         Ok(WalkStats {
             totals: collector.progress,
@@ -243,11 +251,12 @@ impl Walker {
             dir_info_fallback: ctx.dir_fallback.load(Ordering::Relaxed),
             access_denied_dirs,
             partial_dirs,
+            partial_files,
             estimated_allocations: collector.estimated,
             hardlinks_merged: ctx.hardlinks.merged(),
             errors,
             cancelled,
-            partial: cancelled || partial_dirs > 0 || access_denied_dirs > 0,
+            partial: cancelled || partial_dirs > 0 || access_denied_dirs > 0 || partial_files > 0,
             volume: volume.map(|v| VolumeStats {
                 mount: String::from_utf16_lossy(&path::display(&v.mount)),
                 filesystem: v.filesystem,
@@ -261,6 +270,7 @@ impl Walker {
 
     fn root_task(&self, display: &str) -> Result<DirTask, WalkError> {
         let nt = path::to_nt(&self.root);
+        let _exposed = sys::expose_placeholders();
         // NOTE: the root is the one path we follow if it is a link: the user
         // chose it explicitly.
         let (times, attributes) = match sys::nt_open(None, &nt, OpenMode::Attributes, true) {
@@ -288,6 +298,18 @@ impl Walker {
             follow: true,
         })
     }
+}
+
+/// Whether filesystem file ids can serve as record ids on a volume.
+///
+/// Only local NTFS and ReFS ids are stable, unique and shared by all links
+/// of a file. FAT and exFAT ids encode the directory-entry position (they
+/// change on rename and can be reused), and SMB servers may synthesise
+/// them, so those volumes get synthetic ids. `filesystem` is the
+/// upper-cased name from `GetVolumeInformationW`, or `None` when it could
+/// not be read.
+pub(crate) fn trusts_file_ids(network: bool, filesystem: Option<&str>) -> bool {
+    !network && matches!(filesystem, Some("NTFS" | "REFS"))
 }
 
 fn now_filetime() -> FileTime {
@@ -323,6 +345,9 @@ struct Ctx {
     errors: AtomicErrorCounts,
     access_denied_dirs: AtomicU64,
     partial_dirs: AtomicU64,
+    partial_files: AtomicU64,
+    /// Stream-list buffer cap for file probes.
+    stream_cap: usize,
     #[cfg(test)]
     hooks: Hooks,
 }
@@ -343,6 +368,18 @@ impl Ctx {
 
     fn id_for(&self, id: Option<u128>) -> FileRef {
         self.real_ref(id).unwrap_or_else(|| self.synthetic())
+    }
+
+    /// Reserves a record id. Returns `false` when a record with this real id
+    /// was already produced: the entry was moved between two directory
+    /// listings and must not be reported (or descended into) twice.
+    /// Synthetic ids are unique by construction.
+    fn claim(&self, id: FileRef) -> bool {
+        id.is_synthetic()
+            || self
+                .seen
+                .as_ref()
+                .is_none_or(|s| s.insert(u128::from(id.0)))
     }
 
     fn count(&self, e: &io::Error) -> ErrorKind {
@@ -443,6 +480,8 @@ pub(crate) struct Listing {
     pub overhead: u64,
     /// Named streams on the directory itself.
     pub streams: Vec<StreamEntry>,
+    /// Why the directory's stream list could not be read.
+    pub streams_error: Option<io::Error>,
     pub entries: Vec<RawEntry>,
     /// False when cancellation cut the listing short.
     pub complete: bool,
@@ -462,7 +501,7 @@ pub(crate) fn list_dir(
     cancel: &CancelToken,
 ) -> io::Result<Listing> {
     let nt = path::to_nt(path);
-    let handle = if method == ListingMethod::DirectoryInfo || want_handle {
+    let mut handle = if method == ListingMethod::DirectoryInfo || want_handle {
         match sys::nt_open(None, &nt, OpenMode::ListDir, follow) {
             Ok(h) => Some(h),
             Err(e) if method == ListingMethod::DirectoryInfo => return Err(e),
@@ -480,6 +519,7 @@ pub(crate) fn list_dir(
             .and_then(|h| sys::standard_info(h).ok())
             .map_or(0, |s| s.allocation),
         streams: Vec::new(),
+        streams_error: None,
         entries: Vec::new(),
         complete: true,
         class,
@@ -487,45 +527,76 @@ pub(crate) fn list_dir(
     };
     if want_handle && let Some(h) = &handle {
         let mut buf = AlignedBuf::new(1024);
-        l.streams = sys::stream_info(h, &mut buf)
-            .map(parse_streams)
-            .unwrap_or_default();
+        match sys::stream_info(h, &mut buf) {
+            Ok(b) => l.streams = parse_streams(b),
+            Err(e) => l.streams_error = Some(e),
+        }
     }
     match (method, &handle) {
-        (ListingMethod::DirectoryInfo, Some(h)) => {
-            let mut buf = AlignedBuf::new(LIST_BUF);
-            let mut first = true;
-            loop {
-                if cancel.is_cancelled() {
-                    l.complete = false;
-                    break;
-                }
-                match sys::query_dir(h, l.class, &mut buf)? {
-                    DirChunk::Data(n) => {
-                        crate::parse::parse_dir_info(buf.bytes(n), l.class, &mut l.entries);
-                    }
-                    DirChunk::End => break,
-                    DirChunk::Unsupported if first && l.class != DirInfoClass::Full => {
-                        l.class = match l.class {
-                            DirInfoClass::IdExtd => DirInfoClass::IdBoth,
-                            _ => DirInfoClass::Full,
-                        };
-                        continue;
-                    }
-                    DirChunk::Unsupported => return Err(io::Error::from_raw_os_error(50)),
-                }
-                first = false;
+        (ListingMethod::DirectoryInfo, Some(h)) => query_all(h, &mut l, cancel)?,
+        _ => match sys::find_list(path, cancel, &mut l.entries) {
+            Ok(complete) => l.complete = complete,
+            // NOTE: FindFirstFileExW needs `<dir>\*`, which can exceed the NT
+            // path limit when the directory itself still fits; Win32 then
+            // reports PATH_NOT_FOUND, as if the directory had vanished. A
+            // failed find is retried through a directory handle, and the
+            // original error stands only if that cannot be opened either.
+            Err(e) => {
+                let h = match handle.take() {
+                    Some(h) => h,
+                    None => match sys::nt_open(None, &nt, OpenMode::ListDir, follow) {
+                        Ok(h) => h,
+                        Err(_) => return Err(e),
+                    },
+                };
+                l.entries.clear();
+                l.complete = true;
+                query_all(&h, &mut l, cancel)?;
+                handle = Some(h);
             }
-        }
-        _ => l.complete = sys::find_list(path, cancel, &mut l.entries)?,
+        },
     }
     l.handle = handle.map(Arc::new);
     Ok(l)
 }
 
+/// Reads every directory-information buffer of `h` into `l`, downgrading
+/// the information class once if the filesystem rejects it.
+fn query_all(h: &OwnedHandle, l: &mut Listing, cancel: &CancelToken) -> io::Result<()> {
+    let mut buf = AlignedBuf::new(LIST_BUF);
+    let mut first = true;
+    loop {
+        if cancel.is_cancelled() {
+            l.complete = false;
+            return Ok(());
+        }
+        match sys::query_dir(h, l.class, &mut buf)? {
+            DirChunk::Data(n) => {
+                crate::parse::parse_dir_info(buf.bytes(n), l.class, &mut l.entries);
+            }
+            DirChunk::End => return Ok(()),
+            DirChunk::Unsupported if first && l.class != DirInfoClass::Full => {
+                l.class = match l.class {
+                    DirInfoClass::IdExtd => DirInfoClass::IdBoth,
+                    _ => DirInfoClass::Full,
+                };
+                continue;
+            }
+            DirChunk::Unsupported => return Err(io::Error::from_raw_os_error(50)),
+        }
+        first = false;
+    }
+}
+
 fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
-    if ctx.cancel.is_cancelled() {
-        let mut rec = task.record(ctx.id_for(task.listed_id), ctx.build.now);
+    // Children with recall bits are never spawned; this catches a root that
+    // is itself an online-only cloud directory.
+    if ctx.cancel.is_cancelled() || task.attributes & RECALL_BITS != 0 {
+        let id = ctx.id_for(task.listed_id);
+        if !ctx.claim(id) {
+            return;
+        }
+        let mut rec = task.record(id, ctx.build.now);
         rec.flags |= EntryFlags::PARTIAL;
         ctx.partial_dirs.fetch_add(1, Ordering::Relaxed);
         ctx.emit(vec![rec]);
@@ -546,7 +617,8 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
     let listing = match listing {
         Ok(l) => l,
         Err(e) => {
-            let mut rec = task.record(ctx.id_for(task.listed_id), ctx.build.now);
+            let id = ctx.id_for(task.listed_id);
+            let mut rec = task.record(id, ctx.build.now);
             match ctx.count(&e) {
                 ErrorKind::AccessDenied => {
                     rec.flags |= EntryFlags::ACCESS_DENIED;
@@ -559,7 +631,9 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
                     ctx.partial_dirs.fetch_add(1, Ordering::Relaxed);
                 }
             }
-            ctx.emit(vec![rec]);
+            if ctx.claim(id) {
+                ctx.emit(vec![rec]);
+            }
             return;
         }
     };
@@ -568,10 +642,17 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
     let own_id = ctx
         .real_ref(listing.own_id)
         .unwrap_or_else(|| ctx.id_for(task.listed_id));
+    if !ctx.claim(own_id) {
+        // Moved during the walk and already walked at its other path.
+        return;
+    }
     let mut own = task.record(own_id, ctx.build.now);
     own.sizes.dir_overhead = ctx.build.on_disk(listing.overhead);
     record::apply_streams(&mut own, listing.streams, ctx.build);
-    if !listing.complete {
+    if let Some(e) = &listing.streams_error {
+        ctx.count(e);
+    }
+    if !listing.complete || listing.streams_error.is_some() {
         own.flags |= EntryFlags::PARTIAL;
         ctx.partial_dirs.fetch_add(1, Ordering::Relaxed);
     }
@@ -583,15 +664,19 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
         let kind = record::reparse_kind(e.attributes, e.reparse_tag);
         let wants_target = matches!(kind, ReparseKind::Symlink | ReparseKind::MountPoint);
         if e.is_dir() && !kind.blocks_traversal() {
-            if e.attributes & win32::FILE_ATTRIBUTE_RECALL_ON_OPEN != 0 {
+            if e.attributes & RECALL_BITS != 0 {
                 // NOTE: listing a not-yet-populated cloud directory makes the
-                // provider fetch its contents. Record it, flagged partial,
+                // provider fetch its contents. cfapi marks such directories
+                // RECALL_ON_DATA_ACCESS (or RECALL_ON_OPEN), and the open
+                // flags cannot prevent it. Record it, flagged partial,
                 // without descending.
                 let id = ctx.id_for(e.file_id);
-                let mut rec = record::build(e, id, own_id, ctx.build);
-                rec.flags |= EntryFlags::PARTIAL;
-                ctx.partial_dirs.fetch_add(1, Ordering::Relaxed);
-                out.push(rec);
+                if ctx.claim(id) {
+                    let mut rec = record::build(e, id, own_id, ctx.build);
+                    rec.flags |= EntryFlags::PARTIAL;
+                    ctx.partial_dirs.fetch_add(1, Ordering::Relaxed);
+                    out.push(rec);
+                }
                 continue;
             }
             let child = DirTask {
@@ -607,6 +692,9 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
             scope.spawn(move |s| process_dir(s, ctx, child));
         } else if e.is_dir() {
             let id = ctx.id_for(e.file_id);
+            if !ctx.claim(id) {
+                continue;
+            }
             if wants_target {
                 targets.push(out.len());
             }
@@ -616,8 +704,10 @@ fn process_dir<'s>(scope: &rayon::Scope<'s>, ctx: &'s Ctx, task: DirTask) {
             let id = ctx.id_for(key);
             let rec = record::build(e, id, own_id, ctx.build);
             if wants_target {
-                targets.push(out.len());
-                out.push(rec);
+                if ctx.claim(id) {
+                    targets.push(out.len());
+                    out.push(rec);
+                }
             } else {
                 files.push((rec, key));
             }
@@ -668,6 +758,9 @@ fn replaced_by_file(ctx: &Ctx, task: &DirTask) {
                 file_id: id,
             };
             let id = ctx.id_for(id);
+            if !ctx.claim(id) {
+                return;
+            }
             ctx.emit(vec![record::build(
                 e,
                 id,
@@ -727,11 +820,8 @@ fn read_targets(
 fn dedup_without_link_counts(ctx: &Ctx, files: Vec<(ScanRecord, Option<u128>)>) -> Vec<ScanRecord> {
     files
         .into_iter()
-        .map(|(mut rec, key)| {
-            if let (Some(seen), Some(k)) = (&ctx.seen, key)
-                && !rec.id.is_synthetic()
-                && !seen.insert(k)
-            {
+        .map(|(mut rec, _)| {
+            if !ctx.claim(rec.id) {
                 rec.id = ctx.synthetic();
                 rec.flags |= EntryFlags::HARDLINK_SECONDARY;
             }
@@ -752,6 +842,8 @@ fn refine_chunk(
         h(&dir);
     }
     let want_id = |r: &ScanRecord| ctx.real_ids && r.id.is_synthetic();
+    let cap = ctx.stream_cap;
+    let mut chunk_failed = false;
     let results = if ctx.network {
         let owned: Vec<(Vec<u16>, u32, ReparseKind, bool)> = chunk
             .iter()
@@ -771,10 +863,11 @@ fn refine_chunk(
                     want_id: *want_id,
                 })
                 .collect();
-            Ok(alloc::probe_all(h.as_deref(), &qs, &cancel))
+            Ok(alloc::probe_all(h.as_deref(), &qs, &cancel, cap))
         })
         .unwrap_or_else(|e| {
             ctx.count(&e);
+            chunk_failed = !ctx.cancel.is_cancelled();
             (0..n).map(|_| None).collect()
         })
     } else {
@@ -796,25 +889,44 @@ fn refine_chunk(
                 want_id: want_id(r),
             })
             .collect();
-        alloc::probe_all(handle.as_deref(), &qs, &ctx.cancel)
+        alloc::probe_all(handle.as_deref(), &qs, &ctx.cancel, cap)
     };
 
+    // A file the pass could not fully read keeps its listing values, but its
+    // streams (and, without a listing allocation, its real size) are
+    // unknown: flag it so totals are not mistaken for complete ones.
+    let partial = |rec: &mut ScanRecord| {
+        rec.flags |= EntryFlags::PARTIAL;
+        ctx.partial_files.fetch_add(1, Ordering::Relaxed);
+    };
     let mut out = Vec::with_capacity(chunk.len());
     for ((mut rec, key), res) in chunk.into_iter().zip(results) {
         match res {
-            None => out.push(rec),
-            Some(Err(e)) => {
-                if ctx.count(&e) != ErrorKind::Vanished {
+            None => {
+                if ctx.claim(rec.id) {
+                    if chunk_failed {
+                        partial(&mut rec);
+                    }
                     out.push(rec);
                 }
             }
-            Some(Ok(facts)) => {
+            Some(Err(e)) => {
+                if ctx.count(&e) != ErrorKind::Vanished && ctx.claim(rec.id) {
+                    partial(&mut rec);
+                    out.push(rec);
+                }
+            }
+            Some(Ok(mut facts)) => {
                 let links = facts.links;
                 let key = key.or(facts.id);
                 if rec.id.is_synthetic()
                     && let Some(r) = ctx.real_ref(facts.id)
                 {
                     rec.id = r;
+                }
+                if let Some(e) = facts.streams_error.take() {
+                    ctx.count(&e);
+                    partial(&mut rec);
                 }
                 alloc::apply(&mut rec, facts, ctx.build);
                 match key {
@@ -823,6 +935,9 @@ fn refine_chunk(
                             out.push(merged);
                         }
                     }
+                    // A single-link file met twice was moved between two
+                    // directory listings; it is kept at the first path.
+                    _ if !ctx.claim(rec.id) => {}
                     _ => out.push(rec),
                 }
             }

@@ -37,20 +37,25 @@ pub(crate) struct Query<'a> {
 }
 
 /// Facts read from one file handle.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) struct FileFacts {
     pub logical: u64,
     pub allocated: u64,
     pub links: u32,
     pub id: Option<u128>,
     pub streams: Vec<StreamEntry>,
+    /// Why the stream list could not be read; `streams` is then empty and
+    /// the record's stream totals are unknown.
+    pub streams_error: Option<io::Error>,
 }
 
-/// Probes one file.
+/// Probes one file. `stream_cap` bounds the stream-list buffer (see
+/// [`sys::stream_info_capped`]).
 pub(crate) fn probe(
     dir: Option<&OwnedHandle>,
     q: &Query<'_>,
     buf: &mut AlignedBuf,
+    stream_cap: usize,
 ) -> io::Result<FileFacts> {
     let h = sys::nt_open(dir, q.name, OpenMode::Attributes, false)?;
     let std = sys::standard_info(&h)?;
@@ -70,12 +75,13 @@ pub(crate) fn probe(
     } else {
         None
     };
-    let streams = if remote {
-        Vec::new()
+    let (streams, streams_error) = if remote {
+        (Vec::new(), None)
     } else {
-        sys::stream_info(&h, buf)
-            .map(parse_streams)
-            .unwrap_or_default()
+        match sys::stream_info_capped(&h, buf, stream_cap) {
+            Ok(b) => (parse_streams(b), None),
+            Err(e) => (Vec::new(), Some(e)),
+        }
     };
     Ok(FileFacts {
         logical: std.end_of_file,
@@ -83,6 +89,7 @@ pub(crate) fn probe(
         links: std.links,
         id,
         streams,
+        streams_error,
     })
 }
 
@@ -91,6 +98,7 @@ pub(crate) fn probe_all(
     dir: Option<&OwnedHandle>,
     queries: &[Query<'_>],
     cancel: &CancelToken,
+    stream_cap: usize,
 ) -> Vec<Option<io::Result<FileFacts>>> {
     let mut buf = AlignedBuf::new(4096);
     let mut out = Vec::with_capacity(queries.len());
@@ -99,7 +107,7 @@ pub(crate) fn probe_all(
             out.resize_with(queries.len(), || None);
             break;
         }
-        out.push(Some(probe(dir, q, &mut buf)));
+        out.push(Some(probe(dir, q, &mut buf, stream_cap)));
     }
     out
 }

@@ -61,6 +61,7 @@ impl IoThread {
         std::thread::Builder::new()
             .name("strata-walk-io".into())
             .spawn(move || {
+                let _exposed = crate::sys::expose_placeholders();
                 let _ = htx.send(ThreadHandle::current().map(Arc::new));
                 for job in rx {
                     job();

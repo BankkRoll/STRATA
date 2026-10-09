@@ -26,6 +26,12 @@ windows = { workspace = true, features = [
 
 [dev-dependencies]
 proptest = { workspace = true }
+# Tests register a throwaway cloud-files sync root to prove the walker never
+# hydrates placeholders.
+windows = { workspace = true, features = [
+    "Win32_Storage_CloudFilters",
+    "Win32_System_CorrelationVector",
+] }
 
 [lints]
 workspace = true

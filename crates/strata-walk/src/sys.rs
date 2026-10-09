@@ -11,6 +11,8 @@
 //!   `FindFirstFileExW`.
 //! - Per-handle queries (standard, basic, id, compression, streams, reparse).
 //! - Volume facts and the thread handle used by `CancelSynchronousIo`.
+//! - The per-thread placeholder compatibility mode, so cloud-files
+//!   placeholders report their real reparse tag and attributes.
 //!
 //! Handles are `std::os::windows::io::OwnedHandle` (closed on drop); find
 //! handles use [`FindGuard`]. Every function returns `io::Error` with the
@@ -55,7 +57,10 @@ const ERROR_INVALID_PARAMETER: i32 = 87;
 const ERROR_MORE_DATA: i32 = 234;
 const ERROR_NO_MORE_FILES: i32 = 18;
 const ERROR_NOT_SUPPORTED: i32 = 50;
-const ERROR_FILENAME_EXCED_RANGE: i32 = 206;
+pub(crate) const ERROR_FILENAME_EXCED_RANGE: i32 = 206;
+/// Longest path, in UTF-16 units including the terminator, that fits an NT
+/// `UNICODE_STRING` (whose byte lengths are `u16`).
+const NT_PATH_MAX_WITH_NUL: usize = 32_767;
 const ERROR_INVALID_FUNCTION: i32 = 1;
 const DRIVE_REMOTE: u32 = 4;
 
@@ -304,6 +309,11 @@ pub(crate) fn find_list(
 ) -> io::Result<bool> {
     let mut pattern = crate::path::join(dir, &[u16::from(b'*')]);
     pattern.push(0);
+    if pattern.len() > NT_PATH_MAX_WITH_NUL {
+        // NOTE: Win32 reports an over-long pattern as PATH_NOT_FOUND, which
+        // would read as a vanished directory.
+        return Err(io::Error::from_raw_os_error(ERROR_FILENAME_EXCED_RANGE));
+    }
     let mut data = WIN32_FIND_DATAW::default();
     // SAFETY: `pattern` is NUL-terminated; `data` is a valid out buffer for
     // the FindExInfoBasic level.
@@ -431,10 +441,28 @@ pub(crate) fn compressed_size(h: &OwnedHandle) -> io::Result<u64> {
     Ok(c.CompressedFileSize.max(0) as u64)
 }
 
-/// Queries `FileStreamInfo` into `buf`, growing it as needed. Returns the
-/// valid bytes (empty when the object has no data streams).
+/// Largest `FileStreamInfo` buffer [`stream_info`] grows to: room for
+/// several hundred thousand stream names.
+pub(crate) const STREAM_INFO_MAX: usize = 16 << 20;
+
+/// Queries `FileStreamInfo` into `buf`, growing it as needed up to
+/// [`STREAM_INFO_MAX`]. Returns the valid bytes (empty when the object has
+/// no data streams).
+///
+/// # Errors
+///
+/// The query's error, or `ERROR_MORE_DATA` when the stream list does not fit
+/// in the largest buffer. Callers must not treat an error as "no streams".
 pub(crate) fn stream_info<'b>(h: &OwnedHandle, buf: &'b mut AlignedBuf) -> io::Result<&'b [u8]> {
-    const MAX: usize = 16 << 20;
+    stream_info_capped(h, buf, STREAM_INFO_MAX)
+}
+
+/// [`stream_info`] with an explicit buffer cap in bytes.
+pub(crate) fn stream_info_capped<'b>(
+    h: &OwnedHandle,
+    buf: &'b mut AlignedBuf,
+    max: usize,
+) -> io::Result<&'b [u8]> {
     loop {
         let len = buf.len_bytes();
         // SAFETY: the buffer is writable for `len` bytes and 8-byte aligned.
@@ -446,8 +474,15 @@ pub(crate) fn stream_info<'b>(h: &OwnedHandle, buf: &'b mut AlignedBuf) -> io::R
             Err(e) => {
                 let err = to_io(&e);
                 match err.raw_os_error() {
-                    Some(ERROR_HANDLE_EOF) => return Ok(&[]),
-                    Some(ERROR_MORE_DATA) if len < MAX => buf.grow(),
+                    // NOTE: FAT, exFAT and some SMB servers have no named
+                    // streams and reject the class outright.
+                    Some(
+                        ERROR_HANDLE_EOF
+                        | ERROR_INVALID_PARAMETER
+                        | ERROR_NOT_SUPPORTED
+                        | ERROR_INVALID_FUNCTION,
+                    ) => return Ok(&[]),
+                    Some(ERROR_MORE_DATA) if len < max => buf.grow(),
                     _ => return Err(err),
                 }
             }
@@ -535,6 +570,47 @@ pub(crate) fn volume_facts(ext_path: &[u16]) -> io::Result<VolumeFacts> {
         total,
         free,
     })
+}
+
+/// `PHCM_EXPOSE_PLACEHOLDERS`: report cloud-files placeholders with their
+/// real reparse tag and attributes.
+const PHCM_EXPOSE_PLACEHOLDERS: i8 = 2;
+
+/// Makes the calling thread see cloud-files placeholders as they are on
+/// disk, until the returned guard is dropped (or for the thread's lifetime
+/// if it is forgotten).
+///
+/// By default the cloud filter disguises placeholders from applications: it
+/// strips the reparse point and `FILE_ATTRIBUTE_OFFLINE`, so a walk could
+/// not tell an online-only file from a local one (or match the MFT
+/// scanner's records). Exposing them changes only what metadata queries
+/// report; it never recalls content.
+pub(crate) fn expose_placeholders() -> PlaceholderMode {
+    // SAFETY: no pointer arguments; affects only the calling thread.
+    let old = unsafe {
+        windows::Wdk::Storage::FileSystem::RtlSetThreadPlaceholderCompatibilityMode(
+            PHCM_EXPOSE_PLACEHOLDERS,
+        )
+    };
+    // NOTE: negative values are PHCM_ERROR_* codes (nothing was changed).
+    PlaceholderMode((old >= 0).then_some(old))
+}
+
+/// Restores a thread's previous placeholder compatibility mode on drop.
+#[derive(Debug)]
+#[must_use = "dropping the guard restores the previous mode immediately"]
+pub(crate) struct PlaceholderMode(Option<i8>);
+
+impl Drop for PlaceholderMode {
+    fn drop(&mut self) {
+        if let Some(old) = self.0 {
+            // SAFETY: as in `expose_placeholders`; `old` is a mode the system
+            // returned for this thread.
+            unsafe {
+                windows::Wdk::Storage::FileSystem::RtlSetThreadPlaceholderCompatibilityMode(old)
+            };
+        }
+    }
 }
 
 /// A handle to a thread that can have its synchronous I/O cancelled.

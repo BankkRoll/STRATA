@@ -14,6 +14,10 @@
 //! - The allocation pass: one attribute-only, never-recalling open per file
 //!   for exact allocation, compressed/sparse/WOF size, hardlink count and
 //!   alternate data streams.
+//! - Cloud placeholders: seen undisguised (real tag, recall and offline
+//!   bits), never hydrated, and online-only directories are recorded
+//!   `PARTIAL` instead of listed, because listing them makes the provider
+//!   fetch their contents.
 //! - Hardlink merging into one record per file id with all links found.
 //! - Access-denied, vanished and replaced entries handled without failing.
 //! - Network paths: bounded concurrency, per-request timeouts with
@@ -65,6 +69,8 @@ mod sys;
 mod timed;
 mod walker;
 
+#[cfg(test)]
+mod harden_tests;
 #[cfg(test)]
 mod tests;
 

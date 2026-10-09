@@ -826,6 +826,7 @@ fn entries_changing_mid_scan_are_handled() {
                     let _ = fs::remove_file(root.join(r"mixed\del.txt"));
                 }
             })),
+            ..Hooks::default()
         };
         let (recs, stats) = hooked(&t.plain, opts(method, alloc), hooks);
         let v = View::new(&recs);

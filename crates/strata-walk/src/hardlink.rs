@@ -97,8 +97,9 @@ impl HardlinkTable {
     }
 }
 
-/// File ids seen so far, used to keep ids unique when hardlink counts are
-/// unknown (allocation pass off).
+/// Record ids produced so far, used to keep ids unique when hardlink counts
+/// are unknown (allocation pass off) and when entries move between
+/// directories during a walk.
 pub(crate) struct SeenIds {
     shards: Vec<Mutex<HashSet<u128>>>,
 }

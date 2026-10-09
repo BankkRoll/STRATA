@@ -39,6 +39,7 @@ Component designs are described in the [README](../README.md#how-it-works).
 | Live updates | `cargo bench -p strata-live` |
 | Duplicates | `cargo bench -p strata-dupes` |
 | Activity tracking | `cargo bench -p strata-etw` |
+| App pipeline | `cargo run --release -p strata-app --example pipeline_bench -- <folder>` |
 | History store | `cargo test -p strata-store --release --test bench -- --ignored --nocapture` |
 | UI rendering | `pnpm --dir ui fixtures:large`, then `pnpm --dir ui dev` and in another terminal `node ui/scripts/run-harness.mjs large [treemap\|sunburst\|icicle\|flame\|bubbles\|mindmap]` |
 
@@ -50,6 +51,11 @@ Component designs are described in the [README](../README.md#how-it-works).
 | Parse 1M MFT records, parallel (fixups + parse + assemble) | 155–291 ms (3.4–6.4 M records/s) | ≤ 3 s per 1M files end to end |
 | Parse 1M MFT records, single thread | 0.64–1.02 s | — |
 | Scan pipeline end to end over an in-memory image (I/O thread, channel, parser, sink) | 0.85–1.1 M records/s | — |
+| **App pipeline** (standard scanner, 4.96M-entry user profile, release build) | | |
+| Scan start to first usable treemap | 151–168 ms | — |
+| Finish after the walk (build, classify, remap) | 3.2–3.4 s | — |
+| Treemap of a 103.5k-entry folder from the live index | 3.2 ms | — |
+| Index memory, names excluded | 59.6 B per entry | — |
 | **Standard scanner** | | |
 | System volume, full accuracy (allocation pass on) | 20–23 s per 1M entries | ≤ 30 s per 1M |
 | System volume, listing only (allocation pass off) | 2.5–3.0 s per 1M entries | — |

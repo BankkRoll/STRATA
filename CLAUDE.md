@@ -43,4 +43,4 @@ the folder) before a clean `cargo clippy`.
 - JSDoc / rustdoc on every export. Comments explain *why*, never *what*.
 - **Public repo: no machine-specific data.** Never commit real profile paths, account names,
   SIDs, volume GUIDs/serials or local checkout paths. Use placeholders (`C:\Users\me`,
-  `S-1-5-21-1-2-3-1001`). `node scripts/check-privacy.mjs` enforces this in CI.
+  `S-1-5-21-1-2-3-1001`).

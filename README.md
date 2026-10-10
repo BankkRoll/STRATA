@@ -1,12 +1,28 @@
+<div align="center">
+
 # Strata
 
 A native Windows disk-space app that reads the NTFS Master File Table directly and tells you
 what is using your disk, who put it there, when, and whether it is safe to delete.
 
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20x64%20%26%20ARM64-3467e8?style=for-the-badge&logo=windows&logoColor=white)](https://bankkroll.github.io/STRATA/#download)
+[![Try the demo](https://img.shields.io/badge/Try%20the%20demo-in%20your%20browser-171717?style=for-the-badge)](https://bankkroll.github.io/STRATA/#demo)
+
+[![Latest release](https://img.shields.io/github/v/release/BankkRoll/STRATA?label=release&color=3467e8)](https://github.com/BankkRoll/STRATA/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/BankkRoll/STRATA/total?color=3467e8)](https://github.com/BankkRoll/STRATA/releases)
+[![CI](https://github.com/BankkRoll/STRATA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BankkRoll/STRATA/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3467e8)](LICENSE)
+[![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3467e8)](docs/REQUIREMENTS.md)
+
+<img src="docs/assets/screenshot.png" alt="Strata showing a treemap of a sample volume, a sortable list of its largest folders and the details panel for the selected item" width="100%">
+
+</div>
+
 ## Download
 
-Get the latest installer from [Releases](https://github.com/BankkRoll/STRATA/releases/latest).
-See it running in your browser on the [website](https://bankkroll.github.io/STRATA/).
+Get the latest installer from the [website](https://bankkroll.github.io/STRATA/#download) or
+[GitHub Releases](https://github.com/BankkRoll/STRATA/releases/latest). Every version and its
+changelog is on the [releases page](https://bankkroll.github.io/STRATA/releases/).
 
 - Windows 10 22H2+ or Windows 11, x64 or ARM64.
 - `Strata_<version>_x64-setup.exe` for x64 PCs, `Strata_<version>_arm64-setup.exe` for ARM64.

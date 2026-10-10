@@ -6,13 +6,43 @@
  * data, and {@link strataDemo} builds it into `dist/demo/` (served at
  * `/STRATA/demo/` in development), where the page embeds it in an iframe.
  */
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 import { build, createServer, defineConfig, type Plugin } from "vite";
 import { renderBenchmarks } from "./build/benchmarks.ts";
+import { loadReleases, renderReleases, type Release } from "./build/releases.ts";
 
 const benchmarks = fileURLToPath(new URL("./data/benchmarks.json", import.meta.url));
 const demoConfig = fileURLToPath(new URL("../ui/vite.demo.config.ts", import.meta.url));
+const partials = fileURLToPath(new URL("./partials/", import.meta.url));
+
+/**
+ * Shared page chrome and release data: `<!--site:header-->` and
+ * `<!--site:footer-->` come from `partials/` with `{{base}}` filled in, and
+ * `<!--rel:*-->` from the GitHub releases API, fetched once per build.
+ */
+function siteHtml(): Plugin {
+  let base = "/";
+  let releases: Promise<Release[] | null> | undefined;
+  return {
+    name: "strata-site",
+    configResolved(config) {
+      base = config.base;
+    },
+    async transformIndexHtml(html, ctx) {
+      const partial = (name: string) => readFileSync(join(partials, `${name}.html`), "utf8").replaceAll("{{base}}", base).trimEnd();
+      const page = ctx.path.includes("/releases/") ? "releases" : "home";
+      const header = partial("header").replace(`data-page="${page}"`, 'aria-current="page"');
+      releases ??= loadReleases();
+      const rel = renderReleases(await releases, base);
+      return html
+        .replace("<!--site:header-->", header.replaceAll("\n", "\n    "))
+        .replace("<!--site:footer-->", partial("footer").replaceAll("\n", "\n    "))
+        .replace(/<!--rel:(\w+)-->/g, (m, key: string) => (key in rel ? rel[key as keyof typeof rel] : m));
+    },
+  };
+}
 
 /** Splices the rendered benchmark data into `<!--bench:*-->` placeholders. */
 function benchmarkHtml(): Plugin {
@@ -65,10 +95,16 @@ function strataDemo(): Plugin {
 
 export default defineConfig({
   base: "/STRATA/",
-  plugins: [benchmarkHtml(), strataDemo()],
+  plugins: [siteHtml(), benchmarkHtml(), strataDemo()],
   build: {
     target: "es2022",
     sourcemap: false,
     assetsInlineLimit: 0,
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        releases: fileURLToPath(new URL("./releases/index.html", import.meta.url)),
+      },
+    },
   },
 });

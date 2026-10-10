@@ -178,8 +178,68 @@ function demo(): void {
   near.observe(root);
 }
 
+interface LatestRelease {
+  tag_name: string;
+  published_at: string;
+  assets: { name: string; size: number; browser_download_url: string }[];
+}
+
+/**
+ * The download block (`site/build/releases.ts`): marks the installer that
+ * matches this PC, and swaps in a release published after the site was built.
+ *
+ * NOTE: the architecture comes from User-Agent Client Hints, which only
+ * Chromium browsers expose; elsewhere both cards stay equal.
+ */
+function downloads(): void {
+  const block = document.querySelector<HTMLElement>("[data-release]");
+  if (!block) return;
+  const nav = navigator as Navigator & {
+    userAgentData?: { getHighEntropyValues(hints: string[]): Promise<{ architecture?: string; platform?: string }> };
+  };
+  void nav.userAgentData?.getHighEntropyValues(["architecture"]).then(
+    (ua) => {
+      if (ua.platform && ua.platform !== "Windows") return;
+      const arch = ua.architecture === "arm" ? "arm64" : ua.architecture === "x86" ? "x64" : null;
+      if (!arch) return;
+      for (const card of block.querySelectorAll<HTMLElement>(".dl-card")) {
+        const mine = card.dataset.arch === arch;
+        card.classList.toggle("is-recommended", mine);
+        card.querySelector<HTMLElement>("[data-recommend]")?.toggleAttribute("hidden", !mine);
+        card.querySelector(".btn--primary")?.classList.toggle("is-secondary", !mine);
+      }
+    },
+    () => undefined,
+  );
+
+  // NOTE: anonymous API calls are limited to 60 an hour per visitor; on any
+  // failure the links baked in at build time stay.
+  fetch("https://api.github.com/repos/BankkRoll/STRATA/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+    .then((res) => (res.ok ? (res.json() as Promise<LatestRelease>) : null))
+    .then((latest) => {
+      if (!latest || latest.tag_name === block.dataset.tag) return;
+      const mb = (b: number) => `${(b / (1024 * 1024)).toFixed(1)} MB`;
+      for (const link of block.querySelectorAll<HTMLAnchorElement>("a[data-asset]")) {
+        const arch = link.dataset.asset ?? "";
+        const file = latest.assets.find((a) => a.name.toLowerCase().endsWith(`_${arch}-setup.exe`));
+        if (!file) continue;
+        link.href = file.browser_download_url;
+        const meta = block.querySelector(`[data-asset-meta="${arch}"]`);
+        if (meta) meta.textContent = `${file.name} · ${mb(file.size)}`;
+      }
+      const line = block.querySelector("[data-release-line]");
+      const date = new Date(latest.published_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+      if (line) line.textContent = `Version ${latest.tag_name.replace(/^v/, "")} · ${date} · Windows 10 / 11`;
+      // The baked checksums belong to the older release.
+      block.querySelector("[data-sums]")?.remove();
+      block.dataset.tag = latest.tag_name;
+    })
+    .catch(() => undefined);
+}
+
 reveals();
 topnav();
 architecture();
 copyButtons();
 demo();
+downloads();

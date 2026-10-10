@@ -120,6 +120,15 @@ again; the workflow refuses to overwrite an existing release.
   `latest.json` and the same signature check. Crashes before Strata's startup
   code runs can't be detected; users then reinstall from the Releases page.
 
+## The installer
+
+The NSIS installer uses Strata's own template, `src-tauri/windows/installer.nsi`,
+forked from the Tauri CLI 2.12.1 template. Its install logic, registry layout and
+command-line modes (`/S`, `/P`, `/UPDATE`, `/NS`, `/R`, `/D=`) match upstream,
+because the updater and the rollback depend on them; only the interactive pages
+differ. When upgrading `@tauri-apps/cli`, diff its new template against 2.12.1 and
+carry over changes outside the page code.
+
 ## Building locally
 
 ```sh

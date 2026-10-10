@@ -137,6 +137,9 @@ fn race_file_replaced_or_modified_is_refused() {
     let t = TestDir::new("race-file");
     let f = t.file("f.txt", b"original");
     let expected = expect(&f);
+    // NOTE: the system clock behind file times can tick only every ~15.6 ms,
+    // and a same-size rewrite within one tick leaves nothing to detect.
+    std::thread::sleep(std::time::Duration::from_millis(50));
     std::fs::write(&f, b"changed!").unwrap();
     let err = delete_permanently(guard(), &f, &expected, &CancelToken::new()).unwrap_err();
     assert!(matches!(err, CleanError::Changed { .. }), "{err:?}");

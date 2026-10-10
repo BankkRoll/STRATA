@@ -105,8 +105,11 @@ fn half_a_million_changes_stay_bounded_per_tick() {
             t.fetched
         );
         // The budget is checked between batches, so one batch may overrun it.
+        // NOTE: unoptimised test builds on shared CI runners are several times
+        // slower and noisy; the release benchmark is what measures tick time.
+        let slack = if cfg!(debug_assertions) { 20 } else { 4 };
         assert!(
-            t.elapsed <= cfg.tick_budget * 4,
+            t.elapsed <= cfg.tick_budget * slack,
             "tick took {:?}",
             t.elapsed
         );

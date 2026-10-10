@@ -18,7 +18,8 @@ on:
       - "SECURITY.md"
       - "rules/**"
   # NOTE: the download links and changelog are read from GitHub Releases at
-  # build time, so publishing a release rebuilds the site.
+  # build time, so publishing a release rebuilds the site (from main; see the
+  # `release` job).
   release:
     types: [published]
   workflow_dispatch:
@@ -34,8 +35,24 @@ permissions:
   contents: read
 
 jobs:
+  # NOTE: a release event runs on the release's tag, and a Pages deployment
+  # made from a tag reports success but does not replace the live site. So a
+  # publish re-runs this workflow on main, which deploys normally.
+  release:
+    name: Rebuild from main
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build:
     name: Build site
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

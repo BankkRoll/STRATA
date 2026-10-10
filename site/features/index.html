@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Features · Strata</title>
+    <meta name="description" content="How Strata scans, stays live, explains every file, cleans up safely, searches, keeps history, finds duplicates, traces activity and draws your drives." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="../../src-tauri/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="../../src-tauri/icons/128x128@2x.png" />
+    <link rel="canonical" href="https://bankkroll.github.io/STRATA/features/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Strata" />
+    <meta property="og:title" content="Features · Strata" />
+    <meta property="og:description" content="Every capability of the Strata disk-space app, in depth." />
+    <meta property="og:url" content="https://bankkroll.github.io/STRATA/features/" />
+    <meta property="og:image" content="https://bankkroll.github.io/STRATA/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <script type="module" src="../src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <!--site:header-->
+
+    <main id="main">
+      <section class="page-head" aria-labelledby="page-title">
+        <div class="wrap">
+          <p class="kicker">Features</p>
+          <h1 id="page-title" class="page-head__title">Every layer, explained.</h1>
+          <p class="page-head__lede">From the raw Master File Table to the pixels on screen: how Strata finds every byte, keeps it current, tells you what it is and removes it without risk.</p>
+        </div>
+      </section>
+
+      <nav class="subnav" aria-label="Features on this page" data-subnav>
+        <div class="wrap">
+          <ul class="subnav__list">
+            <li><a href="#mft"><!--icon:mft-->Scanning</a></li>
+            <li><a href="#live"><!--icon:live-->Live index</a></li>
+            <li><a href="#explain"><!--icon:explain-->Explanations</a></li>
+            <li><a href="#cleanup"><!--icon:cleanup-->Cleanup</a></li>
+            <li><a href="#search"><!--icon:search-->Search</a></li>
+            <li><a href="#history"><!--icon:history-->History</a></li>
+            <li><a href="#duplicates"><!--icon:dupes-->Duplicates</a></li>
+            <li><a href="#activity"><!--icon:activity-->Activity</a></li>
+            <li><a href="#views"><!--icon:views-->Views</a></li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- MFT scanning ------------------------------------------------------ -->
+      <section id="mft" class="fx" aria-labelledby="mft-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">01</span>MFT scanning</p>
+            <h2 id="mft-title" class="fx__title">Reads the table of contents, not the book.</h2>
+            <p class="fx__lede">Every NTFS volume keeps a Master File Table: one record per file and folder. Strata reads it straight from the volume device instead of opening millions of folders one by one.</p>
+            <ul class="fx__facts">
+              <li><strong>Raw, unbuffered reads.</strong> Opens <code>\\.\C:</code> with sector-aligned buffers and follows the <code>$MFT</code> runlist from record 0, so a fragmented table is read fragment by fragment in 8 MiB chunks.</li>
+              <li><strong>Parallel parsing.</strong> One I/O thread feeds a bounded channel; a worker pool applies update-sequence fixups, parses attributes and merges extension records.</li>
+              <li><strong>Exact sizes.</strong> Hardlinks count once, compressed, sparse and CompactOS files count the clusters they use, cloud placeholders count what is local, and alternate streams and folder indexes are included.</li>
+              <li><strong>Hardened.</strong> Torn and corrupt records are counted and skipped. The parser is fuzzed and never panics on malformed input.</li>
+              <li><strong>A fallback that agrees.</strong> Without administrator rights, or on ReFS, FAT, exFAT and network shares, a parallel standard scanner emits the same records, without ever recalling cloud files.</li>
+            </ul>
+            <dl class="fx__stats">
+              <div><dt>Parse 1M records</dt><dd>{{bench.mft-parse}}</dd></div>
+              <div><dt>Full system drive</dt><dd>{{bench.vs.scan.strata}}</dd></div>
+            </dl>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="The volume's MFT fragments are read by one I/O thread into a bounded channel, parsed by four parallel workers, and assembled into scan records for the index.">
+              <text class="i-label" x="24" y="34">\\.\C:  ·  raw volume</text>
+              <text class="i-label i-r" x="536" y="34">$MFT runlist</text>
+              <rect class="i-frame" x="24" y="46" width="512" height="34" rx="5" />
+              <g class="i-fill">
+                <rect x="30" y="52" width="26" height="22" rx="2" /><rect x="128" y="52" width="40" height="22" rx="2" /><rect x="236" y="52" width="18" height="22" rx="2" /><rect x="262" y="52" width="30" height="22" rx="2" /><rect x="410" y="52" width="36" height="22" rx="2" /><rect x="500" y="52" width="30" height="22" rx="2" />
+              </g>
+              <g class="i-acc">
+                <rect x="62" y="52" width="60" height="22" rx="2" /><rect x="174" y="52" width="56" height="22" rx="2" /><rect x="298" y="52" width="106" height="22" rx="2" /><rect x="452" y="52" width="42" height="22" rx="2" />
+              </g>
+              <g class="i-label i-c">
+                <text x="92" y="98">frag 1</text><text x="202" y="98">frag 2</text><text x="351" y="98">frag 3</text><text x="473" y="98">frag 4</text>
+              </g>
+              <g class="i-link">
+                <path d="M92 106v10q0 8 8 8h140q8 0 8 8v6" /><path d="M202 106v10q0 8 8 8h30q8 0 8 8" /><path d="M351 106v10q0 8-8 8h-23q-8 0-8 8v6" /><path d="M473 106v10q0 8-8 8h-145q-8 0-8 8" />
+              </g>
+              <rect class="i-frame" x="208" y="138" width="144" height="34" rx="6" />
+              <text class="i-name i-c" x="280" y="160">I/O thread</text>
+              <text class="i-label" x="372" y="160">8 MiB chunks</text>
+              <path class="i-link" d="M280 172v18" />
+              <rect class="i-frame" x="120" y="190" width="320" height="26" rx="5" />
+              <g class="i-soft"><rect x="126" y="196" width="34" height="14" rx="2" /><rect x="164" y="196" width="34" height="14" rx="2" /><rect x="202" y="196" width="34" height="14" rx="2" /><rect x="240" y="196" width="34" height="14" rx="2" /></g>
+              <g class="i-fill"><rect x="278" y="196" width="34" height="14" rx="2" /><rect x="316" y="196" width="34" height="14" rx="2" /><rect x="354" y="196" width="34" height="14" rx="2" /><rect x="392" y="196" width="42" height="14" rx="2" /></g>
+              <text class="i-label" x="24" y="207">bounded</text>
+              <text class="i-label" x="24" y="221">channel</text>
+              <path class="i-link" d="M280 216v14M100 230h360M100 230v12M220 230v12M340 230v12M460 230v12" />
+              <g class="ill-lanes">
+                <g transform="translate(40 246)">
+                  <rect class="i-frame" width="120" height="104" rx="6" />
+                  <text class="i-label" x="12" y="20">worker 1</text>
+                  <g class="i-fill"><rect x="12" y="30" width="96" height="10" rx="2" /><rect x="12" y="46" width="96" height="10" rx="2" /></g>
+                  <rect class="i-acc" x="12" y="62" width="70" height="10" rx="2" />
+                  <rect class="i-fill" x="12" y="78" width="40" height="10" rx="2" />
+                </g>
+                <g transform="translate(160 246)">
+                  <rect class="i-frame" width="120" height="104" rx="6" x="0" />
+                  <text class="i-label" x="12" y="20">worker 2</text>
+                  <g class="i-fill"><rect x="12" y="30" width="96" height="10" rx="2" /><rect x="12" y="46" width="96" height="10" rx="2" /><rect x="12" y="62" width="96" height="10" rx="2" /></g>
+                  <rect class="i-acc" x="12" y="78" width="54" height="10" rx="2" />
+                </g>
+                <g transform="translate(280 246)">
+                  <rect class="i-frame" width="120" height="104" rx="6" />
+                  <text class="i-label" x="12" y="20">worker 3</text>
+                  <g class="i-fill"><rect x="12" y="30" width="96" height="10" rx="2" /></g>
+                  <rect class="i-acc" x="12" y="46" width="84" height="10" rx="2" />
+                  <rect class="i-fill" x="12" y="62" width="60" height="10" rx="2" />
+                  <rect class="i-warn-o" x="12.5" y="78.5" width="28" height="9" rx="2" />
+                  <text class="i-label" x="48" y="87">torn · skipped</text>
+                </g>
+                <g transform="translate(400 246)">
+                  <rect class="i-frame" width="120" height="104" rx="6" />
+                  <text class="i-label" x="12" y="20">worker 4</text>
+                  <g class="i-fill"><rect x="12" y="30" width="96" height="10" rx="2" /><rect x="12" y="46" width="96" height="10" rx="2" /></g>
+                  <rect class="i-acc" x="12" y="62" width="96" height="10" rx="2" />
+                  <rect class="i-fill" x="12" y="78" width="22" height="10" rx="2" />
+                </g>
+              </g>
+              <g class="i-label i-c"><text x="100" y="366">fixups</text><text x="220" y="366">attributes</text><text x="340" y="366">extensions</text><text x="460" y="366">assemble</text></g>
+              <path class="i-link" d="M100 374v8h360v-8M280 382v10" />
+              <rect class="i-ink-box" x="168" y="392" width="224" height="24" rx="5" />
+              <text class="i-name i-on-ink i-c" x="280" y="408">ScanRecord batches → index</text>
+            </svg>
+            <figcaption>The table is read in large sequential chunks and parsed in parallel; the disk, not the CPU, sets the pace.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Live index -------------------------------------------------------- -->
+      <section id="live" class="fx fx--flip" aria-labelledby="live-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">02</span>Live index</p>
+            <h2 id="live-title" class="fx__title">Scan once. Stay current.</h2>
+            <p class="fx__lede">NTFS records every change in its USN change journal. Strata follows it and patches its in-memory index in place, so the map you are looking at is the disk as it is now.</p>
+            <ul class="fx__facts">
+              <li><strong>Deltas, not rescans.</strong> Journal records are coalesced per tick, the changed MFT records are re-read, and only the affected entries and their parent folders are updated.</li>
+              <li><strong>Silent when idle.</strong> Reads block until something changes, so an idle volume costs no CPU: {{bench.idle}} in the benchmark.</li>
+              <li><strong>Opens at once.</strong> Each volume’s index is cached with per-section checksums and caught up from the journal at the next launch; any mismatch falls back to a scan.</li>
+              <li><strong>Honest about gaps.</strong> A wrapped or recreated journal shows a notice and can trigger a rescan. Volumes indexed by the standard scanner are watched folder by folder.</li>
+              <li><strong>Compact.</strong> A struct-of-arrays index uses {{bench.memory}} of memory per entry, plus its name.</li>
+            </ul>
+            <dl class="fx__stats">
+              <div><dt>Change to view</dt><dd>{{bench.live-latency}}</dd></div>
+              <div><dt>500,000 new files</dt><dd>{{bench.live-burst}}</dd></div>
+            </dl>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="USN journal records stream along a timeline, are grouped per tick, and update one block of the treemap and its parent folders.">
+              <text class="i-label" x="24" y="34">USN change journal</text>
+              <text class="i-label i-r" x="536" y="34">tick</text>
+              <path class="i-line" d="M24 92h512" />
+              <g class="i-tickwin"><rect x="300" y="48" width="212" height="70" rx="6" /></g>
+              <g class="i-fill">
+                <rect x="34" y="64" width="44" height="20" rx="3" /><rect x="88" y="64" width="56" height="20" rx="3" /><rect x="154" y="64" width="38" height="20" rx="3" /><rect x="202" y="64" width="52" height="20" rx="3" />
+              </g>
+              <g class="i-acc"><rect x="310" y="64" width="46" height="20" rx="3" /><rect x="364" y="64" width="62" height="20" rx="3" /><rect x="434" y="64" width="68" height="20" rx="3" /></g>
+              <g class="i-label i-c"><text x="56" y="108">CLOSE</text><text x="116" y="108">RENAME</text><text x="173" y="108">CLOSE</text><text x="228" y="108">DELETE</text></g>
+              <g class="i-label i-c i-acc-t"><text x="333" y="108">CREATE</text><text x="395" y="108">EXTEND</text><text x="468" y="108">EXTEND</text></g>
+              <path class="i-link" d="M406 118v26" />
+              <rect class="i-frame" x="300" y="144" width="212" height="30" rx="6" />
+              <text class="i-name i-c" x="406" y="164">coalesce · re-read records</text>
+              <path class="i-link" d="M406 174v22" />
+              <rect class="i-frame" x="24" y="196" width="512" height="200" rx="6" />
+              <g class="i-fill">
+                <rect x="32" y="204" width="236" height="120" rx="2" /><rect x="32" y="328" width="112" height="60" rx="2" /><rect x="148" y="328" width="120" height="60" rx="2" />
+                <rect x="272" y="204" width="120" height="76" rx="2" /><rect x="396" y="204" width="132" height="76" rx="2" />
+                <rect x="272" y="284" width="76" height="104" rx="2" /><rect x="352" y="358" width="72" height="30" rx="2" /><rect x="428" y="284" width="100" height="44" rx="2" /><rect x="428" y="332" width="100" height="56" rx="2" />
+              </g>
+              <rect class="i-acc" x="352" y="284" width="72" height="70" rx="2" />
+              <rect class="i-ring" x="270" y="282" width="260" height="108" rx="3" />
+              <g class="i-label"><text x="40" y="222">Users</text><text x="280" y="222">Program Files</text><text x="404" y="222">Windows</text></g>
+              <text class="i-name i-inv" x="360" y="304">Videos</text>
+              <text class="i-label i-inv" x="360" y="318">+1.2 GB</text>
+              <text class="i-label" x="278" y="410">parent chain updated in O(depth)</text>
+            </svg>
+            <figcaption>Only the changed entries and the folders above them are touched; the rest of the layout is reused.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Explains every file ----------------------------------------------- -->
+      <section id="explain" class="fx" aria-labelledby="explain-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">03</span>Explains every file</p>
+            <h2 id="explain-title" class="fx__title">What it is, who made it, and what deleting it means.</h2>
+            <p class="fx__lede">{{rules.count}} built-in rules in {{rules.packs}} packs classify every file and folder into one of {{rules.categories}} categories, name the app that owns it among {{rules.apps}} they recognise, and assign a safety tier.</p>
+            <ul class="fx__facts">
+              <li><strong>Four safety tiers.</strong> <em>Safe</em> regenerates by itself, <em>probably</em> is likely junk, <em>careful</em> is your data or a large re-download, and <em>never</em> has no delete action anywhere.</li>
+              <li><strong>Owner attribution.</strong> Installed-program registry keys (machine, 32-bit and per user), AppX packages, rule labels and folder names, each with a confidence and its evidence.</li>
+              <li><strong>“Why is this X?”</strong> Every classification shows the rule that won, the folder it was inherited from, and every candidate that was considered.</li>
+              <li><strong>Yours to extend.</strong> Add TOML packs to your rules folder to cover your own tools. A user rule can tighten any tier, but it can never relax a built-in <em>never</em>.</li>
+            </ul>
+            <!--data:rules.tierbar-->
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="A details panel for the npm cache folder: category Caches, app Node.js / npm, safety tier safe, matched by the rule dev.npm_cache, with the explanation and the inheritance path.">
+              <rect class="i-frame" x="24" y="24" width="512" height="372" rx="8" />
+              <path class="i-line" d="M24 64h512" />
+              <g class="i-label"><text x="44" y="49">C:\Users\me\AppData\Local\</text></g>
+              <text class="i-name" x="214" y="49">npm-cache</text>
+              <text class="i-big" x="44" y="102">npm-cache</text>
+              <text class="i-label" x="44" y="124">Folder · 4.2 GB allocated · 61,204 files</text>
+              <rect class="i-pill-safe" x="436" y="86" width="80" height="24" rx="12" />
+              <text class="i-name i-c i-inv" x="476" y="102">Safe</text>
+              <path class="i-line" d="M44 144h472" />
+              <g class="i-label"><text x="44" y="170">Category</text><text x="44" y="198">App</text><text x="44" y="226">Rule</text><text x="44" y="254">Regenerable</text></g>
+              <g class="i-name"><text x="160" y="170">Caches</text><text x="160" y="198">Node.js / npm</text><text x="160" y="226">dev.npm_cache</text><text x="160" y="254">Yes</text></g>
+              <text class="i-label" x="330" y="198">confidence: exact</text>
+              <text class="i-label" x="330" y="226">pack: dev · path rule</text>
+              <rect class="i-fill" x="44" y="274" width="472" height="58" rx="5" />
+              <text class="i-body" x="60" y="298">npm’s download cache. Safe to delete; packages</text>
+              <text class="i-body" x="60" y="318">are downloaded again when needed.</text>
+              <g class="i-label"><text x="44" y="358">Why</text></g>
+              <g class="i-steps">
+                <circle cx="110" cy="354" r="4" /><path d="M114 354h70" /><circle cx="188" cy="354" r="4" /><path d="M192 354h70" />
+              </g>
+              <circle class="i-acc" cx="266" cy="354" r="5" />
+              <g class="i-label"><text x="96" y="378">C:\</text><text x="170" y="378">Users\me</text><text x="244" y="378">npm-cache</text></g>
+              <text class="i-label" x="330" y="358">matched here, by path</text>
+            </svg>
+            <figcaption>The details panel for a folder the rules recognise. Paths are illustrative.</figcaption>
+          </figure>
+        </div>
+        <div class="wrap">
+          <details class="disclosure fx__more">
+            <summary>The {{rules.packs}} built-in rule packs<span class="disclosure__icon" aria-hidden="true"></span></summary>
+            <div class="disclosure__body"><!--data:rules.packlist--><p class="fx__note">Schema, matchers and precedence are in <a class="link" href="{{repo}}/blob/main/docs/RULES.md">docs/RULES.md</a>.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Safe cleanup ------------------------------------------------------ -->
+      <section id="cleanup" class="fx fx--flip" aria-labelledby="cleanup-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">04</span>Safe cleanup</p>
+            <h2 id="cleanup-title" class="fx__title">Every layer fails closed.</h2>
+            <p class="fx__lede">Deletion is the only destructive thing Strata does, so it passes through independent checks, each able to stop it, and lands somewhere you can take it back from.</p>
+            <ul class="fx__facts">
+              <li><strong>A never-delete list in code.</strong> Volume roots, the Windows folder, Program Files, every profile root, known-folder roots, boot and paging files, NTFS metadata and more, enforced by the app and again by the elevated helper.</li>
+              <li><strong>Every spelling checked.</strong> <code>\\?\</code> and <code>\??\</code> prefixes, UNC and admin shares, volume GUID paths, mount points, trailing dots and 8.3 short names all resolve to the same protected location.</li>
+              <li><strong>Re-verified by file id.</strong> Right before acting, the item is opened without following links, and its volume serial, file id, size and modification time must still match the scan.</li>
+              <li><strong>Recycle Bin by default.</strong> The undo log is written before anything is touched, and a restore puts files back without ever overwriting.</li>
+              <li><strong>Locks, named.</strong> Restart Manager shows which program holds a file. Closing it is a polite request after you agree, never a kill.</li>
+            </ul>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="Two delete requests pass through four gates. A temp folder passes the never-list, canonicalisation and file-id check and lands in the Recycle Bin with an undo record. A System32 path is refused at the never-list.">
+              <g class="i-label i-c"><text x="98" y="34">never-list</text><text x="218" y="34">canonical path</text><text x="338" y="34">file id + size</text><text x="458" y="34">Recycle Bin</text></g>
+              <g class="i-gate">
+                <rect x="66" y="46" width="64" height="300" rx="6" /><rect x="186" y="46" width="64" height="300" rx="6" /><rect x="306" y="46" width="64" height="300" rx="6" /><rect x="426" y="46" width="64" height="300" rx="6" />
+              </g>
+              <g class="i-label i-c"><text x="98" y="68">01</text><text x="218" y="68">02</text><text x="338" y="68">03</text><text x="458" y="68">04</text></g>
+              <path class="i-flow" d="M24 120h442" />
+              <g class="i-ok"><circle cx="98" cy="120" r="9" /><circle cx="218" cy="120" r="9" /><circle cx="338" cy="120" r="9" /></g>
+              <g class="i-check"><path d="m94 120 3 3 5-6M214 120l3 3 5-6M334 120l3 3 5-6" /></g>
+              <rect class="i-acc" x="438" y="106" width="40" height="28" rx="4" />
+              <text class="i-label" x="24" y="104">Temp\build-cache</text>
+              <path class="i-flow i-flow--stop" d="M24 236h66" />
+              <circle class="i-stop" cx="98" cy="236" r="9" />
+              <path class="i-x" d="m94 232 8 8M102 232l-8 8" />
+              <text class="i-label" x="24" y="220">System32\drivers</text>
+              <text class="i-label" x="118" y="262">refused: protected location</text>
+              <rect class="i-frame" x="24" y="362" width="512" height="44" rx="6" />
+              <text class="i-label" x="40" y="381">undo log</text>
+              <text class="i-name" x="40" y="398">written first · recycled · restorable</text>
+              <rect class="i-fill" x="404" y="374" width="116" height="20" rx="4" />
+              <text class="i-label i-c" x="462" y="388">Restore</text>
+            </svg>
+            <figcaption>A request must pass every gate; any one of them can refuse it.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Search ------------------------------------------------------------ -->
+      <section id="search" class="fx" aria-labelledby="search-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">05</span>Search</p>
+            <h2 id="search-title" class="fx__title">Results before you finish typing.</h2>
+            <p class="fx__lede">One parallel pass over every name on the volume, with filters checked before any name work. Results stream in as each chunk finishes, and each keystroke cancels the query before it.</p>
+            <div class="syntax" role="table" aria-label="Search syntax">
+              <div role="row" class="syntax__row"><code role="cell">*.gguf size:&gt;1gb</code><span role="cell">Model files over 1 GB</span></div>
+              <div role="row" class="syntax__row"><code role="cell">node_modules\react</code><span role="cell"><code>react</code> folders directly inside <code>node_modules</code></span></div>
+              <div role="row" class="syntax__row"><code role="cell">ext:mp4,mkv modified:&gt;1y</code><span role="cell">Videos untouched for a year</span></div>
+              <div role="row" class="syntax__row"><code role="cell">cat:cache safe:yes size:&gt;100mb</code><span role="cell">Large caches that are safe to remove</span></div>
+              <div role="row" class="syntax__row"><code role="cell">app:steam dir:</code><span role="cell">Folders owned by Steam</span></div>
+              <div role="row" class="syntax__row"><code role="cell">attr:hardlink vol:C</code><span role="cell">Hardlinked files on drive C</span></div>
+              <div role="row" class="syntax__row"><code role="cell">cloud:online</code><span role="cell">Online-only cloud files</span></div>
+              <div role="row" class="syntax__row"><code role="cell">re:^IMG_\d{4}\.jpe?g$</code><span role="cell">A regular expression over the name</span></div>
+            </div>
+            <p class="fx__note">Terms combine with AND. Also: <code>^prefix</code>, <code>"quoted phrases"</code>, <code>size:1mb..5mb</code>, <code>modified:&lt;30d</code>, <code>attr:sparse</code>, <code>case:yes</code>.</p>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="A search box with the query star dot gguf size greater than 1 GB, showing five model files sorted by size, with first results in about a millisecond.">
+              <rect class="i-frame" x="24" y="24" width="512" height="372" rx="8" />
+              <rect class="i-field" x="44" y="44" width="472" height="44" rx="6" />
+              <circle class="i-stroke" cx="68" cy="65" r="7" /><path class="i-stroke" d="m73 70 5 5" />
+              <text class="i-query" x="90" y="71">*.gguf</text>
+              <text class="i-query i-acc-t" x="146" y="71">size:&gt;1gb</text>
+              <rect class="i-caret" x="232" y="56" width="1.5" height="20" />
+              <rect class="i-chip" x="404" y="54" width="96" height="24" rx="12" />
+              <text class="i-label i-c" x="452" y="70">{{bench.search}}</text>
+              <g class="i-label"><text x="44" y="118">Name</text><text x="304" y="118">Folder</text><text class="i-r" x="516" y="118">Size</text></g>
+              <path class="i-line" d="M44 128h472" />
+              <g class="i-rows">
+                <g><text class="i-name" x="44" y="156">llama-3-70b.Q4_K_M.gguf</text><text class="i-label" x="304" y="156">models\llama</text><text class="i-name i-r" x="516" y="156">39.6 GB</text><rect class="i-acc" x="44" y="164" width="472" height="2" /></g>
+                <g><text class="i-name" x="44" y="196">mixtral-8x7b.Q5.gguf</text><text class="i-label" x="304" y="196">.ollama\blobs</text><text class="i-name i-r" x="516" y="196">30.0 GB</text><rect class="i-soft" x="44" y="204" width="358" height="2" /></g>
+                <g><text class="i-name" x="44" y="236">qwen2-32b.Q4.gguf</text><text class="i-label" x="304" y="236">lm-studio\models</text><text class="i-name i-r" x="516" y="236">18.5 GB</text><rect class="i-soft" x="44" y="244" width="220" height="2" /></g>
+                <g><text class="i-name" x="44" y="276">mistral-7b.Q8_0.gguf</text><text class="i-label" x="304" y="276">Downloads</text><text class="i-name i-r" x="516" y="276">7.7 GB</text><rect class="i-soft" x="44" y="284" width="92" height="2" /></g>
+                <g><text class="i-name" x="44" y="316">phi-3-mini.f16.gguf</text><text class="i-label" x="304" y="316">models\phi</text><text class="i-name i-r" x="516" y="316">7.6 GB</text><rect class="i-soft" x="44" y="324" width="90" height="2" /></g>
+              </g>
+              <path class="i-line" d="M44 346h472" />
+              <text class="i-label" x="44" y="372">5 results · 5,012,448 names searched · streaming</text>
+            </svg>
+            <figcaption>Name terms and filters in one box. File names are illustrative.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- History ----------------------------------------------------------- -->
+      <section id="history" class="fx fx--flip" aria-labelledby="history-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">06</span>History and snapshots</p>
+            <h2 id="history-title" class="fx__title">See what grew, and when.</h2>
+            <p class="fx__lede">Each scan can store a snapshot of folder sizes. Compare any two and Strata lists what grew, what shrank and what appeared, folder by folder.</p>
+            <ul class="fx__facts">
+              <li><strong>Small by design.</strong> Snapshots keep aggregate sizes of folders above a threshold (16 MB by default), about 12 bytes per folder, never individual files.</li>
+              <li><strong>Self-pruning.</strong> Thinned to one a week after 30 days and removed after 90 days by default; both limits are in Settings.</li>
+              <li><strong>Kept apart.</strong> History lives in its own database, so resetting it never touches your settings or the undo log that restores depend on.</li>
+            </ul>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="A stepped chart of used space over eight weekly snapshots, with the last step highlighted, and a diff list of the folders that grew most since the previous snapshot.">
+              <text class="i-label" x="24" y="34">Used space · weekly snapshots</text>
+              <g class="i-grid"><path d="M56 64h480M56 104h480M56 144h480M56 184h480" /></g>
+              <g class="i-label i-r"><text x="48" y="68">400</text><text x="48" y="108">380</text><text x="48" y="148">360</text><text x="48" y="188">340 GB</text></g>
+              <path class="i-area" d="M56 176h60v-6h60v-14h60v4h60v-18h60v-6h60v-30h60V200H56z" />
+              <path class="i-stepline" d="M56 176h60v-6h60v-14h60v4h60v-18h60v-6h60" />
+              <path class="i-stepline i-stepline--acc" d="M416 136v-30h60" />
+              <g class="i-dot"><circle cx="416" cy="136" r="4" /></g>
+              <circle class="i-acc" cx="476" cy="106" r="5" />
+              <path class="i-line" d="M56 200h480" />
+              <g class="i-label i-c"><text x="86" y="218">W1</text><text x="146" y="218">W2</text><text x="206" y="218">W3</text><text x="266" y="218">W4</text><text x="326" y="218">W5</text><text x="386" y="218">W6</text><text x="446" y="218">W7</text><text x="506" y="218">now</text></g>
+              <rect class="i-frame" x="24" y="240" width="512" height="160" rx="8" />
+              <text class="i-label" x="44" y="266">Since the last snapshot</text>
+              <text class="i-name i-r i-acc-t" x="516" y="266">+15.2 GB</text>
+              <path class="i-line" d="M44 278h472" />
+              <g>
+                <text class="i-name" x="44" y="302">Videos\Captures</text><rect class="i-acc" x="300" y="292" width="150" height="12" rx="2" /><text class="i-label i-r" x="516" y="302">+9.8 GB</text>
+                <text class="i-name" x="44" y="330">AppData\Local\Docker</text><rect class="i-soft" x="300" y="320" width="62" height="12" rx="2" /><text class="i-label i-r" x="516" y="330">+4.1 GB</text>
+                <text class="i-name" x="44" y="358">projects\app\node_modules</text><rect class="i-soft" x="300" y="348" width="24" height="12" rx="2" /><text class="i-label i-r" x="516" y="358">+1.6 GB</text>
+                <text class="i-name" x="44" y="386">Downloads</text><rect class="i-fill" x="300" y="376" width="18" height="12" rx="2" /><text class="i-label i-r" x="516" y="386">−0.3 GB</text>
+              </g>
+            </svg>
+            <figcaption>A diff between two snapshots, sorted by growth. Figures are illustrative.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Duplicates -------------------------------------------------------- -->
+      <section id="duplicates" class="fx" aria-labelledby="duplicates-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">07</span>Duplicates</p>
+            <h2 id="duplicates-title" class="fx__title">Real copies only. Nothing downloaded.</h2>
+            <p class="fx__lede">Files are narrowed down in stages, so most candidates are ruled out without reading a byte, and only true byte-for-byte copies reach you.</p>
+            <ul class="fx__facts">
+              <li><strong>Three stages.</strong> Group by size, then hash the first, middle and last 64 KiB, then hash the whole file. Hashes are cached, so a rerun reads {{bench.dupes-rerun}} from disk.</li>
+              <li><strong>Hardlinks are one file.</strong> Paths that share a file record are never reported as copies of each other.</li>
+              <li><strong>Cloud files stay in the cloud.</strong> Placeholders are never opened, and every open forbids recalling cloud content.</li>
+              <li><strong>Can’t lose the last copy.</strong> A selection can never include every copy in a group; Strata suggests which to keep and says why, then re-checks before deleting through the same safe cleanup.</li>
+            </ul>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="Candidates narrow through three stages: size, partial hash and full hash. A hardlink and a cloud placeholder are set aside. One group of three identical files remains, with one copy suggested to keep.">
+              <g class="i-label i-c"><text x="96" y="34">same size</text><text x="280" y="34">partial hash</text><text x="464" y="34">full hash</text></g>
+              <g class="i-label i-c"><text x="96" y="50">no reads</text><text x="280" y="50">3 × 64 KiB</text><text x="464" y="50">whole file</text></g>
+              <g class="i-col"><rect x="24" y="64" width="144" height="236" rx="8" /><rect x="208" y="64" width="144" height="236" rx="8" /><rect x="392" y="64" width="144" height="236" rx="8" /></g>
+              <g class="i-fill">
+                <rect x="40" y="80" width="112" height="18" rx="3" /><rect x="40" y="104" width="112" height="18" rx="3" /><rect x="40" y="128" width="112" height="18" rx="3" /><rect x="40" y="152" width="112" height="18" rx="3" /><rect x="40" y="176" width="112" height="18" rx="3" /><rect x="40" y="200" width="112" height="18" rx="3" /><rect x="40" y="224" width="112" height="18" rx="3" />
+                <rect x="224" y="80" width="112" height="18" rx="3" /><rect x="224" y="104" width="112" height="18" rx="3" /><rect x="224" y="128" width="112" height="18" rx="3" /><rect x="224" y="152" width="112" height="18" rx="3" />
+              </g>
+              <g class="i-dash-o"><rect x="40.5" y="248.5" width="111" height="17" rx="3" /><rect x="40.5" y="272.5" width="111" height="17" rx="3" /></g>
+              <text class="i-label" x="50" y="261">hardlink · skipped</text>
+              <text class="i-label" x="50" y="285">cloud · not opened</text>
+              <g class="i-acc"><rect x="408" y="80" width="112" height="18" rx="3" /></g>
+              <g class="i-soft"><rect x="408" y="104" width="112" height="18" rx="3" /><rect x="408" y="128" width="112" height="18" rx="3" /></g>
+              <g class="i-link"><path d="M152 89h72M152 113h72M152 137h72M152 161h72" /><path d="M336 89h72M336 113h72M336 137h72" /></g>
+              <text class="i-label i-inv" x="416" y="93">keep · oldest</text>
+              <rect class="i-frame" x="24" y="320" width="512" height="80" rx="8" />
+              <text class="i-label" x="44" y="346">Group · 3 copies · 2.4 GB each</text>
+              <text class="i-name i-r i-acc-t" x="516" y="346">4.8 GB reclaimable</text>
+              <path class="i-line" d="M44 358h472" />
+              <text class="i-body" x="44" y="382">Keep: Pictures\2023\trip.mov — oldest, not in Downloads</text>
+            </svg>
+            <figcaption>Each stage reads more only for files still in the running. Names are illustrative.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Activity ---------------------------------------------------------- -->
+      <section id="activity" class="fx fx--flip" aria-labelledby="activity-title">
+        <div class="wrap fx__grid">
+          <div class="fx__text">
+            <p class="kicker"><span class="kicker__n">08</span>Activity · opt-in</p>
+            <h2 id="activity-title" class="fx__title">Which program is filling your disk, right now.</h2>
+            <p class="fx__lede">Turn on activity tracking and Strata records which programs write, create and delete files, per folder and per hour, plus the last program that wrote each path.</p>
+            <ul class="fx__facts">
+              <li><strong>Off by default.</strong> It needs administrator rights and runs inside the elevated helper as one kernel trace session.</li>
+              <li><strong>Light.</strong> Tracing stays under a CPU cap (2% by default); above it, Strata samples writes and scales them, and suggests turning tracking off.</li>
+              <li><strong>Accurate attribution.</strong> Processes are keyed by id and start time, so a reused process id is never blamed for another program’s writes.</li>
+              <li><strong>Local and temporary.</strong> Activity data stays in the history database and is deleted after 30 days by default, or whenever you clear it.</li>
+            </ul>
+          </div>
+          <figure class="fx__figure">
+            <svg class="ill" viewBox="0 0 560 420" role="img" aria-label="Bytes written per program over the last hour, as horizontal bars, with an hourly heat strip for each program and the CPU cost of tracing under its cap.">
+              <text class="i-label" x="24" y="34">Written · last hour</text>
+              <text class="i-label i-r" x="536" y="34">by hour, today</text>
+              <path class="i-line" d="M24 48h512" />
+              <g>
+                <text class="i-name" x="24" y="80">obs64.exe</text><rect class="i-acc" x="150" y="68" width="190" height="16" rx="2" /><text class="i-label" x="348" y="80">6.1 GB</text>
+                <text class="i-name" x="24" y="120">steam.exe</text><rect class="i-soft" x="150" y="108" width="112" height="16" rx="2" /><text class="i-label" x="270" y="120">3.6 GB</text>
+                <text class="i-name" x="24" y="160">Code.exe</text><rect class="i-soft" x="150" y="148" width="40" height="16" rx="2" /><text class="i-label" x="198" y="160">1.2 GB</text>
+                <text class="i-name" x="24" y="200">chrome.exe</text><rect class="i-soft" x="150" y="188" width="22" height="16" rx="2" /><text class="i-label" x="180" y="200">710 MB</text>
+                <text class="i-name" x="24" y="240">MsMpEng.exe</text><rect class="i-fill" x="150" y="228" width="8" height="16" rx="2" /><text class="i-label" x="166" y="240">96 MB</text>
+              </g>
+              <g class="i-heat">
+                <g transform="translate(416 68)"><rect class="h0" x="0" width="12" height="16" /><rect class="h1" x="15" width="12" height="16" /><rect class="h0" x="30" width="12" height="16" /><rect class="h2" x="45" width="12" height="16" /><rect class="h3" x="60" width="12" height="16" /><rect class="h3" x="75" width="12" height="16" /><rect class="h2" x="90" width="12" height="16" /><rect class="h3" x="105" width="12" height="16" /></g>
+                <g transform="translate(416 108)"><rect class="h1" x="0" width="12" height="16" /><rect class="h2" x="15" width="12" height="16" /><rect class="h0" x="30" width="12" height="16" /><rect class="h0" x="45" width="12" height="16" /><rect class="h1" x="60" width="12" height="16" /><rect class="h0" x="75" width="12" height="16" /><rect class="h2" x="90" width="12" height="16" /><rect class="h3" x="105" width="12" height="16" /></g>
+                <g transform="translate(416 148)"><rect class="h1" x="0" width="12" height="16" /><rect class="h1" x="15" width="12" height="16" /><rect class="h2" x="30" width="12" height="16" /><rect class="h1" x="45" width="12" height="16" /><rect class="h1" x="60" width="12" height="16" /><rect class="h2" x="75" width="12" height="16" /><rect class="h1" x="90" width="12" height="16" /><rect class="h1" x="105" width="12" height="16" /></g>
+                <g transform="translate(416 188)"><rect class="h1" x="0" width="12" height="16" /><rect class="h0" x="15" width="12" height="16" /><rect class="h1" x="30" width="12" height="16" /><rect class="h1" x="45" width="12" height="16" /><rect class="h0" x="60" width="12" height="16" /><rect class="h1" x="75" width="12" height="16" /><rect class="h1" x="90" width="12" height="16" /><rect class="h1" x="105" width="12" height="16" /></g>
+                <g transform="translate(416 228)"><rect class="h0" x="0" width="12" height="16" /><rect class="h0" x="15" width="12" height="16" /><rect class="h1" x="30" width="12" height="16" /><rect class="h0" x="45" width="12" height="16" /><rect class="h0" x="60" width="12" height="16" /><rect class="h0" x="75" width="12" height="16" /><rect class="h1" x="90" width="12" height="16" /><rect class="h0" x="105" width="12" height="16" /></g>
+              </g>
+              <rect class="i-frame" x="24" y="272" width="512" height="124" rx="8" />
+              <text class="i-label" x="44" y="298">Last writer</text>
+              <text class="i-name" x="140" y="298">Videos\Captures\2026-10-09 21-14.mkv</text>
+              <text class="i-label" x="44" y="324">Program</text>
+              <text class="i-name" x="140" y="324">obs64.exe · OBS Studio</text>
+              <path class="i-line" d="M44 340h472" />
+              <text class="i-label" x="44" y="370">Tracing CPU</text>
+              <rect class="i-fill" x="140" y="360" width="300" height="12" rx="6" />
+              <rect class="i-acc" x="140" y="360" width="84" height="12" rx="6" />
+              <path class="i-cap" d="M440 354v24" />
+              <text class="i-label" x="448" y="370">2% cap</text>
+            </svg>
+            <figcaption>Per-program writes with hourly rollups. Programs and sizes are illustrative.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Views ------------------------------------------------------------- -->
+      <section id="views" class="fx fx--wide" aria-labelledby="views-title">
+        <div class="wrap">
+          <div class="fx__text fx__text--wide">
+            <p class="kicker"><span class="kicker__n">09</span>Views</p>
+            <h2 id="views-title" class="fx__title">Five ways to see the same drive.</h2>
+            <p class="fx__lede">Layouts are computed in Rust, in device pixels, and streamed to the window as fixed 32-byte records that WebGL2 draws directly. Switching colour modes is a shader change, not a relayout, and hover never waits on the backend.</p>
+          </div>
+          <ul class="views">
+            <li class="view">
+              <svg class="ill ill--view" viewBox="0 0 200 150" role="img" aria-label="Treemap">
+                <rect class="i-frame" x="1" y="1" width="198" height="148" rx="4" />
+                <rect class="i-acc" x="6" y="6" width="96" height="84" rx="1.5" /><rect class="i-soft" x="6" y="94" width="58" height="50" rx="1.5" /><rect class="i-fill" x="68" y="94" width="34" height="50" rx="1.5" />
+                <rect class="i-soft" x="106" y="6" width="88" height="52" rx="1.5" /><rect class="i-fill" x="106" y="62" width="48" height="44" rx="1.5" /><rect class="i-fill" x="158" y="62" width="36" height="44" rx="1.5" /><rect class="i-fill" x="106" y="110" width="30" height="34" rx="1.5" /><rect class="i-hatch" x="140" y="110" width="54" height="34" rx="1.5" />
+              </svg>
+              <h3>Treemap</h3><p>Squarified, with cushions and folded small items.</p>
+            </li>
+            <li class="view">
+              <svg class="ill ill--view" viewBox="0 0 200 150" role="img" aria-label="Sunburst">
+                <rect class="i-frame" x="1" y="1" width="198" height="148" rx="4" />
+                <circle class="i-fill" cx="100" cy="75" r="18" />
+                <path class="i-acc" d="M100 49a26 26 0 0 1 24.7 34L136.1 87A38 38 0 0 0 100 37z" />
+                <path class="i-soft" d="M124.7 83A26 26 0 0 1 82 94l-8.3 8.8A38 38 0 0 0 136.1 87z" />
+                <path class="i-fill" d="M82 94a26 26 0 0 1 18-45V37a38 38 0 0 0-26.3 65.8z" />
+                <path class="i-soft" d="M100 30a45 45 0 0 1 31.8 13.2l7.8-7.8A56 56 0 0 0 100 19z" />
+                <path class="i-acc" d="M131.8 43.2A45 45 0 0 1 143.5 87l10.6 3A56 56 0 0 0 139.6 35.4z" />
+                <path class="i-fill" d="M68.2 106.8A45 45 0 0 1 100 30V19a56 56 0 0 0-39.6 95.6z" />
+              </svg>
+              <h3>Sunburst</h3><p>Rings by depth; the angle is the size.</p>
+            </li>
+            <li class="view">
+              <svg class="ill ill--view" viewBox="0 0 200 150" role="img" aria-label="Icicle">
+                <rect class="i-frame" x="1" y="1" width="198" height="148" rx="4" />
+                <rect class="i-ink-box" x="6" y="6" width="188" height="22" rx="1.5" />
+                <rect class="i-acc" x="6" y="32" width="110" height="22" rx="1.5" /><rect class="i-soft" x="120" y="32" width="74" height="22" rx="1.5" />
+                <rect class="i-acc" x="6" y="58" width="60" height="22" rx="1.5" /><rect class="i-soft" x="70" y="58" width="46" height="22" rx="1.5" /><rect class="i-fill" x="120" y="58" width="44" height="22" rx="1.5" /><rect class="i-fill" x="168" y="58" width="26" height="22" rx="1.5" />
+                <rect class="i-soft" x="6" y="84" width="34" height="22" rx="1.5" /><rect class="i-fill" x="44" y="84" width="22" height="22" rx="1.5" /><rect class="i-fill" x="70" y="84" width="30" height="22" rx="1.5" /><rect class="i-fill" x="120" y="84" width="24" height="22" rx="1.5" />
+                <rect class="i-fill" x="6" y="110" width="18" height="22" rx="1.5" /><rect class="i-fill" x="28" y="110" width="12" height="22" rx="1.5" />
+              </svg>
+              <h3>Icicle</h3><p>Depth top to bottom, size left to right.</p>
+            </li>
+            <li class="view">
+              <svg class="ill ill--view" viewBox="0 0 200 150" role="img" aria-label="Circle packing">
+                <rect class="i-frame" x="1" y="1" width="198" height="148" rx="4" />
+                <circle class="i-ring-o" cx="100" cy="75" r="66" />
+                <circle class="i-acc" cx="78" cy="68" r="34" /><circle class="i-soft" cx="132" cy="56" r="22" /><circle class="i-soft" cx="128" cy="104" r="20" /><circle class="i-fill" cx="84" cy="118" r="12" /><circle class="i-fill" cx="156" cy="84" r="8" /><circle class="i-fill" cx="104" cy="28" r="7" />
+              </svg>
+              <h3>Circle packing</h3><p>Nested circles for nested folders.</p>
+            </li>
+            <li class="view">
+              <svg class="ill ill--view" viewBox="0 0 200 150" role="img" aria-label="Mind map">
+                <rect class="i-frame" x="1" y="1" width="198" height="148" rx="4" />
+                <g class="i-link"><path d="M62 75C82 75 82 34 104 34M62 75h42M62 75C82 75 82 116 104 116M138 34c14 0 14-12 28-12M138 34c14 0 14 12 28 12M138 116h28" /></g>
+                <rect class="i-ink-box" x="14" y="65" width="48" height="20" rx="4" />
+                <rect class="i-acc" x="104" y="25" width="34" height="18" rx="4" /><rect class="i-soft" x="104" y="66" width="34" height="18" rx="4" /><rect class="i-soft" x="104" y="107" width="34" height="18" rx="4" />
+                <rect class="i-fill" x="166" y="15" width="24" height="14" rx="3" /><rect class="i-fill" x="166" y="39" width="24" height="14" rx="3" /><rect class="i-fill" x="166" y="109" width="24" height="14" rx="3" />
+              </svg>
+              <h3>Mind map</h3><p>The biggest branches, readable at a glance.</p>
+            </li>
+          </ul>
+          <dl class="fx__stats fx__stats--row">
+            <div><dt>Blocks on screen</dt><dd>503,464</dd></div>
+            <div><dt>Frame rate</dt><dd>{{bench.ui-fps}}</dd></div>
+            <div><dt>Hit test</dt><dd>on the GPU buffer</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="closing closing--compact" aria-labelledby="cta-title">
+        <div class="wrap">
+          <div class="cta">
+            <h2 id="cta-title" class="cta__title">See it on your own drives.</h2>
+            <div class="cta__aside">
+              <p class="cta__lede">Free for {{req.os}}, on x64 and ARM64.</p>
+              <div class="cta__actions">
+                <!--rel:hero-->
+                <a class="btn btn--quiet btn--lg" href="../#demo">Try the live demo</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!--site:footer-->
+  </body>
+</html>

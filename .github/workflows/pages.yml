@@ -10,6 +10,13 @@ on:
       - "ui/package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/pages.yml"
+      # NOTE: the site renders the FAQ, privacy and security pages and the
+      # rule-pack figures from these files at build time.
+      - "docs/FAQ.md"
+      - "docs/PRIVACY.md"
+      - "docs/REQUIREMENTS.md"
+      - "SECURITY.md"
+      - "rules/**"
   # NOTE: the download links and changelog are read from GitHub Releases at
   # build time, so publishing a release rebuilds the site.
   release:

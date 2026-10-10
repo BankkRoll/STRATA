@@ -1,10 +1,18 @@
 /**
- * Page bootstrap: scroll reveals, the architecture captions, copy buttons on
- * the benchmark reproduction commands, and the demo frame. The demo (the app
- * and its sample data) loads only when its section nears the viewport, so the
- * first paint costs a few kilobytes of script.
+ * Page bootstrap, shared by every page: the navigation, scroll reveals, copy
+ * buttons, the architecture captions, the demo frame, the download blocks,
+ * the features section bar and the FAQ. Each part looks for its own markup
+ * and does nothing on pages without it.
+ *
+ * The demo (the app and its sample data) loads only when its section nears
+ * the viewport, so the first paint costs a few kilobytes of script.
  */
 import "./styles/site.css";
+import "./styles/nav.css";
+import "./styles/pages.css";
+import { faq } from "./faq.ts";
+import { navigation } from "./nav.ts";
+import { subnav } from "./subnav.ts";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -25,14 +33,6 @@ function reveals(): void {
     { rootMargin: "0px 0px -8% 0px", threshold: 0.15 },
   );
   for (const el of items) io.observe(el);
-}
-
-function topnav(): void {
-  const nav = document.querySelector<HTMLElement>("[data-topnav]");
-  if (!nav) return;
-  const update = () => nav.classList.toggle("is-scrolled", window.scrollY > 8);
-  update();
-  window.addEventListener("scroll", update, { passive: true });
 }
 
 function architecture(): void {
@@ -67,29 +67,31 @@ function architecture(): void {
   }
 }
 
-/** Copy buttons on the reproduction commands. */
+/** Copy buttons on commands and checksums. */
 function copyButtons(): void {
   for (const btn of document.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     btn.addEventListener("click", () => {
       const text = btn.dataset.copy ?? "";
-      const done = (label: string) => {
+      const done = (label: string, ok: boolean) => {
         btn.textContent = label;
+        btn.classList.toggle("is-done", ok);
         clearTimeout(timer);
         timer = setTimeout(() => {
           btn.textContent = "Copy";
+          btn.classList.remove("is-done");
         }, 1600);
       };
       if (!navigator.clipboard) {
-        done("Select to copy");
+        done("Select to copy", false);
         return;
       }
       navigator.clipboard.writeText(text).then(
         () => {
-          done("Copied");
+          done("Copied", true);
         },
         () => {
-          done("Select to copy");
+          done("Select to copy", false);
         },
       );
     });
@@ -184,24 +186,46 @@ interface LatestRelease {
   assets: { name: string; size: number; browser_download_url: string }[];
 }
 
+type Arch = "x64" | "arm64";
+const ARCH_LABEL: Record<Arch, string> = { x64: "x64", arm64: "ARM64" };
+
+/** Points every hero download button at one architecture's installer. */
+function aimHeroButtons(arch: Arch): void {
+  for (const block of document.querySelectorAll<HTMLElement>("[data-hero-dl]")) {
+    const href = block.dataset[`href${arch === "x64" ? "X64" : "Arm64"}`];
+    const meta = block.dataset[`meta${arch === "x64" ? "X64" : "Arm64"}`];
+    const link = block.querySelector<HTMLAnchorElement>("[data-hero-link]");
+    const label = block.querySelector<HTMLElement>("[data-hero-meta]");
+    if (link && href) link.href = href;
+    if (label && meta) label.textContent = meta;
+  }
+}
+
 /**
- * The download block (`site/build/releases.ts`): marks the installer that
- * matches this PC, and swaps in a release published after the site was built.
+ * The download blocks (`site/build/releases.ts`): marks the installer that
+ * matches this PC, aims the hero buttons at it, and swaps in a release
+ * published after the site was built.
  *
  * NOTE: the architecture comes from User-Agent Client Hints, which only
- * Chromium browsers expose; elsewhere both cards stay equal.
+ * Chromium browsers expose; elsewhere the hero button stays on x64 and both
+ * cards stay equal.
  */
 function downloads(): void {
   const block = document.querySelector<HTMLElement>("[data-release]");
-  if (!block) return;
+  const heroes = document.querySelectorAll<HTMLElement>("[data-hero-dl]");
+  if (!block && heroes.length === 0) return;
+  let detected: Arch | null = null;
   const nav = navigator as Navigator & {
     userAgentData?: { getHighEntropyValues(hints: string[]): Promise<{ architecture?: string; platform?: string }> };
   };
   void nav.userAgentData?.getHighEntropyValues(["architecture"]).then(
     (ua) => {
       if (ua.platform && ua.platform !== "Windows") return;
-      const arch = ua.architecture === "arm" ? "arm64" : ua.architecture === "x86" ? "x64" : null;
+      const arch: Arch | null = ua.architecture === "arm" ? "arm64" : ua.architecture === "x86" ? "x64" : null;
       if (!arch) return;
+      detected = arch;
+      aimHeroButtons(arch);
+      if (!block) return;
       for (const card of block.querySelectorAll<HTMLElement>(".dl-card")) {
         const mine = card.dataset.arch === arch;
         card.classList.toggle("is-recommended", mine);
@@ -212,24 +236,43 @@ function downloads(): void {
     () => undefined,
   );
 
-  // NOTE: anonymous API calls are limited to 60 an hour per visitor; on any
-  // failure the links baked in at build time stay.
+  // NOTE: anonymous API calls are limited to 60 an hour per visitor, so only
+  // the landing page checks; on any failure the links baked in at build time stay.
+  if (!block) return;
+  const builtTag = block.dataset.tag ?? "";
   fetch("https://api.github.com/repos/BankkRoll/STRATA/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
     .then((res) => (res.ok ? (res.json() as Promise<LatestRelease>) : null))
     .then((latest) => {
-      if (!latest || latest.tag_name === block.dataset.tag) return;
+      if (!latest || !/^v\d/.test(latest.tag_name) || latest.tag_name === builtTag) return;
+      const version = latest.tag_name.replace(/^v/, "");
       const mb = (b: number) => `${(b / (1024 * 1024)).toFixed(1)} MB`;
+      const file = (arch: string) => latest.assets.find((a) => a.name.toLowerCase().endsWith(`_${arch}-setup.exe`));
+      for (const hero of heroes) {
+        for (const arch of ["x64", "arm64"] as const) {
+          const f = file(arch);
+          if (!f) continue;
+          const key = arch === "x64" ? "X64" : "Arm64";
+          hero.dataset[`href${key}`] = f.browser_download_url;
+          hero.dataset[`meta${key}`] = `${version} · ${ARCH_LABEL[arch]} · ${mb(f.size)}`;
+        }
+      }
+      aimHeroButtons(detected ?? "x64");
+      for (const pill of document.querySelectorAll<HTMLAnchorElement>("[data-pill]")) {
+        pill.href = `${import.meta.env.BASE_URL}releases/`;
+        const text = pill.querySelector("[data-pill-text]");
+        if (text) text.textContent = `What’s new in ${version}`;
+      }
       for (const link of block.querySelectorAll<HTMLAnchorElement>("a[data-asset]")) {
         const arch = link.dataset.asset ?? "";
-        const file = latest.assets.find((a) => a.name.toLowerCase().endsWith(`_${arch}-setup.exe`));
-        if (!file) continue;
-        link.href = file.browser_download_url;
+        const f = file(arch);
+        if (!f) continue;
+        link.href = f.browser_download_url;
         const meta = block.querySelector(`[data-asset-meta="${arch}"]`);
-        if (meta) meta.textContent = `${file.name} · ${mb(file.size)}`;
+        if (meta) meta.textContent = `${f.name} · ${mb(f.size)}`;
       }
       const line = block.querySelector("[data-release-line]");
       const date = new Date(latest.published_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-      if (line) line.textContent = `Version ${latest.tag_name.replace(/^v/, "")} · ${date} · Windows 10 / 11`;
+      if (line) line.textContent = `Version ${version} · ${date} · Windows 10 / 11`;
       // The baked checksums belong to the older release.
       block.querySelector("[data-sums]")?.remove();
       block.dataset.tag = latest.tag_name;
@@ -237,9 +280,11 @@ function downloads(): void {
     .catch(() => undefined);
 }
 
+navigation();
 reveals();
-topnav();
 architecture();
 copyButtons();
 demo();
 downloads();
+subnav();
+faq();

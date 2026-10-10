@@ -1,0 +1,760 @@
+/*
+ * Top navigation: the sticky bar, the desktop mega menus and the mobile
+ * sheet. Behaviour lives in `src/nav.ts`; this file draws the states it sets
+ * (`aria-expanded`, `.is-open`, `.is-on`, `.is-instant`).
+ *
+ * Mega menus: every panel sits at the same spot under the bar. A shared
+ * background box (`.nav__bg`) morphs its width, height and position to the
+ * open panel while the panels themselves cross-fade with a short horizontal
+ * offset in the direction of travel (`--from`).
+ */
+
+/* -----------------------------------------------------------------------------
+ * Bar
+ * -------------------------------------------------------------------------- */
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--page);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.topnav.is-scrolled,
+.topnav:has(.sheet.is-open) {
+  border-bottom-color: var(--line);
+}
+
+.topnav__inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: var(--nav-h);
+}
+
+.brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.brand__mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+
+.topnav__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* GitHub button with the star count */
+.gh {
+  gap: 8px;
+}
+
+.gh__stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font: 12px var(--font-mono);
+}
+
+.btn .gh__stars svg {
+  width: 13px;
+  height: 13px;
+}
+
+@media (max-width: 420px) {
+  .gh__label {
+    display: none;
+  }
+
+  .gh__stars {
+    margin-left: 0;
+    padding-left: 8px;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Desktop menus
+ * -------------------------------------------------------------------------- */
+
+.nav {
+  position: relative;
+  display: none;
+  align-self: stretch;
+  align-items: center;
+  margin-left: 16px;
+}
+
+.nav__list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav__trigger,
+.nav__link {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--fast) var(--ease);
+}
+
+.nav__trigger:hover,
+.nav__link:hover,
+.nav__trigger[aria-expanded="true"],
+.nav__trigger[aria-current="page"],
+.nav__item:has(a[aria-current="page"]) > .nav__trigger {
+  color: var(--ink);
+}
+
+.chev {
+  width: 12px;
+  height: 12px;
+  margin-right: -2px;
+  color: var(--ink-3);
+  transition: rotate var(--med) var(--ease);
+}
+
+.nav__trigger[aria-expanded="true"] .chev {
+  rotate: -180deg;
+}
+
+/* Sliding hover pill behind the top-level items. */
+.nav__hover {
+  position: absolute;
+  top: calc(50% - 16px);
+  left: 0;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--med) var(--ease),
+    width var(--med) var(--ease),
+    opacity var(--fast) var(--ease);
+}
+
+.nav__hover.is-on {
+  opacity: 1;
+}
+
+.nav__hover.is-instant {
+  transition: opacity var(--fast) var(--ease);
+}
+
+/* The morphing background shared by every panel. */
+.nav__bg {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 2;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+  transition:
+    transform var(--med) var(--ease),
+    width var(--med) var(--ease),
+    height var(--med) var(--ease),
+    opacity var(--fast) var(--ease);
+}
+
+.nav.is-open .nav__bg {
+  opacity: 1;
+}
+
+.nav__bg.is-instant {
+  transition: opacity var(--fast) var(--ease);
+}
+
+.nav__panel {
+  --from: 0px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 3;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(var(--from));
+  transition:
+    opacity var(--fast) var(--ease),
+    transform var(--med) var(--ease),
+    visibility 0s linear var(--med);
+}
+
+/* Bridges the gap under the bar so the pointer can travel into the panel. */
+.nav__panel::before {
+  content: "";
+  position: absolute;
+  inset: -12px 0 100%;
+}
+
+.nav__panel.is-open {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--med) var(--ease) 40ms,
+    transform var(--med) var(--ease),
+    visibility 0s;
+}
+
+/* Without scripts, keyboard focus still reveals a panel. */
+html:not(.js) .nav__item:focus-within > .nav__panel {
+  visibility: visible;
+  opacity: 1;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.mega {
+  padding: 12px;
+}
+
+/* Product panel: two groups of feature rows, a featured card, a footer strip. */
+.mega--product {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 8px;
+  width: 920px;
+}
+
+.mega__main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mega__group + .mega__group {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.mega__rows {
+  display: grid;
+  grid-auto-rows: 56px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.prow:hover,
+.prow:focus-visible {
+  background: var(--surface-2);
+}
+
+.prow:focus-visible {
+  outline-offset: -2px;
+}
+
+.prow__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--page);
+  color: var(--ink-2);
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.prow__icon .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.prow:hover .prow__icon,
+.prow:focus-visible .prow__icon {
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+
+.prow__text {
+  display: grid;
+  min-width: 0;
+}
+
+.prow__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.005em;
+}
+
+.prow__desc {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mega__card {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.mega__art {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.mega__card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mega__card-desc {
+  margin-bottom: 8px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mega__card .mega__more {
+  color: var(--ink);
+}
+
+.mega__card .mega__more--quiet {
+  color: var(--ink-2);
+}
+
+.mega__foot {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 -12px -12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.mega__ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px 0 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: none;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.mega__ver:hover,
+.mega__ver:focus-visible {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.mega__ver-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: 500 11px/1.4 var(--font-mono);
+}
+
+.mega__ver svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mega--resources {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 8px;
+  width: 560px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 14px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.tile:hover,
+.tile:focus-visible {
+  background: var(--surface-2);
+}
+
+.tile:focus-visible {
+  outline-offset: -2px;
+}
+
+.tile__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--page);
+  color: var(--ink-2);
+  transition:
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.tile__icon .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tile:hover .tile__icon,
+.tile:focus-visible .tile__icon {
+  border-color: var(--accent-mark);
+  color: var(--accent-mark);
+}
+
+.tile__text {
+  display: grid;
+  gap: 2px;
+}
+
+.tile__title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.tile__desc {
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tile--row {
+  flex-direction: row;
+  align-items: center;
+  padding: 10px;
+}
+
+.mega__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--fast) var(--ease);
+}
+
+.mega__more:hover,
+.mega__more:focus-visible {
+  color: var(--ink);
+}
+
+.mega__more svg {
+  width: 14px;
+  height: 14px;
+  transition: translate var(--fast) var(--ease);
+}
+
+.mega__more:hover svg {
+  translate: 2px 0;
+}
+
+.mega__col + .mega__col {
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+
+.mega__kicker {
+  padding: 8px 10px 6px;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.mega__links {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mega__links--plain a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: 14px;
+  text-decoration: none;
+  transition:
+    color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.mega__links--plain a:hover,
+.mega__links--plain a:focus-visible {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.mega__links--plain .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+}
+
+.ext {
+  width: 10px;
+  height: 10px;
+  margin-left: auto;
+  color: var(--ink-3);
+}
+
+/* -----------------------------------------------------------------------------
+ * Mobile sheet
+ * -------------------------------------------------------------------------- */
+
+.burger {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-right: -6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.burger svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.burger path {
+  transform-origin: 10px 10px;
+  transition: transform var(--med) var(--ease);
+}
+
+.burger[aria-expanded="true"] .burger__a {
+  transform: translateY(3px) rotate(45deg);
+}
+
+.burger[aria-expanded="true"] .burger__b {
+  transform: translateY(-3px) rotate(-45deg);
+}
+
+html:not(.js) .burger {
+  display: none;
+}
+
+.sheet {
+  position: fixed;
+  inset: var(--nav-h) 0 0;
+  z-index: 39;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--page);
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--med) var(--ease),
+    transform var(--med) var(--ease),
+    visibility 0s linear var(--med);
+}
+
+.sheet.is-open {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--med) var(--ease),
+    transform var(--med) var(--ease),
+    visibility 0s;
+}
+
+.sheet__inner {
+  display: grid;
+  gap: 32px;
+  padding-block: 24px 40px;
+}
+
+.sheet__title {
+  margin-bottom: 8px;
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sheet__sub {
+  margin: 16px 0 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sheet__title + .sheet__sub {
+  margin-top: 0;
+}
+
+.sheet__grid,
+.sheet__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.sheet__grid a,
+.sheet__list a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.sheet__grid .icon,
+.sheet__list .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.sheet__list a[aria-current="page"] {
+  color: var(--link);
+}
+
+.sheet__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.sheet__more svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sheet__actions {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .sheet__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+  }
+
+  .sheet__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* NOTE: last, so it wins over the mobile rules above. */
+@media (min-width: 960px) {
+  .nav {
+    display: flex;
+  }
+
+  .burger,
+  .sheet {
+    display: none;
+  }
+}

@@ -7,16 +7,18 @@
  * Responsibilities:
  * - Fetch published releases (drafts never appear in the public API).
  * - Read the latest release's `SHA256SUMS.txt` for the checksum list.
- * - Render the landing-page download block and the releases page list.
+ * - Render the hero download button, the "what's new" pill, the landing-page
+ *   download block and the releases page.
  * - Fall back to plain links to GitHub Releases when the API is unreachable,
  *   so a build never fails and visitors can always download.
  */
+import { githubJson, REPO, REPO_URL } from "./github.ts";
+import { ARROW_ICON, DOWNLOAD_ICON, GITHUB_ICON } from "./icons.ts";
+import { esc, markdown } from "./markdown.ts";
 
-const REPO = "BankkRoll/STRATA";
-const API = `https://api.github.com/repos/${REPO}/releases?per_page=50`;
 /** Always resolves to the newest published release on GitHub. */
-export const LATEST_URL = `https://github.com/${REPO}/releases/latest`;
-const ALL_URL = `https://github.com/${REPO}/releases`;
+export const LATEST_URL = `${REPO_URL}/releases/latest`;
+const ALL_URL = `${REPO_URL}/releases`;
 
 /** Installer architectures, in display order. */
 const ARCHES = [
@@ -53,12 +55,6 @@ export interface Release {
   sums: Map<string, string>;
 }
 
-interface ApiAsset {
-  name: string;
-  size: number;
-  browser_download_url: string;
-}
-
 interface ApiRelease {
   tag_name: string;
   published_at: string | null;
@@ -66,29 +62,21 @@ interface ApiRelease {
   draft: boolean;
   html_url: string;
   body: string | null;
-  assets: ApiAsset[];
+  assets: { name: string; size: number; browser_download_url: string }[];
 }
 
 /**
- * Fetches published releases, newest first.
+ * Fetches published releases, newest first, and the latest release's
+ * checksums.
  *
- * SECURITY: `GITHUB_TOKEN` (set by the Pages workflow to lift the anonymous
- * rate limit) is sent only to api.github.com, never to download hosts.
+ * SECURITY: the checksum file is fetched from GitHub's download host without
+ * credentials; the API token stays with api.github.com (see `github.ts`).
  *
  * @returns The releases, or `null` when GitHub could not be reached.
  */
 export async function loadReleases(): Promise<Release[] | null> {
-  const headers: Record<string, string> = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
-  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-  let raw: ApiRelease[];
-  try {
-    const res = await fetch(API, { headers, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    raw = (await res.json()) as ApiRelease[];
-  } catch (e) {
-    console.warn(`releases: GitHub API unavailable, falling back to links (${String(e)})`);
-    return null;
-  }
+  const raw = await githubJson<ApiRelease[]>(`/repos/${REPO}/releases?per_page=50`);
+  if (!Array.isArray(raw)) return null;
   const releases: Release[] = raw
     // NOTE: only version tags; `updater-beta` is the beta update channel, not a release.
     .filter((r) => !r.draft && r.published_at && /^v\d/.test(r.tag_name))
@@ -124,8 +112,6 @@ export async function loadReleases(): Promise<Release[] | null> {
 // Formatting
 // -----------------------------------------------------------------------------
 
-const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
 const date = (iso: string): string =>
   new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 
@@ -135,63 +121,17 @@ const size = (bytes: number): string =>
 const installer = (r: Release, arch: ArchId): ReleaseAsset | undefined =>
   r.assets.find((a) => a.name.toLowerCase().endsWith(`_${arch}-setup.exe`));
 
-/** Inline Markdown: code spans, bold and http(s) links, on escaped text. */
-function inline(text: string): string {
-  return esc(text)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a class="link" href="$2">$1</a>');
-}
-
-/**
- * Renders the subset of Markdown the changelog uses: `###` headings, `-`
- * bullets with indented continuation lines, and paragraphs.
- */
-function markdown(md: string): string {
-  const out: string[] = [];
-  let list: string[] | null = null;
-  let para: string[] = [];
-  const flushPara = () => {
-    if (para.length) out.push(`<p>${inline(para.join(" "))}</p>`);
-    para = [];
-  };
-  const flushList = () => {
-    if (list) out.push(`<ul>${list.map((li) => `<li>${inline(li)}</li>`).join("")}</ul>`);
-    list = null;
-  };
-  for (const line of md.split(/\r?\n/)) {
-    const heading = /^#{1,6}\s+(.*)$/.exec(line);
-    const bullet = /^[-*]\s+(.*)$/.exec(line);
-    if (heading) {
-      flushPara();
-      flushList();
-      out.push(`<h3>${inline(heading[1] ?? "")}</h3>`);
-    } else if (bullet) {
-      flushPara();
-      (list ??= []).push(bullet[1] ?? "");
-    } else if (list && /^\s+\S/.test(line)) {
-      list[list.length - 1] += ` ${line.trim()}`;
-    } else if (line.trim() === "") {
-      flushPara();
-      flushList();
-    } else {
-      flushList();
-      para.push(line.trim());
-    }
-  }
-  flushPara();
-  flushList();
-  return out.join("");
-}
-
-const GITHUB_ICON =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" /></svg>';
-
-const DOWNLOAD_ICON =
-  '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v9m0 0-3.5-3.5M10 12.5l3.5-3.5M4.5 16h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>';
-
 const githubButton = (href: string, label: string): string =>
   `<a class="btn btn--quiet btn--sm" href="${esc(href)}">${GITHUB_ICON}<span>${esc(label)}</span></a>`;
+
+/** A checksum with a copy button; the page script wires `data-copy`. */
+const hashRow = (name: string, hash: string): string =>
+  `<dt>${esc(name)}</dt><dd><code>${hash}</code><button class="copy" type="button" data-copy="${hash}" aria-label="Copy the SHA-256 of ${esc(name)}">Copy</button></dd>`;
+
+const sumsList = (r: Release): string => {
+  const rows = [...r.sums].filter(([name]) => /\.exe$/i.test(name));
+  return rows.length ? `<dl class="sums">${rows.map(([n, h]) => hashRow(n, h)).join("")}</dl>` : "";
+};
 
 // -----------------------------------------------------------------------------
 // Fragments
@@ -199,10 +139,42 @@ const githubButton = (href: string, label: string): string =>
 
 /** HTML fragments keyed by placeholder name (`<!--rel:KEY-->`). */
 export interface ReleaseHtml {
+  /** Hero download button, aimed at the visitor's architecture by the page script. */
+  hero: string;
+  /** "What's new" pill linking to the latest release notes. */
+  pill: string;
   /** Landing-page download block. */
   download: string;
+  /** Releases page summary of the latest release. */
+  latest: string;
   /** Releases page list. */
   list: string;
+  /** Latest version without the `v`, or empty when unknown. */
+  version: string;
+}
+
+/**
+ * The hero button. It links to the x64 installer, which most PCs need; the
+ * page script switches it to ARM64 when the browser reports an ARM PC.
+ * `data-*` carry both targets so the switch needs no request.
+ */
+function heroBlock(latest: Release | undefined, base: string): string {
+  const files = ARCHES.map((a) => ({ arch: a, file: latest && installer(latest, a.id) }));
+  const attrs = files
+    .map(({ arch, file }) => (file ? ` data-href-${arch.id}="${esc(file.url)}" data-meta-${arch.id}="${esc(`${latest?.version ?? ""} · ${arch.label} · ${size(file.size)}`)}"` : ""))
+    .join("");
+  const x64 = files[0]?.file;
+  const meta = latest && x64 ? `${latest.version} · x64 · ${size(x64.size)}` : "x64 and ARM64";
+  return `<div class="hero-dl" data-hero-dl${attrs}>
+  <a class="btn btn--primary btn--lg" href="${esc(x64?.url ?? LATEST_URL)}" data-hero-link>${DOWNLOAD_ICON}Download for Windows</a>
+  <p class="hero-dl__meta"><span data-hero-meta>${esc(meta)}</span><a class="hero-dl__other" href="${base}#download">Other downloads</a></p>
+</div>`;
+}
+
+function pillBlock(latest: Release | undefined, base: string): string {
+  const href = latest ? `${base}releases/#${esc(latest.tag)}` : `${base}releases/`;
+  const text = latest ? `What’s new in ${esc(latest.version)}` : "Read the changelog";
+  return `<a class="pill" href="${href}" data-pill><span class="pill__tag">New</span><span data-pill-text>${text}</span>${ARROW_ICON}</a>`;
 }
 
 /**
@@ -227,16 +199,13 @@ function downloadBlock(latest: Release | undefined, base: string): string {
   const version = latest
     ? `<p class="meta" data-release-line>Version ${esc(latest.version)} · ${date(latest.date)} · Windows 10 / 11</p>`
     : `<p class="meta" data-release-line>Windows 10 / 11</p>`;
-  const sums =
-    latest && latest.sums.size > 0
-      ? `<details class="disclosure dl__sums" data-sums>
+  const list = latest ? sumsList(latest) : "";
+  const sums = list
+    ? `<details class="disclosure dl__sums" data-sums>
   <summary>SHA-256 checksums<span class="disclosure__icon" aria-hidden="true"></span></summary>
-  <dl class="sums">${[...latest.sums]
-    .filter(([name]) => /\.exe$/i.test(name))
-    .map(([name, hash]) => `<dt>${esc(name)}</dt><dd><code>${hash}</code></dd>`)
-    .join("")}</dl>
+  <div class="disclosure__body">${list}<p class="dl__note">Check a download in PowerShell with <code>Get-FileHash .\\Strata_${esc(latest?.version ?? "")}_x64-setup.exe</code> and compare the hash.</p></div>
 </details>`
-      : "";
+    : "";
   return `<div class="dl" data-release data-tag="${esc(latest?.tag ?? "")}">
   <div class="dl__grid">${cards}</div>
   <div class="dl__foot">
@@ -246,8 +215,22 @@ function downloadBlock(latest: Release | undefined, base: string): string {
       ${githubButton(LATEST_URL, "Release on GitHub")}
     </div>
   </div>
-  <p class="dl__note">The installers aren’t code-signed yet, so Windows SmartScreen may ask you to confirm. Installed copies update themselves.</p>
+  <p class="dl__note">The installers aren’t code-signed yet, so Windows SmartScreen may ask you to confirm. Installed copies update themselves, and every update is verified against the project’s signing key.</p>
   ${sums}
+</div>`;
+}
+
+function latestBlock(latest: Release | undefined): string {
+  if (!latest) return `<div class="rel-latest"><p class="rel-latest__line">Installers and notes for every version are on GitHub.</p>${githubButton(ALL_URL, "All releases on GitHub")}</div>`;
+  const buttons = ARCHES.map((a) => {
+    const file = installer(latest, a.id);
+    return file
+      ? `<a class="btn btn--quiet btn--sm" href="${esc(file.url)}" data-asset="${a.id}">${DOWNLOAD_ICON}<span>${a.label}</span><span class="btn__meta">${size(file.size)}</span></a>`
+      : "";
+  }).join("");
+  return `<div class="rel-latest">
+  <p class="rel-latest__line"><span class="rel__badge">Latest</span><a class="rel-latest__ver" href="#${esc(latest.tag)}">${esc(latest.version)}</a><span class="meta">${date(latest.date)}</span></p>
+  <div class="actions">${buttons}</div>
 </div>`;
 }
 
@@ -257,7 +240,7 @@ const rank = (name: string): number => {
   return i < 0 ? ARCHES.length : i;
 };
 
-/** One release on the releases page: notes beside its files. */
+/** One release on the releases page: its version rail, notes and files. */
 function releaseEntry(r: Release, isLatest: boolean): string {
   const files = r.assets
     .filter((a) => !a.name.endsWith(".sig") && a.name !== "latest.json")
@@ -265,16 +248,18 @@ function releaseEntry(r: Release, isLatest: boolean): string {
     .map((a) => `<li><a class="link" href="${esc(a.url)}">${esc(a.name)}</a><span class="meta">${size(a.size)}</span></li>`)
     .join("");
   const badge = isLatest ? '<span class="rel__badge">Latest</span>' : r.prerelease ? '<span class="rel__badge rel__badge--pre">Pre-release</span>' : "";
-  return `<article class="rel" id="${esc(r.tag)}">
+  const sums = sumsList(r);
+  return `<article class="rel" id="${esc(r.tag)}" aria-labelledby="${esc(r.tag)}-title">
   <header class="rel__head">
-    <h2 class="rel__title"><a href="#${esc(r.tag)}">${esc(r.version)}</a></h2>${badge}
-    <p class="meta">${date(r.date)}</p>
+    <h2 class="rel__title" id="${esc(r.tag)}-title"><a href="#${esc(r.tag)}">${esc(r.version)}</a></h2>${badge}
+    <p class="meta"><time datetime="${esc(r.date)}">${date(r.date)}</time></p>
   </header>
   <div class="rel__body">
     <div class="rel__notes prose">${markdown(r.notes) || "<p>No release notes.</p>"}</div>
     <aside class="rel__files" aria-label="Downloads for ${esc(r.version)}">
       <h3 class="rel__sub">Downloads</h3>
       ${files ? `<ul class="files">${files}</ul>` : ""}
+      ${sums ? `<h3 class="rel__sub">SHA-256</h3>${sums}` : ""}
       ${githubButton(r.url, "View on GitHub")}
     </aside>
   </div>
@@ -294,5 +279,12 @@ export function renderReleases(releases: Release[] | null, base: string): Releas
     releases && releases.length > 0
       ? releases.map((r) => releaseEntry(r, r === latest)).join("")
       : `<p class="rel__empty">Release notes are on GitHub. ${githubButton(ALL_URL, "All releases on GitHub")}</p>`;
-  return { download: downloadBlock(latest, base), list };
+  return {
+    hero: heroBlock(latest, base),
+    pill: pillBlock(latest, base),
+    download: downloadBlock(latest, base),
+    latest: latestBlock(latest),
+    list,
+    version: latest ? esc(latest.version) : "",
+  };
 }

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security &amp; privacy · Strata</title>
+    <meta name="description" content="How Strata keeps privileged work small and verified: an unelevated UI, a locked-down named pipe to an elevated helper, fail-closed deletes, signed updates and no telemetry." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="../../src-tauri/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="../../src-tauri/icons/128x128@2x.png" />
+    <link rel="canonical" href="https://bankkroll.github.io/STRATA/security/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Strata" />
+    <meta property="og:title" content="Security &amp; privacy · Strata" />
+    <meta property="og:description" content="An unelevated UI, a verified elevated helper, fail-closed deletes, signed updates and no telemetry." />
+    <meta property="og:url" content="https://bankkroll.github.io/STRATA/security/" />
+    <meta property="og:image" content="https://bankkroll.github.io/STRATA/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <script type="module" src="../src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <!--site:header-->
+
+    <main id="main">
+      <section class="page-head" aria-labelledby="page-title">
+        <div class="wrap">
+          <p class="kicker">Security &amp; privacy</p>
+          <h1 id="page-title" class="page-head__title">Small privileged surface. Nothing leaves your PC.</h1>
+          <p class="page-head__lede">A disk tool needs deep access to your drives. Strata keeps that access in one small, verified process, checks every delete several times over, and sends nothing about your files anywhere.</p>
+          <ul class="summary">
+            <li><span class="summary__k">UI</span><strong>Never elevated</strong><a href="#model">Process model</a></li>
+            <li><span class="summary__k">Pipe</span><strong>You and SYSTEM only</strong><a href="#pipe">Helper pipe</a></li>
+            <li><span class="summary__k">Deletes</span><strong>Fail closed</strong><a href="#deletes">Delete checks</a></li>
+            <li><span class="summary__k">Network</span><strong>No telemetry</strong><a href="#privacy">Privacy</a></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Process model ----------------------------------------------------- -->
+      <section id="model" class="section" aria-labelledby="model-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">01</span>Process model</p>
+            <div>
+              <h2 id="model-title" class="section__title">The window never runs as administrator.</h2>
+              <p class="section__lede">An elevated web runtime would widen the attack surface and break drag-and-drop from Explorer. So the app stays unelevated, and only the work that truly needs administrator rights runs in a separate helper.</p>
+            </div>
+          </header>
+          <figure class="sec-figure">
+            <svg class="ill ill--wide" viewBox="0 0 1000 340" role="img" aria-label="The unelevated Strata app, containing the WebView2 UI and the Rust backend, talks over a secured named pipe to the elevated strata-helper, which reads the MFT, tails the USN journal, traces activity and performs validated deletes.">
+              <rect class="i-frame" x="16" y="24" width="420" height="292" rx="10" />
+              <text class="i-label" x="40" y="54">STRATA APP · UNELEVATED · MEDIUM INTEGRITY</text>
+              <rect class="i-fill" x="40" y="74" width="372" height="76" rx="6" />
+              <text class="i-name" x="60" y="104">WebView2 UI</text>
+              <text class="i-label" x="60" y="126">React + WebGL2 · bundled, no remote content</text>
+              <path class="i-link" d="M226 150v24" />
+              <text class="i-label" x="236" y="167">commands · binary channels</text>
+              <rect class="i-fill" x="40" y="174" width="372" height="118" rx="6" />
+              <text class="i-name" x="60" y="204">Rust backend</text>
+              <text class="i-label" x="60" y="226">index · classify · layout · search · store</text>
+              <text class="i-label" x="60" y="246">unprivileged cleanup · never-list check #1</text>
+              <text class="i-label" x="60" y="272">standard scanner when the helper is declined</text>
+              <path class="i-pipe" d="M436 233h128" />
+              <rect class="i-ink-box" x="452" y="150" width="96" height="58" rx="8" />
+              <text class="i-name i-on-ink i-c" x="500" y="174">named pipe</text>
+              <text class="i-label i-on-ink i-c" x="500" y="194">DACL · signed</text>
+              <path class="i-link" d="M500 208v25" />
+              <g class="i-label i-c"><text x="500" y="262">handshake v3</text><text x="500" y="280">rate limited</text></g>
+              <rect class="i-frame i-frame--warn" x="564" y="24" width="420" height="292" rx="10" />
+              <text class="i-label i-warn-t" x="588" y="54">STRATA-HELPER · ELEVATED · ON DEMAND</text>
+              <rect class="i-fill" x="588" y="74" width="372" height="118" rx="6" />
+              <text class="i-name" x="608" y="104">Privileged I/O</text>
+              <g class="i-label"><text x="608" y="128">raw MFT reads · USN journal tail</text><text x="608" y="148">ETW activity session (opt-in)</text><text x="608" y="168">validated deletes · never-list check #2</text></g>
+              <rect class="i-fill" x="588" y="206" width="372" height="86" rx="6" />
+              <text class="i-name" x="608" y="234">Privileges stripped at start</text>
+              <g class="i-label"><text x="608" y="256">keeps SeBackup, SeManageVolume, SeChangeNotify</text><text x="608" y="276">exits when the app disconnects or after 30 idle min</text></g>
+            </svg>
+          </figure>
+          <div class="cols">
+            <div class="col">
+              <h3 class="col__title">The helper trusts nothing it is told</h3>
+              <p>The pipe proves <em>who</em> is talking; the helper still validates <em>what</em> is asked. A delete is accepted only as a volume, file id, expected path, expected size and expected modification time, and is checked again against the helper’s own copy of the never-delete list.</p>
+            </div>
+            <div class="col">
+              <h3 class="col__title">Least privilege, even when elevated</h3>
+              <p>At start the helper drops every privilege except the three it needs, and enables backup and volume rights only while a volume is being opened. Deletes run with ordinary administrator access checks, so a file that denies administrators stays undeletable.</p>
+            </div>
+            <div class="col">
+              <h3 class="col__title">Declining is always safe</h3>
+              <p>If you say no to the UAC prompt, Strata uses its standard scanner. Optional service mode serves only the configured app image run by a local administrator, and stops after 5 idle minutes.</p>
+            </div>
+          </div>
+          <details class="disclosure">
+            <summary>What needs administrator rights<span class="disclosure__icon" aria-hidden="true"></span></summary>
+            <div class="disclosure__body"><!--data:req.admin--></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Helper pipe ------------------------------------------------------- -->
+      <section id="pipe" class="section" aria-labelledby="pipe-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">02</span>Helper pipe</p>
+            <div>
+              <h2 id="pipe-title" class="section__title">A pipe only you can open, to a helper that proves who it is.</h2>
+              <p class="section__lede">Before either side parses a single byte, each checks the other’s identity with the kernel and with Windows code signing. Then they agree on a protocol version, or hang up.</p>
+            </div>
+          </header>
+          <div class="pipe">
+            <ol class="layers">
+              <li><span class="layers__k">Name</span><p>Random per launch: your user SID plus 128 bits from <code>BCryptGenRandom</code>, passed on the helper’s command line.</p></li>
+              <li><span class="layers__k">Creation</span><p>First-instance only, so a squatted name fails; remote clients rejected; one instance per pipe.</p></li>
+              <li><span class="layers__k">DACL</span><p>You get read and write only, with no create-instance or permission changes; SYSTEM gets full access; owner rights are limited to reading the descriptor.</p></li>
+              <li><span class="layers__k">Integrity</span><p>An explicit medium label with no-write-up: the app can connect, low-integrity and AppContainer processes cannot.</p></li>
+              <li><span class="layers__k">Peer check</span><p>Client process id from the kernel, then image path, start time and Authenticode signer, which must match the helper’s own. The app verifies the helper the same way.</p></li>
+              <li><span class="layers__k">Framing</span><p>Every message is one length-prefixed frame capped at 64 MiB; the length is checked before anything is allocated, and any framing error closes the connection.</p></li>
+              <li><span class="layers__k">Rate limit</span><p>A token bucket per connection: bursts of 200, 100 requests a second sustained.</p></li>
+            </ol>
+            <figure class="sec-figure sec-figure--seq">
+              <svg class="ill" viewBox="0 0 480 440" role="img" aria-label="Handshake sequence. The app connects; the helper checks the client's process id, image, start time and signer; the app sends Hello with protocol, build and process id; the helper replies Welcome with its build, elevation and capabilities, or Reject; then requests flow.">
+                <text class="i-name i-c" x="96" y="32">Strata app</text>
+                <text class="i-name i-c" x="384" y="32">strata-helper</text>
+                <path class="i-life" d="M96 44v376M384 44v376" />
+                <path class="i-msg" d="M96 80h284" /><path class="i-head" d="m374 75 8 5-8 5" />
+                <text class="i-label" x="112" y="72">connect</text>
+                <rect class="i-fill" x="292" y="96" width="176" height="78" rx="6" />
+                <g class="i-label"><text x="304" y="116">kernel PID</text><text x="304" y="134">image path, start time</text><text x="304" y="152">Authenticode signer</text><text x="304" y="168">= expected</text></g>
+                <rect class="i-fill" x="12" y="96" width="168" height="56" rx="6" />
+                <g class="i-label"><text x="24" y="116">verify server signer</text><text x="24" y="134">identification-only</text><text x="24" y="148">impersonation</text></g>
+                <path class="i-msg" d="M96 208h284" /><path class="i-head" d="m374 203 8 5-8 5" />
+                <text class="i-name" x="112" y="200">Hello</text>
+                <text class="i-label" x="112" y="226">protocol 3 · build · client_pid</text>
+                <path class="i-msg" d="M384 266H100" /><path class="i-head" d="m106 261-8 5 8 5" />
+                <text class="i-name i-r" x="368" y="258">Welcome</text>
+                <text class="i-label i-r" x="368" y="284">elevated · capabilities</text>
+                <path class="i-msg i-msg--dash" d="M384 312H100" />
+                <text class="i-label i-r i-warn-t" x="368" y="304">or Reject: version or pid mismatch</text>
+                <g class="i-acc"><rect x="96" y="346" width="288" height="4" rx="2" /><rect x="96" y="362" width="288" height="4" rx="2" /><rect x="96" y="378" width="288" height="4" rx="2" /></g>
+                <text class="i-label i-c" x="240" y="406">requests · rate limited · each validated</text>
+              </svg>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- Delete checks ----------------------------------------------------- -->
+      <section id="deletes" class="section" aria-labelledby="deletes-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">03</span>Before every delete</p>
+            <div>
+              <h2 id="deletes-title" class="section__title">Seven checks, any of which can say no.</h2>
+              <p class="section__lede">Deletion is the only destructive operation in Strata, and every layer fails closed: when a check cannot prove an item is the one you confirmed, the item is left alone.</p>
+            </div>
+          </header>
+          <ol class="checks">
+            <li><span class="checks__n">01</span><h3>Never-delete list</h3><p>In code and independent of rule packs: volume roots, the Windows folder, Program Files and <code>WindowsApps</code>, every profile root, known-folder roots, boot, paging and hibernation files, NTFS metadata and Strata itself. Enforced by the app and again by the helper.</p></li>
+            <li><span class="checks__n">02</span><h3>Every spelling</h3><p><code>\\?\</code>, <code>\??\</code>, UNC and administrative shares, volume GUID and device paths with every mount point, trailing dots and spaces, and 8.3 short names.</p></li>
+            <li><span class="checks__n">03</span><h3>Handle checks</h3><p>Opened without following reparse points, its resolved path checked again, and its volume serial, file id, size and modification time matched against the scan.</p></li>
+            <li><span class="checks__n">04</span><h3>Recycle Bin</h3><p>Moved through the Shell with every ancestor held open, so none can be swapped for a junction mid-operation. Anything the Shell would delete permanently is aborted.</p></li>
+            <li><span class="checks__n">05</span><h3>Pre-flight</h3><p>Items that can’t be recycled (no Recycle Bin, too large, path too long) are listed before anything happens, and need a separate permanent-delete confirmation.</p></li>
+            <li><span class="checks__n">06</span><h3>Locks</h3><p>Restart Manager names the program holding a file. Closing it is a polite request after you agree, never a kill.</p></li>
+            <li><span class="checks__n">07</span><h3>Write-ahead log</h3><p>A record is committed before each item is touched and completed after. If Strata stops mid-way, the next launch marks the entry as interrupted.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Updates ----------------------------------------------------------- -->
+      <section id="updates" class="section" aria-labelledby="updates-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">04</span>Updates and downloads</p>
+            <div>
+              <h2 id="updates-title" class="section__title">Signed updates. Checkable downloads.</h2>
+              <p class="section__lede">Installed copies only install updates signed with the project’s release key, and every installer you download by hand comes with a published SHA-256 checksum.</p>
+            </div>
+          </header>
+          <div class="cols cols--2">
+            <div class="col col--card">
+              <span class="col__icon"><!--icon:security--></span>
+              <h3 class="col__title">Signed update manifests</h3>
+              <p>The app reads a small manifest, <code>latest.json</code>, from GitHub Releases. Each installer it lists carries a signature, and the app checks it against the public key built into Strata before installing. An update that fails to verify is never run.</p>
+              <p>If a just-installed update fails to start, Strata offers to reinstall the previous version, which is verified the same way.</p>
+            </div>
+            <div class="col col--card">
+              <span class="col__icon"><!--icon:releases--></span>
+              <h3 class="col__title">SHA-256 checksums</h3>
+              <p>Every release publishes <code>SHA256SUMS.txt</code> beside its installers; the <a class="link" href="../releases/">releases page</a> and the <a class="link" href="../#download">download section</a> show them with a copy button. To check a download in PowerShell:</p>
+              <div class="cmd"><pre><code>Get-FileHash .\Strata_{{version}}_x64-setup.exe -Algorithm SHA256</code></pre><button class="copy" type="button" data-copy="Get-FileHash .\Strata_{{version}}_x64-setup.exe -Algorithm SHA256" aria-label="Copy the PowerShell command">Copy</button></div>
+              <p class="col__note">The installers aren’t code-signed yet, so Windows SmartScreen may ask you to confirm (More info → Run anyway).</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Privacy ----------------------------------------------------------- -->
+      <section id="privacy" class="section" aria-labelledby="privacy-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">05</span>Privacy</p>
+            <div>
+              <h2 id="privacy-title" class="section__title">No telemetry. Here is every request the app makes.</h2>
+              <p class="section__lede">Scan results, file names and paths never leave your machine. This is the complete list of network requests, taken from the privacy document in the repository.</p>
+            </div>
+          </header>
+          <!--data:privacy.network-->
+          <div class="prose sec-prose"><!--data:privacy.networkNote--></div>
+          <details class="disclosure">
+            <summary>What Strata stores, and where<span class="disclosure__icon" aria-hidden="true"></span></summary>
+            <div class="disclosure__body"><!--data:privacy.stored--><p class="fx__note">Everything can be cleared from Settings → Data &amp; privacy, or removed with the uninstaller. Full details in <a class="link" href="{{repo}}/blob/main/docs/PRIVACY.md">docs/PRIVACY.md</a>.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Report ------------------------------------------------------------ -->
+      <section id="report" class="section" aria-labelledby="report-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="kicker"><span class="kicker__n">06</span>Report a vulnerability</p>
+            <div>
+              <h2 id="report-title" class="section__title">Found something? Tell us privately.</h2>
+              <div class="prose sec-prose"><!--data:security.report--></div>
+              <div class="actions sec-actions">
+                <a class="btn btn--primary btn--lg" href="{{repo}}/security/advisories/new"><!--icon:security-->Report a vulnerability</a>
+                <a class="btn btn--quiet btn--lg" href="{{repo}}/blob/main/SECURITY.md"><!--icon:github-->Security policy</a>
+              </div>
+            </div>
+          </header>
+          <div class="scope">
+            <h3 class="scope__title">Scope</h3>
+            <div class="prose scope__body"><!--data:security.scope--></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!--site:footer-->
+  </body>
+</html>

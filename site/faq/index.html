@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FAQ · Strata</title>
+    <meta name="description" content="Answers about Strata: why sizes differ from Explorer, administrator rights, OneDrive, what it can and can't delete, restoring files, SmartScreen and more." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="../../src-tauri/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="../../src-tauri/icons/128x128@2x.png" />
+    <link rel="canonical" href="https://bankkroll.github.io/STRATA/faq/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Strata" />
+    <meta property="og:title" content="FAQ · Strata" />
+    <meta property="og:description" content="Sizes vs. Explorer, admin rights, OneDrive, deletion and restore." />
+    <meta property="og:url" content="https://bankkroll.github.io/STRATA/faq/" />
+    <meta property="og:image" content="https://bankkroll.github.io/STRATA/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <script type="module" src="../src/main.ts"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <!--site:header-->
+
+    <main id="main">
+      <section class="page-head" aria-labelledby="page-title">
+        <div class="wrap">
+          <p class="kicker">FAQ</p>
+          <h1 id="page-title" class="page-head__title">Questions, answered.</h1>
+          <p class="page-head__lede">Why sizes differ from Explorer, what needs administrator rights, what Strata will and won’t delete, and how to get files back.</p>
+        </div>
+      </section>
+
+      <section class="faq" aria-label="Frequently asked questions">
+        <div class="wrap faq__grid">
+          <div class="faq__main">
+            <div class="faq__tools" data-faq-tools hidden>
+              <label class="search" for="faq-filter">
+                <!--icon:search-->
+                <span class="visually-hidden">Filter questions</span>
+                <input id="faq-filter" class="search__input" type="search" placeholder="Filter {{faq.count}} questions" autocomplete="off" spellcheck="false" data-faq-filter />
+              </label>
+              <button class="btn btn--quiet btn--sm" type="button" data-faq-toggle>Expand all</button>
+            </div>
+            <p class="faq__status" role="status" aria-live="polite" data-faq-status></p>
+            <div class="faq__list" data-faq>
+              <!--data:faq.list-->
+            </div>
+            <p class="faq__empty" data-faq-empty hidden>No question matches. Try another word, or <a class="link" href="{{repo}}/issues">ask on GitHub</a>.</p>
+          </div>
+          <aside class="faq__aside" aria-label="More help">
+            <div class="aside-card">
+              <h2 class="aside-card__title">Still stuck?</h2>
+              <p>Search the issues or open a new one. In the app, Settings → Report an issue fills in your version and Windows build for you.</p>
+              <a class="btn btn--quiet btn--sm" href="{{repo}}/issues"><!--icon:github-->Issues on GitHub</a>
+            </div>
+            <ul class="aside-links">
+              <li><a href="../security/#privacy"><!--icon:security-->Privacy and network access</a></li>
+              <li><a href="{{repo}}/blob/main/docs/REQUIREMENTS.md"><!--icon:docs-->System requirements<!--icon:external--></a></li>
+              <li><a href="{{repo}}/blob/main/docs/ARCHITECTURE.md#size-accounting"><!--icon:docs-->Size accounting rules<!--icon:external--></a></li>
+              <li><a href="{{repo}}/blob/main/docs/RULES.md"><!--icon:rules-->Writing rule packs<!--icon:external--></a></li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <!--site:footer-->
+  </body>
+</html>

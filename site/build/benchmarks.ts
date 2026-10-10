@@ -641,3 +641,29 @@ export function renderBenchmarks(file: string): BenchmarkHtml {
   checkCopy(out.machine + out.versus + out.groups + out.method);
   return out;
 }
+
+/**
+ * Headline figures as plain text, for quoting elsewhere on the site
+ * (`{{bench.<outcome id>}}`, `{{bench.vs.<scan|memory>.<tool>}}`), so a number
+ * changes in one place only.
+ *
+ * @param file - Path to `benchmarks.json`.
+ * @returns Escaped text keyed by placeholder name, e.g. `bench.search` → `≤ 1.1 ms`.
+ * @example
+ * benchmarkFacts(file)["bench.vs.scan.strata"] // "26.2 s"
+ */
+export function benchmarkFacts(file: string): Record<string, string> {
+  const data = JSON.parse(readFileSync(file, "utf8")) as BenchmarkData;
+  const out: Record<string, string> = {};
+  for (const g of data.groups) for (const o of g.outcomes) out[`bench.${o.id}`] = esc(`${o.value} ${o.unit}`.trim());
+  for (const r of data.comparison.results) {
+    const metric = /memory/i.test(r.metric) ? "memory" : /^full scan/i.test(r.metric) ? "scan" : null;
+    if (!metric) continue;
+    for (const v of r.values) {
+      if (v.value === null) continue;
+      const tool = (v.tool.split(/\s/)[0] ?? "").toLowerCase();
+      out[`bench.vs.${metric}.${tool}`] ??= esc(`${v.value.toLocaleString("en-US")} ${r.unit}`);
+    }
+  }
+  return out;
+}

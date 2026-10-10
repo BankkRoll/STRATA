@@ -1,20 +1,126 @@
 <header class="topnav" data-topnav>
   <div class="wrap topnav__inner">
-    <a class="brand" href="{{base}}" aria-label="Strata home">
+    <a class="brand" href="{{base}}" aria-label="Strata home" data-page="home">
       <svg class="brand__mark" viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="224" fill="#111827" /><rect x="160" y="208" width="704" height="160" rx="48" fill="#3b82f6" /><rect x="160" y="432" width="480" height="160" rx="48" fill="#06b6d4" /><rect x="160" y="656" width="272" height="160" rx="48" fill="#8b5cf6" /></svg>
       <span>Strata</span>
     </a>
-    <nav class="topnav__links" aria-label="Sections">
-      <a href="{{base}}#demo">Demo</a>
-      <a href="{{base}}#features">Features</a>
-      <a href="{{base}}#benchmarks">Benchmarks</a>
-      <a href="{{base}}#architecture">Architecture</a>
-      <a href="{{base}}#download">Download</a>
-      <a href="{{base}}releases/" data-page="releases">Releases</a>
+    <nav class="nav" aria-label="Main" data-nav>
+      <ul class="nav__list">
+        <li class="nav__item">
+          <button class="nav__trigger" type="button" aria-expanded="false" aria-controls="nav-product" data-nav-trigger data-page="features">Product<!--icon:chevron--></button>
+          <div class="nav__panel" id="nav-product" data-nav-panel>
+            <div class="mega mega--product">
+              <div class="mega__main">
+                <div class="mega__group">
+                  <p class="mega__kicker" id="nav-prod-scan">Scan &amp; understand</p>
+                  <ul class="mega__rows" aria-labelledby="nav-prod-scan">
+                    <li><a class="prow" href="{{base}}features/#mft"><span class="prow__icon"><!--icon:mft--></span><span class="prow__text"><span class="prow__title">MFT scanning</span><span class="prow__desc">Reads the MFT, not every folder</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#live"><span class="prow__icon"><!--icon:live--></span><span class="prow__text"><span class="prow__title">Live updates</span><span class="prow__desc">Follows the USN change journal</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#explain"><span class="prow__icon"><!--icon:explain--></span><span class="prow__text"><span class="prow__title">Explains every file</span><span class="prow__desc">{{rules.count}} rules: app, category, risk</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#views"><span class="prow__icon"><!--icon:views--></span><span class="prow__text"><span class="prow__title">Views</span><span class="prow__desc">Treemap, sunburst, icicle and more</span></span></a></li>
+                  </ul>
+                </div>
+                <div class="mega__group">
+                  <p class="mega__kicker" id="nav-prod-act">Act safely</p>
+                  <ul class="mega__rows" aria-labelledby="nav-prod-act">
+                    <li><a class="prow" href="{{base}}features/#cleanup"><span class="prow__icon"><!--icon:cleanup--></span><span class="prow__text"><span class="prow__title">Safe cleanup</span><span class="prow__desc">Re-verified, recycled, restorable</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#search"><span class="prow__icon"><!--icon:search--></span><span class="prow__text"><span class="prow__title">Search</span><span class="prow__desc">First results in {{bench.search}}</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#history"><span class="prow__icon"><!--icon:history--></span><span class="prow__text"><span class="prow__title">History</span><span class="prow__desc">Snapshots show what grew</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#duplicates"><span class="prow__icon"><!--icon:dupes--></span><span class="prow__text"><span class="prow__title">Duplicates</span><span class="prow__desc">Hash-verified, hardlink-aware</span></span></a></li>
+                    <li><a class="prow" href="{{base}}features/#activity"><span class="prow__icon"><!--icon:activity--></span><span class="prow__text"><span class="prow__title">Activity</span><span class="prow__desc">Which program is writing, now</span></span></a></li>
+                  </ul>
+                </div>
+              </div>
+              <div class="mega__card">
+                <svg class="mega__art" viewBox="0 0 240 132" aria-hidden="true">
+                  <rect class="i-frame" x="0.5" y="0.5" width="239" height="131" rx="6" />
+                  <rect class="i-acc" x="8" y="8" width="112" height="72" rx="2" /><rect class="i-soft" x="8" y="84" width="64" height="40" rx="2" /><rect class="i-fill" x="76" y="84" width="44" height="40" rx="2" />
+                  <rect class="i-soft" x="124" y="8" width="108" height="46" rx="2" /><rect class="i-fill" x="124" y="58" width="60" height="38" rx="2" /><rect class="i-fill" x="188" y="58" width="44" height="38" rx="2" /><rect class="i-fill" x="124" y="100" width="40" height="24" rx="2" /><rect class="i-hatch" x="168.5" y="100.5" width="63" height="23" rx="2" />
+                </svg>
+                <p class="mega__card-title">See every feature</p>
+                <p class="mega__card-desc">From the raw MFT to the pixels on screen, in depth.</p>
+                <a class="mega__more" href="{{base}}features/" data-page="features">Explore features<!--icon:arrow--></a>
+                <a class="mega__more mega__more--quiet" href="{{base}}#demo">Try the live demo<!--icon:arrow--></a>
+              </div>
+              <div class="mega__foot">
+                <a class="mega__ver" href="{{base}}releases/"><span class="mega__ver-tag">{{release.short}}</span>{{release.label}}<!--icon:arrow--></a>
+                <a class="mega__more" href="{{base}}#download"><!--icon:download-->Download for Windows</a>
+              </div>
+            </div>
+          </div>
+        </li>
+        <li class="nav__item">
+          <button class="nav__trigger" type="button" aria-expanded="false" aria-controls="nav-resources" data-nav-trigger data-page="resources">Resources<!--icon:chevron--></button>
+          <div class="nav__panel" id="nav-resources" data-nav-panel>
+            <div class="mega mega--resources">
+              <div class="mega__col">
+                <p class="mega__kicker" id="nav-res-site">Learn</p>
+                <ul class="mega__links" aria-labelledby="nav-res-site">
+                  <li><a class="tile tile--row" href="{{base}}releases/" data-page="releases"><span class="tile__icon"><!--icon:releases--></span><span class="tile__text"><span class="tile__title">Releases</span><span class="tile__desc">Changelog, installers, checksums.</span></span></a></li>
+                  <li><a class="tile tile--row" href="{{base}}#benchmarks"><span class="tile__icon"><!--icon:benchmarks--></span><span class="tile__text"><span class="tile__title">Benchmarks</span><span class="tile__desc">Measured, with the workload.</span></span></a></li>
+                  <li><a class="tile tile--row" href="{{base}}faq/" data-page="faq"><span class="tile__icon"><!--icon:faq--></span><span class="tile__text"><span class="tile__title">FAQ</span><span class="tile__desc">Sizes, admin rights, OneDrive.</span></span></a></li>
+                  <li><a class="tile tile--row" href="{{base}}security/" data-page="security"><span class="tile__icon"><!--icon:security--></span><span class="tile__text"><span class="tile__title">Security &amp; privacy</span><span class="tile__desc">Trust boundary, no telemetry.</span></span></a></li>
+                </ul>
+              </div>
+              <div class="mega__col">
+                <p class="mega__kicker" id="nav-res-docs">On GitHub</p>
+                <ul class="mega__links mega__links--plain" aria-labelledby="nav-res-docs">
+                  <li><a href="{{repo}}/blob/main/docs/RULES.md"><!--icon:rules--><span>Rule packs</span><!--icon:external--></a></li>
+                  <li><a href="{{repo}}/blob/main/docs/ARCHITECTURE.md"><!--icon:docs--><span>Architecture</span><!--icon:external--></a></li>
+                  <li><a href="{{repo}}/blob/main/docs/REQUIREMENTS.md"><!--icon:docs--><span>Requirements</span><!--icon:external--></a></li>
+                  <li><a href="{{repo}}/blob/main/docs/BENCHMARKS.md"><!--icon:docs--><span>Benchmark method</span><!--icon:external--></a></li>
+                  <li><a href="{{repo}}/blob/main/CONTRIBUTING.md"><!--icon:docs--><span>Contributing</span><!--icon:external--></a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </li>
+        <li class="nav__item"><a class="nav__link" href="{{base}}#download">Download</a></li>
+      </ul>
+      <span class="nav__hover" aria-hidden="true" data-nav-hover></span>
+      <span class="nav__bg" aria-hidden="true" data-nav-bg></span>
     </nav>
-    <a class="btn btn--quiet btn--sm" href="https://github.com/BankkRoll/STRATA">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" /></svg>
-      <span>GitHub</span>
-    </a>
+    <div class="topnav__end">
+      <a class="btn btn--quiet btn--sm gh" href="{{repo}}"><!--icon:github--><span class="gh__label">GitHub</span><!--gh:stars--></a>
+      <button class="burger" type="button" aria-expanded="false" aria-controls="nav-sheet" data-sheet-toggle><!--icon:menu--><span class="visually-hidden">Menu</span></button>
+    </div>
+  </div>
+  <div class="sheet" id="nav-sheet" data-sheet>
+    <div class="wrap sheet__inner">
+      <section class="sheet__group" aria-labelledby="sheet-product">
+        <h2 class="sheet__title" id="sheet-product">Product</h2>
+        <p class="sheet__sub">Scan &amp; understand</p>
+        <ul class="sheet__list">
+          <li><a href="{{base}}features/#mft"><!--icon:mft-->MFT scanning</a></li>
+          <li><a href="{{base}}features/#live"><!--icon:live-->Live updates</a></li>
+          <li><a href="{{base}}features/#explain"><!--icon:explain-->Explains every file</a></li>
+          <li><a href="{{base}}features/#views"><!--icon:views-->Views</a></li>
+        </ul>
+        <p class="sheet__sub">Act safely</p>
+        <ul class="sheet__list">
+          <li><a href="{{base}}features/#cleanup"><!--icon:cleanup-->Safe cleanup</a></li>
+          <li><a href="{{base}}features/#search"><!--icon:search-->Search</a></li>
+          <li><a href="{{base}}features/#history"><!--icon:history-->History</a></li>
+          <li><a href="{{base}}features/#duplicates"><!--icon:dupes-->Duplicates</a></li>
+          <li><a href="{{base}}features/#activity"><!--icon:activity-->Activity</a></li>
+        </ul>
+        <a class="sheet__more" href="{{base}}features/" data-page="features">Every feature in depth<!--icon:arrow--></a>
+      </section>
+      <section class="sheet__group" aria-labelledby="sheet-resources">
+        <h2 class="sheet__title" id="sheet-resources">Resources</h2>
+        <ul class="sheet__list">
+          <li><a href="{{base}}releases/" data-page="releases"><!--icon:releases-->Releases</a></li>
+          <li><a href="{{base}}#benchmarks"><!--icon:benchmarks-->Benchmarks</a></li>
+          <li><a href="{{base}}faq/" data-page="faq"><!--icon:faq-->FAQ</a></li>
+          <li><a href="{{base}}security/" data-page="security"><!--icon:security-->Security &amp; privacy</a></li>
+          <li><a href="{{repo}}/blob/main/docs/RULES.md"><!--icon:rules-->Rule packs<!--icon:external--></a></li>
+          <li><a href="{{repo}}/tree/main/docs"><!--icon:docs-->Docs on GitHub<!--icon:external--></a></li>
+        </ul>
+      </section>
+      <div class="sheet__actions">
+        <a class="btn btn--primary btn--lg" href="{{base}}#download"><!--icon:download-->Download</a>
+        <a class="btn btn--quiet btn--lg" href="{{repo}}"><!--icon:github-->GitHub</a>
+      </div>
+    </div>
   </div>
 </header>

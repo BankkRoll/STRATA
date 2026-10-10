@@ -28,6 +28,12 @@ Append `?nogl` to the URL to see the app's own state for machines without WebGL2
   `docs/BENCHMARKS.md`. The head-to-head block appears only once
   `comparison.results` has entries; publishing a head-to-head is a data-only change: paste the
   `comparison` block that `bench/verify-elevated.ps1` prints.
+- **From the repository:** the FAQ page is rendered from `docs/FAQ.md`, the security page's
+  tables from `docs/REQUIREMENTS.md`, `docs/PRIVACY.md` and `SECURITY.md`, and the rule counts
+  from `rules/*.toml` (`build/content.ts`).
+- **From GitHub:** releases, checksums and the star count are fetched once per build
+  (`build/github.ts`, `build/releases.ts`). `GITHUB_TOKEN` is used only for api.github.com when
+  set; offline builds fall back to plain links and leave the star count out.
 - **Social image:** `public/og.png` is rendered from `build/og.svg` with a headless browser
   screenshot at 1200×630.
 

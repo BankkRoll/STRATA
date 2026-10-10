@@ -39,20 +39,34 @@
     <main id="main">
       <!-- Hero -------------------------------------------------------------- -->
       <section class="hero" aria-labelledby="hero-title">
-        <div class="wrap hero__inner">
-          <p class="kicker">Disk-space app for Windows · Open source</p>
+        <div class="wrap">
+          <!--rel:pill-->
           <h1 id="hero-title" class="hero__title">See everything on your drives.</h1>
-          <div class="hero__aside">
+          <div class="hero__row">
             <p class="hero__lede">What it is, who put it there, and whether it’s safe to delete. Strata reads the NTFS Master File Table directly and keeps every view live as files change.</p>
-            <div class="actions">
-              <a class="btn btn--primary btn--lg" href="https://github.com/BankkRoll/STRATA/releases/latest">
-                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v9m0 0-3.5-3.5M10 12.5l3.5-3.5M4.5 16h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                Download for Windows
-              </a>
-              <a class="btn btn--quiet btn--lg" href="https://github.com/BankkRoll/STRATA">View source</a>
+            <div class="hero__cta">
+              <!--rel:hero-->
+              <a class="btn btn--quiet btn--lg" href="#demo">Try the live demo</a>
             </div>
-            <p class="meta">Windows 10 / 11 · x64 &amp; ARM64 · MIT</p>
           </div>
+          <dl class="stats">
+            <div class="stat">
+              <dt>Full scan, system drive</dt>
+              <dd><span class="stat__v">{{bench.vs.scan.strata}}</span><span class="stat__d">WizTree took {{bench.vs.scan.wiztree}} on the same drive</span></dd>
+            </div>
+            <div class="stat">
+              <dt>First search results</dt>
+              <dd><span class="stat__v">{{bench.search}}</span><span class="stat__d">across 5 million file names</span></dd>
+            </div>
+            <div class="stat">
+              <dt>Change on disk to updated view</dt>
+              <dd><span class="stat__v">{{bench.live-latency}}</span><span class="stat__d">from the NTFS change journal</span></dd>
+            </div>
+            <div class="stat">
+              <dt>Built-in rules</dt>
+              <dd><span class="stat__v">{{rules.count}}</span><span class="stat__d">across {{rules.categories}} categories and {{rules.apps}} apps</span></dd>
+            </div>
+          </dl>
         </div>
       </section>
 
@@ -83,36 +97,71 @@
           </header>
           <ul class="features">
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.75" y="4.75" width="16.5" height="14.5" rx="1.5" /><path d="M3.75 9.25h16.5M3.75 13.75h16.5M9.25 9.25v10" /></svg>
-              <h3>MFT scanning</h3>
-              <p>Reads <code>$MFT</code> directly instead of walking folders, with exact sizes for hardlinks, streams, compression and cloud files.</p>
+              <a class="feature__link" href="features/#mft">
+                <span class="feature__icon"><!--icon:mft--></span>
+                <h3>MFT scanning</h3>
+                <p>Reads <code>$MFT</code> directly instead of walking folders, with exact sizes for hardlinks, streams, compression, sparse files and cloud placeholders.</p>
+                <span class="feature__more">How it scans<!--icon:arrow--></span>
+              </a>
             </li>
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12h4l2.5-6 4 12 2.5-6h4" /></svg>
-              <h3>Live updates</h3>
-              <p>Tails the USN change journal and patches the index in place, so every view stays current without a rescan.</p>
+              <a class="feature__link" href="features/#live">
+                <span class="feature__icon"><!--icon:live--></span>
+                <h3>Live index</h3>
+                <p>Tails the USN change journal and patches the index in place, so every view stays current without a rescan.</p>
+                <span class="feature__more">Live updates<!--icon:arrow--></span>
+              </a>
             </li>
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.25V5.5a1 1 0 0 1 1-1h6.75l7.25 7.25-7.25 7.25z" /><circle cx="8.75" cy="8.75" r="1.25" /></svg>
-              <h3>Explains every file</h3>
-              <p>Rule packs name the category, owning app and safety tier for each path, and show exactly which rule matched.</p>
+              <a class="feature__link" href="features/#explain">
+                <span class="feature__icon"><!--icon:explain--></span>
+                <h3>Explains every file</h3>
+                <p>{{rules.count}} built-in rules name the category, owning app and safety tier for each path, and show which rule matched.</p>
+                <span class="feature__more">Rule packs<!--icon:arrow--></span>
+              </a>
             </li>
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 5.5 6.25v5.25c0 4 2.75 7.25 6.5 8.75 3.75-1.5 6.5-4.75 6.5-8.75V6.25z" /><path d="m9.25 12 2 2 3.5-3.75" /></svg>
-              <h3>Safe cleanup</h3>
-              <p>A hard-coded never-delete list, re-verification right before every delete, Recycle Bin by default and one-click restore.</p>
+              <a class="feature__link" href="features/#cleanup">
+                <span class="feature__icon"><!--icon:cleanup--></span>
+                <h3>Safe cleanup</h3>
+                <p>A never-delete list in code, re-verification by file id right before acting, Recycle Bin by default and one-click restore.</p>
+                <span class="feature__more">Deletion safety<!--icon:arrow--></span>
+              </a>
             </li>
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="m15 15 5 5" /></svg>
-              <h3>Instant search</h3>
-              <p>Name search with filters like <code>*.gguf size:&gt;1gb</code>. First results in about a millisecond over 5 million names.</p>
+              <a class="feature__link" href="features/#search">
+                <span class="feature__icon"><!--icon:search--></span>
+                <h3>Instant search</h3>
+                <p>Name search with filters like <code>*.gguf size:&gt;1gb</code>. First results in {{bench.search}} over 5 million names.</p>
+                <span class="feature__more">Query syntax<!--icon:arrow--></span>
+              </a>
             </li>
             <li class="feature reveal">
-              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.25 12a7.75 7.75 0 1 0 2.3-5.5" /><path d="M4.25 4v3.25H7.5M12 8v4l2.5 2" /></svg>
-              <h3>History &amp; duplicates</h3>
-              <p>Snapshots show what grew since the last scan. The duplicate finder skips hardlinks and never downloads cloud-only files.</p>
+              <a class="feature__link" href="features/#history">
+                <span class="feature__icon"><!--icon:history--></span>
+                <h3>History &amp; duplicates</h3>
+                <p>Snapshots show what grew since the last scan. The duplicate finder skips hardlinks and never downloads cloud-only files.</p>
+                <span class="feature__more">History and duplicates<!--icon:arrow--></span>
+              </a>
+            </li>
+            <li class="feature reveal">
+              <a class="feature__link" href="features/#activity">
+                <span class="feature__icon"><!--icon:activity--></span>
+                <h3>Activity</h3>
+                <p>Opt-in ETW tracing shows which program is writing what, aggregated per folder and per hour.</p>
+                <span class="feature__more">Activity tracking<!--icon:arrow--></span>
+              </a>
+            </li>
+            <li class="feature reveal">
+              <a class="feature__link" href="features/#views">
+                <span class="feature__icon"><!--icon:views--></span>
+                <h3>Five ways to see a drive</h3>
+                <p>Treemap, sunburst, icicle, circle packing and mind map, laid out in Rust and drawn with WebGL2 at a steady frame rate.</p>
+                <span class="feature__more">Views<!--icon:arrow--></span>
+              </a>
             </li>
           </ul>
+          <p class="section__foot"><a class="link" href="features/">Every feature in depth<span aria-hidden="true"> →</span></a></p>
         </div>
       </section>
 
@@ -209,6 +258,7 @@
               <li><span class="safety__n">04</span><strong>Restore</strong><span>One click puts it back, and a restore never overwrites.</span></li>
             </ol>
           </div>
+          <p class="section__foot"><a class="link" href="security/">The full security model<span aria-hidden="true"> →</span></a></p>
         </div>
       </section>
 
@@ -219,7 +269,7 @@
             <p class="kicker"><span class="kicker__n">04</span>Download</p>
             <div>
               <h2 id="download-title" class="section__title">Get Strata.</h2>
-              <p class="section__lede">Free for Windows 10 and 11. Pick the installer for your processor; if you’re not sure, it’s x64.</p>
+              <p class="section__lede">Free for {{req.os}}. Pick the installer for your processor; if you’re not sure, it’s x64.</p>
             </div>
           </header>
           <!--rel:download-->
@@ -229,22 +279,22 @@
       <!-- Privacy + CTA ----------------------------------------------------- -->
       <section class="closing" aria-labelledby="cta-title">
         <div class="wrap">
-          <p class="privacy reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.25" y="10.75" width="13.5" height="9.5" rx="1.5" /><path d="M8.5 10.75V8a3.5 3.5 0 0 1 7 0v2.75" /></svg>
-            <span><strong>No telemetry. Everything stays on your machine.</strong> Scans, history, settings and the undo log stay local. The app only contacts GitHub Releases to check for, download or roll back updates; the installer may fetch Microsoft’s WebView2 runtime, and “Report an issue” just opens your browser. <a class="link" href="https://github.com/BankkRoll/STRATA/blob/main/docs/PRIVACY.md">Privacy details</a></span>
-          </p>
+          <div class="privacy reveal">
+            <span class="privacy__icon"><!--icon:security--></span>
+            <div>
+              <p class="privacy__title">No telemetry. Everything stays on your machine.</p>
+              <p>Scans, history, settings and the undo log stay local. The app only contacts GitHub Releases to check for, download or roll back updates; the installer may fetch Microsoft’s WebView2 runtime, and “Report an issue” just opens your browser.</p>
+              <p class="privacy__links"><a class="link" href="security/#privacy">Privacy details</a><a class="link" href="security/">How Strata stays safe</a></p>
+            </div>
+          </div>
           <div class="cta reveal">
             <h2 id="cta-title" class="cta__title">Find out where your space went.</h2>
             <div class="cta__aside">
               <p class="cta__lede">Free, open source, and native to Windows.</p>
-              <div class="actions">
-                <a class="btn btn--primary btn--lg" href="https://github.com/BankkRoll/STRATA/releases/latest">
-                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v9m0 0-3.5-3.5M10 12.5l3.5-3.5M4.5 16h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                  Download for Windows
-                </a>
-                <a class="btn btn--quiet btn--lg" href="https://github.com/BankkRoll/STRATA">View source</a>
+              <div class="cta__actions">
+                <!--rel:hero-->
+                <a class="btn btn--quiet btn--lg" href="{{repo}}"><!--icon:github-->View source</a>
               </div>
-              <p class="meta">Windows 10 / 11 · x64 &amp; ARM64 · MIT</p>
             </div>
           </div>
         </div>

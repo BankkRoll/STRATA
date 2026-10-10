@@ -1369,11 +1369,14 @@
  * Status bar
  * ------------------------------------------------------------------------- */
 
+/* Spans the full window under the activity bar, sidebar and workspace, with
+ * a hairline on top like the title bar's bottom edge. */
 .statusbar {
   display: flex;
   align-items: center;
   height: var(--statusbar-h);
   padding: 0 8px;
+  border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;

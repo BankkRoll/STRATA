@@ -881,7 +881,8 @@ pub struct Recommendation {
     pub kind: &'static str,
     /// Title.
     pub title: String,
-    /// One-line summary.
+    /// One-line summary of what is affected, e.g. "48 items". The size is
+    /// shown separately, in the units the user chose.
     pub summary: String,
     /// Why it is safe or what to check.
     pub explain: String,
@@ -954,10 +955,6 @@ fn strictest(items: &[RecommendationItem]) -> &'static str {
         .map(|i| i.safety)
         .max_by_key(|s| rank(s))
         .unwrap_or("safe")
-}
-
-fn gib(b: u64) -> String {
-    crate::features::tray::format_bytes(b, strata_store::SizeUnits::Binary)
 }
 
 /// Ranks what can be freed: regenerable caches by rule, stale
@@ -1078,8 +1075,7 @@ pub fn recommendations(
                 kind: "caches",
                 title: rule.name.clone(),
                 summary: format!(
-                    "{} in {} location{}",
-                    gib(bytes),
+                    "{} location{}",
                     items.len(),
                     if items.len() == 1 { "" } else { "s" }
                 ),
@@ -1119,8 +1115,7 @@ pub fn recommendations(
                 kind,
                 title: title.into(),
                 summary: format!(
-                    "{} in {} item{}",
-                    gib(bytes),
+                    "{} item{}",
                     items.len(),
                     if items.len() == 1 { "" } else { "s" }
                 ),
@@ -1141,7 +1136,7 @@ pub fn recommendations(
                 id: "windows_update".into(),
                 kind: "windows_update",
                 title: "Windows Update downloads".into(),
-                summary: gib(update_bytes),
+                summary: "Kept after updates were installed".into(),
                 explain: "Windows keeps update packages after installing them. Disk Cleanup removes the ones it no longer needs, safely.".into(),
                 bytes: update_bytes,
                 items: update_cache.len() as u64,
@@ -1160,7 +1155,7 @@ pub fn recommendations(
                 id: "recycle_bin".into(),
                 kind: "recycle_bin",
                 title: "Recycle Bin".into(),
-                summary: format!("{} in {} item{}", gib(cfg.recycle_bin_bytes), cfg.recycle_bin_items, if cfg.recycle_bin_items == 1 { "" } else { "s" }),
+                summary: format!("{} item{}", cfg.recycle_bin_items, if cfg.recycle_bin_items == 1 { "" } else { "s" }),
                 explain: "Deleted files still take space until the Recycle Bin is emptied. Emptying it cannot be undone.".into(),
                 bytes: cfg.recycle_bin_bytes,
                 items: cfg.recycle_bin_items,
@@ -1180,8 +1175,7 @@ pub fn recommendations(
                 kind: "duplicates",
                 title: "Duplicate files".into(),
                 summary: format!(
-                    "{} in {} group{}",
-                    gib(cfg.duplicate_bytes),
+                    "{} group{}",
                     cfg.duplicate_groups,
                     if cfg.duplicate_groups == 1 { "" } else { "s" }
                 ),

@@ -41,8 +41,10 @@
   --info-bg: light-dark(#eef2fb, #1c2333);
   --used: light-dark(#737373, #8c8c8c);
   /* Hatch for space the scan can't attribute: an image tile, not a gradient. */
-  --unaccounted: #c2c2c2 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-2 2l4-4M0 8l8-8M6 10l4-4' stroke='%239a9a9a' stroke-width='2.8'/%3E%3C/svg%3E");
-  --shadow-overlay: 0 8px 24px -6px light-dark(rgb(0 0 0 / 0.16), rgb(0 0 0 / 0.5));
+  --unaccounted: #c2c2c2
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-2 2l4-4M0 8l8-8M6 10l4-4' stroke='%239a9a9a' stroke-width='2.8'/%3E%3C/svg%3E");
+  --shadow-overlay: 0 8px 24px -6px light-dark(rgb(0 0 0 / 0.16), rgb(0 0 0 /
+          0.5));
   --accent-hex: #2a5bd7;
   --canvas-hex: #efefef;
   --radius: 6px;
@@ -219,11 +221,6 @@ code {
 .icon-btn:hover {
   background: var(--hover);
   color: var(--text);
-}
-
-.icon-btn[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: var(--border);
 }
 
 .icon-btn--text {
@@ -1104,6 +1101,11 @@ code {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.home__partitions {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .home__inner {

@@ -113,8 +113,16 @@ export interface FileTypeBreakdown {
 }
 
 /** Extension and detected-type breakdown under `scope` (`insights_file_types`). */
-export function fetchFileTypes(volumeId: string, scope: number | null, sizeMode: SizeMode): Promise<FileTypeBreakdown> {
-  return call<FileTypeBreakdown>("insights_file_types", { volumeId, scope, sizeMode });
+export function fetchFileTypes(
+  volumeId: string,
+  scope: number | null,
+  sizeMode: SizeMode,
+): Promise<FileTypeBreakdown> {
+  return call<FileTypeBreakdown>("insights_file_types", {
+    volumeId,
+    scope,
+    sizeMode,
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -131,8 +139,16 @@ export interface CategoryTotal {
 }
 
 /** Totals per category under `scope` (`insights_categories`). */
-export function fetchCategories(volumeId: string, scope: number | null, sizeMode: SizeMode): Promise<CategoryTotal[]> {
-  return call<CategoryTotal[]>("insights_categories", { volumeId, scope, sizeMode });
+export function fetchCategories(
+  volumeId: string,
+  scope: number | null,
+  sizeMode: SizeMode,
+): Promise<CategoryTotal[]> {
+  return call<CategoryTotal[]>("insights_categories", {
+    volumeId,
+    scope,
+    sizeMode,
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -140,7 +156,13 @@ export function fetchCategories(volumeId: string, scope: number | null, sizeMode
 // -----------------------------------------------------------------------------
 
 /** Kind of location in an app's footprint. */
-export type FootprintKind = "install" | "data" | "cache" | "logs" | "updates" | "other";
+export type FootprintKind =
+  | "install"
+  | "data"
+  | "cache"
+  | "logs"
+  | "updates"
+  | "other";
 
 /** One location of an app's footprint. */
 export interface FootprintLocation {
@@ -222,7 +244,7 @@ export interface Recommendation {
   /** e.g. "caches", "stale_node_modules", "old_installers", "recycle_bin", "windows_update", "duplicates". */
   kind: string;
   title: string;
-  /** One-line summary, e.g. "11.2 GB in 48 projects". */
+  /** What is affected, e.g. "48 items"; the size is shown separately in the chosen units. */
   summary: string;
   /** Why it is safe or what to check, shown on expand. */
   explain: string;
@@ -249,11 +271,20 @@ export function fetchRecommendations(): Promise<Recommendation[]> {
 }
 
 /** The items a recommendation covers (`recommendations_preview`). */
-export function previewRecommendation(id: string, limit: number): Promise<{ items: RecommendationItem[]; total: number }> {
-  return call<{ items: RecommendationItem[]; total: number }>("recommendations_preview", { id, limit });
+export function previewRecommendation(
+  id: string,
+  limit: number,
+): Promise<{ items: RecommendationItem[]; total: number }> {
+  return call<{ items: RecommendationItem[]; total: number }>(
+    "recommendations_preview",
+    { id, limit },
+  );
 }
 
 /** Queues a recommendation's items (`recommendations_queue`). */
-export function queueRecommendation(id: string, exclude: number[]): Promise<QueueAddResult> {
+export function queueRecommendation(
+  id: string,
+  exclude: number[],
+): Promise<QueueAddResult> {
   return call<QueueAddResult>("recommendations_queue", { id, exclude });
 }

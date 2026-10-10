@@ -9,10 +9,23 @@ import { listen } from "@tauri-apps/api/event";
 import { call, inTauri } from "./backend";
 
 /** Filesystem as reported by `GetVolumeInformationW` (Dev Drive is ReFS with a flag). */
-export type Filesystem = "NTFS" | "ReFS" | "FAT32" | "exFAT" | "FAT" | "network" | "other";
+export type Filesystem =
+  | "NTFS"
+  | "ReFS"
+  | "FAT32"
+  | "exFAT"
+  | "FAT"
+  | "network"
+  | "other";
 
 /** `GetDriveTypeW` class. */
-export type DriveKind = "fixed" | "removable" | "network" | "cdrom" | "ramdisk" | "unknown";
+export type DriveKind =
+  | "fixed"
+  | "removable"
+  | "network"
+  | "cdrom"
+  | "ramdisk"
+  | "unknown";
 
 /** Scan state chip values. */
 export type ScanState = "never" | "scanning" | "live" | "stale" | "partial";
@@ -100,7 +113,9 @@ export function fetchHelperStatus(): Promise<HelperStatus> {
 }
 
 /** Reads the since-last-scan summary (`history_since_last_scan`). */
-export function fetchSinceLastScan(volumeId: string): Promise<SinceLastScan | null> {
+export function fetchSinceLastScan(
+  volumeId: string,
+): Promise<SinceLastScan | null> {
   return call<SinceLastScan | null>("history_since_last_scan", { volumeId });
 }
 
@@ -108,7 +123,10 @@ export function fetchSinceLastScan(volumeId: string): Promise<SinceLastScan | nu
  * Starts a scan (`scan_start`). `fast` asks for the elevated MFT scanner
  * (UAC prompt when no helper runs); `auto` uses it only if already elevated.
  */
-export function startScan(volumeId: string, mode: "auto" | "fast" | "standard"): Promise<null> {
+export function startScan(
+  volumeId: string,
+  mode: "auto" | "fast" | "standard",
+): Promise<null> {
   return call<null>("scan_start", { volumeId, mode });
 }
 
@@ -128,7 +146,9 @@ export function elevateHelper(): Promise<HelperStatus> {
  * @param onChange - Receives the full volume list.
  * @returns Unsubscribe function (no-op outside Tauri).
  */
-export function watchVolumes(onChange: (volumes: VolumeInfo[]) => void): () => void {
+export function watchVolumes(
+  onChange: (volumes: VolumeInfo[]) => void,
+): () => void {
   if (!inTauri()) return () => undefined;
   const un = listen<VolumeInfo[]>("volumes://changed", (e) => {
     onChange(e.payload);
@@ -146,7 +166,9 @@ export function watchVolumes(onChange: (volumes: VolumeInfo[]) => void): () => v
  * @param onChange - Receives the new status.
  * @returns Unsubscribe function (no-op outside Tauri).
  */
-export function watchHelper(onChange: (status: HelperStatus) => void): () => void {
+export function watchHelper(
+  onChange: (status: HelperStatus) => void,
+): () => void {
   if (!inTauri()) return () => undefined;
   const un = listen<HelperStatus>("helper://changed", (e) => {
     onChange(e.payload);
@@ -161,6 +183,24 @@ export function watchHelper(onChange: (status: HelperStatus) => void): () => voi
 /** Display name: first mount point, else the label, else the GUID. */
 export function volumeName(v: VolumeInfo): string {
   const mount = v.mountPoints[0];
-  if (mount) return v.label ? `${v.label} (${mount.replace(/\\$/, "")})` : mount;
-  return v.label || v.id;
+  if (mount)
+    return v.label ? `${v.label} (${mount.replace(/\\$/, "")})` : mount;
+  // NOTE: the volume GUID path is an internal id, never a name to show.
+  return v.label || "Unnamed partition";
+}
+
+/**
+ * Whether a volume belongs in the drive lists. Boot (EFI) and recovery
+ * partitions have neither a drive letter nor a folder mount, so they are left
+ * out, as File Explorer does, unless one was scanned or is being scanned.
+ *
+ * @param v - The volume.
+ * @returns `true` to list it.
+ */
+export function isListedVolume(v: VolumeInfo): boolean {
+  return (
+    v.mountPoints.length > 0 ||
+    v.scan.lastScanMs !== null ||
+    v.scan.state === "scanning"
+  );
 }

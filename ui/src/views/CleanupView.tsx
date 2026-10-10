@@ -10,7 +10,16 @@
  * (`flow::gate`); the UI never decides that something may be deleted.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ConfirmDialog, LoadState, SafetyBadge, Unavailable, ViewFrame, safetyLabel, useCapability, useLoad } from "../components/feature";
+import {
+  ConfirmDialog,
+  LoadState,
+  SafetyBadge,
+  Unavailable,
+  ViewFrame,
+  safetyLabel,
+  useCapability,
+  useLoad,
+} from "../components/feature";
 import { useFeatures } from "../features";
 import { errorMessage } from "../lib/backend";
 import {
@@ -28,7 +37,12 @@ import {
   type RecycleFit,
   type UndoAction,
 } from "../lib/cleanup";
-import { formatBytes, formatCount, formatDateTime, formatRelative } from "../lib/format";
+import {
+  formatBytes,
+  formatCount,
+  formatDateTime,
+  formatRelative,
+} from "../lib/format";
 import type { Safety } from "../lib/types";
 import { useApp } from "../store/app";
 import { useQueue } from "../store/queue";
@@ -40,13 +54,24 @@ type Stage =
   | { kind: "queue" }
   | { kind: "review"; plan: CleanupPlan }
   | { kind: "preflight"; plan: CleanupPlan; verdicts: ItemVerdict[] | null }
-  | { kind: "running"; plan: CleanupPlan; done: number; total: number; bytes: number }
+  | {
+      kind: "running";
+      plan: CleanupPlan;
+      done: number;
+      total: number;
+      bytes: number;
+    }
   | { kind: "results"; plan: CleanupPlan; report: ExecutionReport };
 
 function emptyDecision(plan: CleanupPlan): Decision {
   return {
     method: plan.defaultMethod,
-    acks: { careful: [], permanent: false, largePermanent: false, permanentInsteadOfRecycle: [] },
+    acks: {
+      careful: [],
+      permanent: false,
+      largePermanent: false,
+      permanentInsteadOfRecycle: [],
+    },
     // Never-tier items are never acted on; skipping them keeps the payload honest.
     skip: plan.items.filter((i) => i.safety === "never").map((i) => i.id),
   };
@@ -64,8 +89,11 @@ export function CleanupView() {
     ["history", "Undo history"],
   ] as const;
   return (
-    <ViewFrame title="Cleanup" lead="Review what will be removed, choose how, and undo it later from the Recycle Bin.">
-      <div role="tablist" aria-label="Cleanup sections" className="tabs">
+    <ViewFrame
+      title="Cleanup"
+      lead="Review what will be removed, choose how, and undo it later from the Recycle Bin."
+    >
+      <div role="tablist" aria-label="Cleanup sections" className="subtabs">
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -75,7 +103,7 @@ export function CleanupView() {
             aria-selected={tab === id}
             aria-controls={`panel-${id}`}
             tabIndex={tab === id ? 0 : -1}
-            className="tabs__tab"
+            className="subtabs__tab"
             onClick={() => {
               setTab(id);
             }}
@@ -101,7 +129,11 @@ export function CleanupView() {
 
 function CleanupFlow() {
   const features = useFeatures();
-  const canPlan = useCapability("cleanup_plan", "cleanup_preflight", "cleanup_execute");
+  const canPlan = useCapability(
+    "cleanup_plan",
+    "cleanup_preflight",
+    "cleanup_execute",
+  );
   const [stage, setStage] = useState<Stage>({ kind: "queue" });
   const [decision, setDecision] = useState<Decision | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,15 +175,25 @@ function CleanupFlow() {
     features.cleanup
       .executeCleanup(plan.planId, d, (p) => {
         if (p.event === "item_finished") {
-          const bytes = p.removed ? (plan.items.find((i) => i.id === p.id)?.bytes ?? 0) : 0;
-          setStage((s) => (s.kind === "running" ? { ...s, done: s.done + 1, bytes: s.bytes + bytes } : s));
+          const bytes = p.removed
+            ? plan.items.find((i) => i.id === p.id)?.bytes ?? 0
+            : 0;
+          setStage((s) =>
+            s.kind === "running"
+              ? { ...s, done: s.done + 1, bytes: s.bytes + bytes }
+              : s,
+          );
         }
       })
       .then(
         (report) => {
           setStage({ kind: "results", plan, report });
           const s = report.summary;
-          useApp.getState().notify(`Cleanup finished: ${s.succeeded} removed, ${s.failed} failed, ${s.skipped} skipped.`);
+          useApp
+            .getState()
+            .notify(
+              `Cleanup finished: ${s.succeeded} removed, ${s.failed} failed, ${s.skipped} skipped.`,
+            );
         },
         (err: unknown) => {
           setError(errorMessage(err));
@@ -167,7 +209,9 @@ function CleanupFlow() {
           {error}
         </p>
       )}
-      {stage.kind === "queue" && <QueuePanel canReview={canPlan} busy={busy} onReview={startReview} />}
+      {stage.kind === "queue" && (
+        <QueuePanel canReview={canPlan} busy={busy} onReview={startReview} />
+      )}
       {stage.kind === "review" && decision && (
         <ReviewPanel
           plan={stage.plan}
@@ -230,17 +274,27 @@ function CleanupFlow() {
 // Queue
 // -----------------------------------------------------------------------------
 
-function TierTotals({ items, skip }: { items: readonly QueueEntry[]; skip?: ReadonlySet<number> }) {
+function TierTotals({
+  items,
+  skip,
+}: {
+  items: readonly QueueEntry[];
+  skip?: ReadonlySet<number>;
+}) {
   const units = useSettings((s) => s.units);
   return (
     <dl className="tier-totals">
       {tierTotals(items, skip).map((t) => (
-        <div key={t.safety} className={`tier-totals__cell tier-totals__cell--${t.safety}`}>
+        <div
+          key={t.safety}
+          className={`tier-totals__cell tier-totals__cell--${t.safety}`}
+        >
           <dt>
             <SafetyBadge tier={t.safety} />
           </dt>
           <dd>
-            <strong>{formatBytes(t.bytes, { units })}</strong> · {formatCount(t.items)} {t.items === 1 ? "item" : "items"}
+            <strong>{formatBytes(t.bytes, { units })}</strong> ·{" "}
+            {formatCount(t.items)} {t.items === 1 ? "item" : "items"}
           </dd>
         </div>
       ))}
@@ -248,7 +302,15 @@ function TierTotals({ items, skip }: { items: readonly QueueEntry[]; skip?: Read
   );
 }
 
-function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: boolean; onReview: (ids: number[]) => void }) {
+function QueuePanel({
+  canReview,
+  busy,
+  onReview,
+}: {
+  canReview: boolean;
+  busy: boolean;
+  onReview: (ids: number[]) => void;
+}) {
   const features = useFeatures();
   const items = useQueue((s) => s.items);
   const refused = useQueue((s) => s.refused);
@@ -256,7 +318,8 @@ function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: b
   if (items === null) {
     return (
       <Unavailable feature="The cleanup queue" command="cleanup_queue_list">
-        Items you add from the map, the list, recommendations or duplicates collect here for review.
+        Items you add from the map, the list, recommendations or duplicates
+        collect here for review.
       </Unavailable>
     );
   }
@@ -279,7 +342,10 @@ function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: b
       {items.length === 0 ? (
         <div className="state state--quiet">
           <h2>The queue is empty</h2>
-          <p>Add items from the map or list (Delete key or “Add to cleanup”), from Free up space, or from Duplicates.</p>
+          <p>
+            Add items from the map or list (Delete key or “Add to cleanup”),
+            from Free up space, or from Duplicates.
+          </p>
         </div>
       ) : (
         <>
@@ -316,7 +382,13 @@ function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: b
                       onClick={() => {
                         features.cleanup.removeFromQueue([i.id]).then(
                           () => {
-                            useQueue.getState().setItems((useQueue.getState().items ?? []).filter((x) => x.id !== i.id));
+                            useQueue
+                              .getState()
+                              .setItems(
+                                (useQueue.getState().items ?? []).filter(
+                                  (x) => x.id !== i.id,
+                                ),
+                              );
                           },
                           (err: unknown) => {
                             useApp.getState().notify(errorMessage(err));
@@ -336,12 +408,18 @@ function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: b
               type="button"
               className="btn btn--primary"
               disabled={!canReview || busy}
-              title={canReview ? undefined : "Review needs cleanup_plan, which this build doesn’t include."}
+              title={
+                canReview
+                  ? undefined
+                  : "Review needs cleanup_plan, which this build doesn’t include."
+              }
               onClick={() => {
                 onReview(items.map((i) => i.id));
               }}
             >
-              Review {formatCount(items.length)} {items.length === 1 ? "item" : "items"} ({formatBytes(total, { units })})
+              Review {formatCount(items.length)}{" "}
+              {items.length === 1 ? "item" : "items"} (
+              {formatBytes(total, { units })})
             </button>
             <button
               type="button"
@@ -359,7 +437,11 @@ function QueuePanel({ canReview, busy, onReview }: { canReview: boolean; busy: b
             >
               Clear queue
             </button>
-            {!canReview && <span className="detail__muted">Reviewing and deleting aren’t available in this build.</span>}
+            {!canReview && (
+              <span className="detail__muted">
+                Reviewing and deleting aren’t available in this build.
+              </span>
+            )}
           </div>
         </>
       )}
@@ -396,22 +478,45 @@ export interface ReviewPanelProps {
 }
 
 /** Review screen: grouped by tier, expandable, deselect, acknowledgements and method. */
-export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: ReviewPanelProps) {
+export function ReviewPanel({
+  plan,
+  decision,
+  onChange,
+  onBack,
+  onContinue,
+}: ReviewPanelProps) {
   const units = useSettings((s) => s.units);
   // Careful and never groups start open, as does any group holding an item
   // that needs a decision, so nothing the user must act on is hidden.
   const [open, setOpen] = useState<ReadonlySet<Safety>>(() => {
-    const needs = new Set(plan.warnings.filter((w) => w.kind === "cannot_recycle" || w.kind === "running_app").map((w) => w.id));
-    return new Set<Safety>(["careful", "never", ...plan.items.filter((i) => needs.has(i.id)).map((i) => i.safety)]);
+    const needs = new Set(
+      plan.warnings
+        .filter((w) => w.kind === "cannot_recycle" || w.kind === "running_app")
+        .map((w) => w.id),
+    );
+    return new Set<Safety>([
+      "careful",
+      "never",
+      ...plan.items.filter((i) => needs.has(i.id)).map((i) => i.safety),
+    ]);
   });
   const skip = useMemo(() => new Set(decision.skip), [decision.skip]);
   const blockers = reviewBlockers(plan, decision);
-  const removed = plan.warnings.filter((w) => w.kind === "refused" || w.kind === "duplicate" || w.kind === "nested");
-  const permanentLarge = plan.items.some((i) => !skip.has(i.id) && i.safety !== "never" && i.bytes > plan.largeDeleteBytes);
+  const removed = plan.warnings.filter(
+    (w) =>
+      w.kind === "refused" || w.kind === "duplicate" || w.kind === "nested",
+  );
+  const permanentLarge = plan.items.some(
+    (i) =>
+      !skip.has(i.id) &&
+      i.safety !== "never" &&
+      i.bytes > plan.largeDeleteBytes,
+  );
   const instead = new Set(decision.acks.permanentInsteadOfRecycle);
   const needsPermanentAck = decision.method === "permanent" || instead.size > 0;
 
-  const toggle = (list: number[], id: number, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id));
+  const toggle = (list: number[], id: number, on: boolean) =>
+    on ? [...new Set([...list, id])] : list.filter((x) => x !== id);
 
   return (
     <div className="review">
@@ -421,8 +526,14 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
         <h3 id="vol-h">Recycle Bin by drive</h3>
         <ul className="plain">
           {plan.volumes.map((v) => (
-            <li key={v.mountPoint} className={v.recycleBin.state === "unavailable" ? "warn-text" : undefined}>
-              <strong>{v.mountPoint}</strong> — {formatCount(v.items)} items, {formatBytes(v.bytes, { units })}:{" "}
+            <li
+              key={v.mountPoint}
+              className={
+                v.recycleBin.state === "unavailable" ? "warn-text" : undefined
+              }
+            >
+              <strong>{v.mountPoint}</strong> — {formatCount(v.items)} items,{" "}
+              {formatBytes(v.bytes, { units })}:{" "}
               {v.recycleBin.state === "available"
                 ? v.recycleBin.capacity === null
                   ? "Recycle Bin available."
@@ -438,7 +549,11 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
         const expanded = open.has(tier);
         const groupId = `grp-${tier}`;
         return (
-          <section key={tier} className={`group group--${tier}`} aria-label={`${safetyLabel(tier)} items`}>
+          <section
+            key={tier}
+            className={`group group--${tier}`}
+            aria-label={`${safetyLabel(tier)} items`}
+          >
             <h3 className="group__head">
               <button
                 type="button"
@@ -452,25 +567,43 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
                   setOpen(next);
                 }}
               >
-                <span className={`twisty${expanded ? " twisty--open" : ""}`} aria-hidden="true">
+                <span
+                  className={`twisty${expanded ? " twisty--open" : ""}`}
+                  aria-hidden="true"
+                >
                   ▸
                 </span>
-                <SafetyBadge tier={tier} /> {formatCount(of.length)} {of.length === 1 ? "item" : "items"} ·{" "}
+                <SafetyBadge tier={tier} /> {formatCount(of.length)}{" "}
+                {of.length === 1 ? "item" : "items"} ·{" "}
                 {formatBytes(
                   of.reduce((a, i) => a + i.bytes, 0),
                   { units },
                 )}
               </button>
             </h3>
-            {tier === "never" && <p className="detail__muted">Never-tier items are protected and will not be deleted. Strata only shows why.</p>}
+            {tier === "never" && (
+              <p className="detail__muted">
+                Never-tier items are protected and will not be deleted. Strata
+                only shows why.
+              </p>
+            )}
             <ul id={groupId} className="review__items" hidden={!expanded}>
               {of.map((item) => {
                 const ws = warningsFor(plan, item.id);
-                const cannot = ws.find((w): w is Extract<PlanWarning, { kind: "cannot_recycle" }> => w.kind === "cannot_recycle");
-                const running = ws.filter((w): w is Extract<PlanWarning, { kind: "running_app" }> => w.kind === "running_app");
+                const cannot = ws.find(
+                  (w): w is Extract<PlanWarning, { kind: "cannot_recycle" }> =>
+                    w.kind === "cannot_recycle",
+                );
+                const running = ws.filter(
+                  (w): w is Extract<PlanWarning, { kind: "running_app" }> =>
+                    w.kind === "running_app",
+                );
                 const included = !skip.has(item.id) && tier !== "never";
                 return (
-                  <li key={item.id} className={`review__item${included ? "" : " review__item--off"}`}>
+                  <li
+                    key={item.id}
+                    className={`review__item${included ? "" : " review__item--off"}`}
+                  >
                     <div className="review__row">
                       {tier === "never" ? (
                         <span className="review__locked" aria-hidden="true">
@@ -482,21 +615,37 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
                           id={`inc-${item.id}`}
                           checked={included}
                           onChange={(e) => {
-                            onChange({ ...decision, skip: toggle(decision.skip, item.id, !e.target.checked) });
+                            onChange({
+                              ...decision,
+                              skip: toggle(
+                                decision.skip,
+                                item.id,
+                                !e.target.checked,
+                              ),
+                            });
                           }}
                         />
                       )}
-                      <label htmlFor={`inc-${item.id}`} className="review__name">
-                        {tier !== "never" && <span className="visually-hidden">Include </span>}
+                      <label
+                        htmlFor={`inc-${item.id}`}
+                        className="review__name"
+                      >
+                        {tier !== "never" && (
+                          <span className="visually-hidden">Include </span>
+                        )}
                         {item.name}
                       </label>
-                      <span className="review__size">{formatBytes(item.bytes, { units })}</span>
+                      <span className="review__size">
+                        {formatBytes(item.bytes, { units })}
+                      </span>
                     </div>
                     <div className="cell-path">{item.path}</div>
                     <p className="review__why">
                       {item.ruleName && <strong>{item.ruleName}: </strong>}
                       {item.explain}
-                      {item.regenerable && <span className="badge">regenerable</span>}
+                      {item.regenerable && (
+                        <span className="badge">regenerable</span>
+                      )}
                     </p>
                     {tier === "careful" && included && (
                       <label className="ack">
@@ -504,48 +653,85 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
                           type="checkbox"
                           checked={decision.acks.careful.includes(item.id)}
                           onChange={(e) => {
-                            onChange({ ...decision, acks: { ...decision.acks, careful: toggle(decision.acks.careful, item.id, e.target.checked) } });
+                            onChange({
+                              ...decision,
+                              acks: {
+                                ...decision.acks,
+                                careful: toggle(
+                                  decision.acks.careful,
+                                  item.id,
+                                  e.target.checked,
+                                ),
+                              },
+                            });
                           }}
                         />
-                        I reviewed this item and want to remove it (it may hold user data or large re-downloads).
+                        I reviewed this item and want to remove it (it may hold
+                        user data or large re-downloads).
                       </label>
                     )}
                     {running.map((w) => (
                       <p key={w.warning.app} className="warn-text">
-                        {w.warning.app} is running ({w.warning.reason === "owns_cache" ? "it owns this cache" : "it holds files here"}). Close it first for a clean result.
+                        {w.warning.app} is running (
+                        {w.warning.reason === "owns_cache"
+                          ? "it owns this cache"
+                          : "it holds files here"}
+                        ). Close it first for a clean result.
                       </p>
                     ))}
-                    {cannot && included && decision.method === "recycle_bin" && (
-                      <fieldset className="choice">
-                        <legend className="warn-text">{fitText(cannot.fit, units)} Strata never decides this for you:</legend>
-                        <label>
-                          <input
-                            type="radio"
-                            name={`fit-${item.id}`}
-                            checked={instead.has(item.id)}
-                            onChange={() => {
-                              onChange({ ...decision, acks: { ...decision.acks, permanentInsteadOfRecycle: toggle(decision.acks.permanentInsteadOfRecycle, item.id, true) } });
-                            }}
-                          />
-                          Delete permanently
-                        </label>
-                        <label>
-                          <input
-                            type="radio"
-                            name={`fit-${item.id}`}
-                            checked={false}
-                            onChange={() => {
-                              onChange({
-                                ...decision,
-                                skip: toggle(decision.skip, item.id, true),
-                                acks: { ...decision.acks, permanentInsteadOfRecycle: toggle(decision.acks.permanentInsteadOfRecycle, item.id, false) },
-                              });
-                            }}
-                          />
-                          Skip
-                        </label>
-                      </fieldset>
-                    )}
+                    {cannot &&
+                      included &&
+                      decision.method === "recycle_bin" && (
+                        <fieldset className="choice">
+                          <legend className="warn-text">
+                            {fitText(cannot.fit, units)} Strata never decides
+                            this for you:
+                          </legend>
+                          <label>
+                            <input
+                              type="radio"
+                              name={`fit-${item.id}`}
+                              checked={instead.has(item.id)}
+                              onChange={() => {
+                                onChange({
+                                  ...decision,
+                                  acks: {
+                                    ...decision.acks,
+                                    permanentInsteadOfRecycle: toggle(
+                                      decision.acks.permanentInsteadOfRecycle,
+                                      item.id,
+                                      true,
+                                    ),
+                                  },
+                                });
+                              }}
+                            />
+                            Delete permanently
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name={`fit-${item.id}`}
+                              checked={false}
+                              onChange={() => {
+                                onChange({
+                                  ...decision,
+                                  skip: toggle(decision.skip, item.id, true),
+                                  acks: {
+                                    ...decision.acks,
+                                    permanentInsteadOfRecycle: toggle(
+                                      decision.acks.permanentInsteadOfRecycle,
+                                      item.id,
+                                      false,
+                                    ),
+                                  },
+                                });
+                              }}
+                            />
+                            Skip
+                          </label>
+                        </fieldset>
+                      )}
                   </li>
                 );
               })}
@@ -559,7 +745,11 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
           <ul className="plain">
             {removed.map((w) => (
               <li key={`${w.kind}-${w.id}`}>
-                {w.kind === "refused" ? w.message : w.kind === "duplicate" ? "Queued twice; kept once." : "Inside another queued folder, which already covers it."}
+                {w.kind === "refused"
+                  ? w.message
+                  : w.kind === "duplicate"
+                    ? "Queued twice; kept once."
+                    : "Inside another queued folder, which already covers it."}
               </li>
             ))}
           </ul>
@@ -573,7 +763,15 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
             name="method"
             checked={decision.method === "recycle_bin"}
             onChange={() => {
-              onChange({ ...decision, method: "recycle_bin", acks: { ...decision.acks, permanent: false, largePermanent: false } });
+              onChange({
+                ...decision,
+                method: "recycle_bin",
+                acks: {
+                  ...decision.acks,
+                  permanent: false,
+                  largePermanent: false,
+                },
+              });
             }}
           />
           Move to Recycle Bin (recommended; restore from Undo history)
@@ -595,7 +793,10 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
               type="checkbox"
               checked={decision.acks.permanent}
               onChange={(e) => {
-                onChange({ ...decision, acks: { ...decision.acks, permanent: e.target.checked } });
+                onChange({
+                  ...decision,
+                  acks: { ...decision.acks, permanent: e.target.checked },
+                });
               }}
             />
             I understand permanently deleted items can’t be restored.
@@ -607,10 +808,14 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
               type="checkbox"
               checked={decision.acks.largePermanent}
               onChange={(e) => {
-                onChange({ ...decision, acks: { ...decision.acks, largePermanent: e.target.checked } });
+                onChange({
+                  ...decision,
+                  acks: { ...decision.acks, largePermanent: e.target.checked },
+                });
               }}
             />
-            Confirm again: some items are larger than {formatBytes(plan.largeDeleteBytes, { units })}.
+            Confirm again: some items are larger than{" "}
+            {formatBytes(plan.largeDeleteBytes, { units })}.
           </label>
         )}
       </fieldset>
@@ -628,7 +833,13 @@ export function ReviewPanel({ plan, decision, onChange, onBack, onContinue }: Re
         <button type="button" className="btn" onClick={onBack}>
           Back to queue
         </button>
-        <button type="button" className="btn btn--primary" disabled={blockers.length > 0} aria-describedby={blockers.length > 0 ? "blockers" : undefined} onClick={onContinue}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={blockers.length > 0}
+          aria-describedby={blockers.length > 0 ? "blockers" : undefined}
+          onClick={onContinue}
+        >
           Check items
         </button>
       </div>
@@ -656,7 +867,15 @@ export interface PreflightPanelProps {
 }
 
 /** Pre-flight results: ready items, and blocked ones with Close app / Skip. */
-export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, onBack, onExecute }: PreflightPanelProps) {
+export function PreflightPanel({
+  plan,
+  verdicts,
+  decision,
+  onChange,
+  onRecheck,
+  onBack,
+  onExecute,
+}: PreflightPanelProps) {
   const features = useFeatures();
   const units = useSettings((s) => s.units);
   const canClose = useCapability("cleanup_close_prompt", "cleanup_close_app");
@@ -675,7 +894,10 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
   const active = verdicts.filter((v) => !skip.has(v.id));
   const blocked = active.filter((v) => v.verdict.status === "blocked");
   const ready = active.filter((v) => v.verdict.status === "ready");
-  const bytes = ready.reduce((a, v) => a + (plan.items.find((i) => i.id === v.id)?.bytes ?? 0), 0);
+  const bytes = ready.reduce(
+    (a, v) => a + (plan.items.find((i) => i.id === v.id)?.bytes ?? 0),
+    0,
+  );
   const skipItem = (id: number) => {
     onChange({ ...decision, skip: [...new Set([...decision.skip, id])] });
   };
@@ -683,7 +905,8 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
     <div className="preflight">
       <h2 className="section-title">Pre-flight check</h2>
       <p role="status">
-        {formatCount(ready.length)} ready ({formatBytes(bytes, { units })}), {formatCount(blocked.length)} need attention.
+        {formatCount(ready.length)} ready ({formatBytes(bytes, { units })}),{" "}
+        {formatCount(blocked.length)} need attention.
       </p>
       {note && (
         <p className="banner" role="status">
@@ -708,11 +931,19 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
                       type="button"
                       className="btn btn--small"
                       disabled={!canClose || h.kind === "critical"}
-                      title={h.kind === "critical" ? "Critical system process; it can’t be closed." : canClose ? undefined : "Closing apps isn’t available in this build."}
+                      title={
+                        h.kind === "critical"
+                          ? "Critical system process; it can’t be closed."
+                          : canClose
+                            ? undefined
+                            : "Closing apps isn’t available in this build."
+                      }
                       onClick={() => {
-                        features.cleanup.prepareClose(h).then(setPrompt, (e: unknown) => {
-                          setNote(errorMessage(e));
-                        });
+                        features.cleanup
+                          .prepareClose(h)
+                          .then(setPrompt, (e: unknown) => {
+                            setNote(errorMessage(e));
+                          });
                       }}
                     >
                       Close app
@@ -746,7 +977,9 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
                     onClick={() => {
                       features.cleanup.deleteOnReboot(plan.planId, v.id).then(
                         () => {
-                          setNote("Scheduled for deletion at the next restart.");
+                          setNote(
+                            "Scheduled for deletion at the next restart.",
+                          );
                           skipItem(v.id);
                         },
                         (e: unknown) => {
@@ -767,9 +1000,14 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
         <section className="callout">
           <h3>Running apps</h3>
           <ul className="plain">
-            {[...new Map(active.flatMap((v) => v.runningApps).map((w) => [w.app, w])).values()].map((w) => (
+            {[
+              ...new Map(
+                active.flatMap((v) => v.runningApps).map((w) => [w.app, w]),
+              ).values(),
+            ].map((w) => (
               <li key={w.app}>
-                {w.app} is running. Close it first so it doesn’t recreate or hold its cache.
+                {w.app} is running. Close it first so it doesn’t recreate or
+                hold its cache.
               </li>
             ))}
           </ul>
@@ -790,12 +1028,23 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
         </button>
         <button
           type="button"
-          className={decision.method === "permanent" ? "btn btn--danger" : "btn btn--primary"}
+          className={
+            decision.method === "permanent"
+              ? "btn btn--danger"
+              : "btn btn--primary"
+          }
           disabled={blocked.length > 0 || ready.length === 0}
-          title={blocked.length > 0 ? "Resolve or skip the items above first." : undefined}
+          title={
+            blocked.length > 0
+              ? "Resolve or skip the items above first."
+              : undefined
+          }
           onClick={onExecute}
         >
-          {decision.method === "permanent" ? "Delete permanently" : "Move to Recycle Bin"} ({formatCount(ready.length)})
+          {decision.method === "permanent"
+            ? "Delete permanently"
+            : "Move to Recycle Bin"}{" "}
+          ({formatCount(ready.length)})
         </button>
       </div>
       {prompt && (
@@ -814,7 +1063,11 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
             }
             features.cleanup.closeApp(p.promptId).then(
               (out) => {
-                setNote(out.kind === "shut_down" ? `${p.app} closed.` : `${p.app} was asked to close; it may ask to save work.`);
+                setNote(
+                  out.kind === "shut_down"
+                    ? `${p.app} closed.`
+                    : `${p.app} was asked to close; it may ask to save work.`,
+                );
                 onRecheck(decision);
               },
               (e: unknown) => {
@@ -824,7 +1077,10 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
           }}
         >
           <p>{prompt.message}</p>
-          <p className="detail__muted">Strata asks the app to close the normal way. It is never killed; unsaved work prompts stay with the app.</p>
+          <p className="detail__muted">
+            Strata asks the app to close the normal way. It is never killed;
+            unsaved work prompts stay with the app.
+          </p>
         </ConfirmDialog>
       )}
     </div>
@@ -835,18 +1091,35 @@ export function PreflightPanel({ plan, verdicts, decision, onChange, onRecheck, 
 // Running and results
 // -----------------------------------------------------------------------------
 
-function RunningPanel({ stage }: { stage: Extract<Stage, { kind: "running" }> }) {
+function RunningPanel({
+  stage,
+}: {
+  stage: Extract<Stage, { kind: "running" }>;
+}) {
   const features = useFeatures();
   const units = useSettings((s) => s.units);
   const [cancelling, setCancelling] = useState(false);
   return (
     <div className="running">
       <h2 className="section-title">Removing items</h2>
-      <div role="progressbar" aria-label="Cleanup progress" aria-valuemin={0} aria-valuemax={stage.total} aria-valuenow={stage.done} className="progress">
-        <span className="progress__fill" style={{ width: `${stage.total === 0 ? 0 : (stage.done / stage.total) * 100}%` }} />
+      <div
+        role="progressbar"
+        aria-label="Cleanup progress"
+        aria-valuemin={0}
+        aria-valuemax={stage.total}
+        aria-valuenow={stage.done}
+        className="progress"
+      >
+        <span
+          className="progress__fill"
+          style={{
+            width: `${stage.total === 0 ? 0 : (stage.done / stage.total) * 100}%`,
+          }}
+        />
       </div>
       <p aria-live="polite">
-        {formatCount(stage.done)} of {formatCount(stage.total)} · {formatBytes(stage.bytes, { units })} freed
+        {formatCount(stage.done)} of {formatCount(stage.total)} ·{" "}
+        {formatBytes(stage.bytes, { units })} freed
       </p>
       <button
         type="button"
@@ -854,9 +1127,11 @@ function RunningPanel({ stage }: { stage: Extract<Stage, { kind: "running" }> })
         disabled={cancelling}
         onClick={() => {
           setCancelling(true);
-          void features.cleanup.cancelCleanup(stage.plan.planId).catch((e: unknown) => {
-            useApp.getState().notify(errorMessage(e));
-          });
+          void features.cleanup
+            .cancelCleanup(stage.plan.planId)
+            .catch((e: unknown) => {
+              useApp.getState().notify(errorMessage(e));
+            });
         }}
       >
         {cancelling ? "Cancelling…" : "Cancel"}
@@ -874,14 +1149,23 @@ export interface ResultsPanelProps {
 }
 
 /** Per-item results with failures, reasons and retry. */
-export function ResultsPanel({ plan, report, onRetry, onDone }: ResultsPanelProps) {
+export function ResultsPanel({
+  plan,
+  report,
+  onRetry,
+  onDone,
+}: ResultsPanelProps) {
   const units = useSettings((s) => s.units);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
   }, []);
   const s = report.summary;
-  const retryable = report.results.filter((r) => (r.outcome.kind === "failed" && r.outcome.error.retryable) || (r.outcome.kind === "skipped" && r.outcome.reason.retryable));
+  const retryable = report.results.filter(
+    (r) =>
+      (r.outcome.kind === "failed" && r.outcome.error.retryable) ||
+      (r.outcome.kind === "skipped" && r.outcome.reason.retryable),
+  );
   const name = (id: number) => plan.items.find((i) => i.id === id)?.name;
   return (
     <div className="results">
@@ -889,7 +1173,9 @@ export function ResultsPanel({ plan, report, onRetry, onDone }: ResultsPanelProp
         {s.cancelled ? "Cleanup cancelled" : "Cleanup finished"}
       </h2>
       <p>
-        <strong>{formatBytes(s.bytes, { units })}</strong> freed · {formatCount(s.succeeded)} removed · {formatCount(s.failed)} failed · {formatCount(s.skipped)} skipped
+        <strong>{formatBytes(s.bytes, { units })}</strong> freed ·{" "}
+        {formatCount(s.succeeded)} removed · {formatCount(s.failed)} failed ·{" "}
+        {formatCount(s.skipped)} skipped
       </p>
       <table className="table">
         <caption className="visually-hidden">Results per item</caption>
@@ -907,15 +1193,25 @@ export function ResultsPanel({ plan, report, onRetry, onDone }: ResultsPanelProp
                 <div className="cell-path">{r.path}</div>
               </td>
               <td>
-                {r.outcome.kind === "recycled" && <span className="ok-text">Moved to Recycle Bin</span>}
-                {r.outcome.kind === "deleted" && <span className="ok-text">Deleted ({formatBytes(r.outcome.bytes, { units })})</span>}
+                {r.outcome.kind === "recycled" && (
+                  <span className="ok-text">Moved to Recycle Bin</span>
+                )}
+                {r.outcome.kind === "deleted" && (
+                  <span className="ok-text">
+                    Deleted ({formatBytes(r.outcome.bytes, { units })})
+                  </span>
+                )}
                 {r.outcome.kind === "failed" && (
                   <span className="warn-text">
                     Failed: {r.outcome.error.message}
                     {r.outcome.error.retryable && " (can retry)"}
                   </span>
                 )}
-                {r.outcome.kind === "skipped" && <span className="detail__muted">Skipped: {r.outcome.reason.message}</span>}
+                {r.outcome.kind === "skipped" && (
+                  <span className="detail__muted">
+                    Skipped: {r.outcome.reason.message}
+                  </span>
+                )}
               </td>
             </tr>
           ))}
@@ -953,16 +1249,23 @@ function UndoHistory() {
   const has = useCapability("cleanup_history");
   const canRestore = useCapability("cleanup_restore");
   const units = useSettings((s) => s.units);
-  const [load, reload] = useLoad(() => features.cleanup.fetchUndoHistory(50, null), [features], has);
+  const [load, reload] = useLoad(
+    () => features.cleanup.fetchUndoHistory(50, null),
+    [features],
+    has,
+  );
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   const [msg, setMsg] = useState<string | null>(null);
-  if (!has) return <Unavailable feature="Undo history" command="cleanup_history" />;
+  if (!has)
+    return <Unavailable feature="Undo history" command="cleanup_history" />;
   const restore = (ids: number[]) => {
     features.cleanup.restoreItems(ids).then(
       (res) => {
         const ok = res.filter((r) => r.ok).length;
         const bad = res.filter((r) => !r.ok);
-        setMsg(`${ok} restored.${bad.length > 0 ? ` ${bad.length} not restored: ${bad[0]?.message ?? ""}` : ""}`);
+        setMsg(
+          `${ok} restored.${bad.length > 0 ? ` ${bad.length} not restored: ${bad[0]?.message ?? ""}` : ""}`,
+        );
         setPicked(new Set());
         reload();
       },
@@ -972,12 +1275,20 @@ function UndoHistory() {
     );
   };
   return (
-    <LoadState load={load} feature="Undo history" command="cleanup_history" onRetry={reload}>
+    <LoadState
+      load={load}
+      feature="Undo history"
+      command="cleanup_history"
+      onRetry={reload}
+    >
       {(actions) =>
         actions.length === 0 ? (
           <div className="state state--quiet">
             <h2>No cleanups yet</h2>
-            <p>Every cleanup is logged here before it acts. Items moved to the Recycle Bin can be restored.</p>
+            <p>
+              Every cleanup is logged here before it acts. Items moved to the
+              Recycle Bin can be restored.
+            </p>
           </div>
         ) : (
           <>
@@ -999,10 +1310,19 @@ function UndoHistory() {
               </button>
             </div>
             {actions.map((a) => (
-              <section key={a.actionId} className="undo" aria-label={`${a.kind} on ${formatDateTime(a.startedMs)}`}>
+              <section
+                key={a.actionId}
+                className="undo"
+                aria-label={`${a.kind} on ${formatDateTime(a.startedMs)}`}
+              >
                 <h3 className="undo__head">
-                  {formatDateTime(a.startedMs)} <span className="detail__muted">({formatRelative(a.startedMs)})</span> · {STATUS_TEXT[a.status]} · {formatCount(a.doneCount)} of{" "}
-                  {formatCount(a.itemCount)} · {formatBytes(a.bytesDone, { units })}
+                  {formatDateTime(a.startedMs)}{" "}
+                  <span className="detail__muted">
+                    ({formatRelative(a.startedMs)})
+                  </span>{" "}
+                  · {STATUS_TEXT[a.status]} · {formatCount(a.doneCount)} of{" "}
+                  {formatCount(a.itemCount)} ·{" "}
+                  {formatBytes(a.bytesDone, { units })}
                 </h3>
                 <ul className="plain undo__items">
                   {a.items.map((i) => (

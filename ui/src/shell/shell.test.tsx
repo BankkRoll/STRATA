@@ -350,11 +350,27 @@ describe("status bar and states", () => {
   it("shows the first-run state when nothing is scanned yet", async () => {
     const services = testServices();
     const v = await fixtureVolume(services);
-    const fresh: VolumeInfo = { ...v, categoryBytes: null, scan: { state: "never", progress: null, lastScanMs: null, scanner: null, rootId: null } };
+    const fresh: VolumeInfo = { ...v, mountPoints: ["X:\\"], categoryBytes: null, scan: { state: "never", progress: null, lastScanMs: null, scanner: null, rootId: null } };
     services.volumes = { ...services.volumes, list: () => Promise.resolve([fresh]) };
     render(<App services={services} />);
     const sidebar = screen.getByRole("navigation", { name: "Explore sidebar" });
-    expect(await within(sidebar).findByRole("button", { name: /Synthetic fixture, Not scanned, .* Press to scan/ })).toBeTruthy();
+    expect(await within(sidebar).findByRole("button", { name: /Synthetic fixture \(X:\), Not scanned, .* Press to scan/ })).toBeTruthy();
     expect(screen.getByRole("contentinfo", { name: "Status" }).textContent).toMatch(/No volume open/);
+  });
+
+  it("hides unscanned partitions without a drive letter until asked", async () => {
+    const services = testServices();
+    const v = await fixtureVolume(services);
+    const never = { state: "never", progress: null, lastScanMs: null, scanner: null, rootId: null } as const;
+    const drive: VolumeInfo = { ...v, id: "drive", mountPoints: ["X:\\"], categoryBytes: null, scan: never };
+    const efi: VolumeInfo = { ...v, id: "efi", label: "", mountPoints: [], categoryBytes: null, scan: never };
+    services.volumes = { ...services.volumes, list: () => Promise.resolve([drive, efi]) };
+    render(<App services={services} />);
+    const sidebar = screen.getByRole("navigation", { name: "Explore sidebar" });
+    await within(sidebar).findByRole("button", { name: /Synthetic fixture \(X:\)/ });
+    expect(within(sidebar).queryByText("Unnamed partition")).toBeNull();
+    expect(screen.queryByText(/efi/)).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Show 1 system partition without a drive letter" }));
+    expect(await screen.findByRole("heading", { name: "Unnamed partition" })).toBeTruthy();
   });
 });

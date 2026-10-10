@@ -9,7 +9,14 @@ import { BackendUnavailableError, errorMessage } from "../lib/backend";
 import { formatBytes, formatPercent, formatRelative } from "../lib/format";
 import { useDark } from "../lib/hooks";
 import { CATEGORIES } from "../lib/palette";
-import { volumeName, watchHelper, type ScanState, type SinceLastScan, type VolumeInfo } from "../lib/volumes";
+import {
+  isListedVolume,
+  volumeName,
+  watchHelper,
+  type ScanState,
+  type SinceLastScan,
+  type VolumeInfo,
+} from "../lib/volumes";
 import { useServices } from "../services";
 import { useApp } from "../store/app";
 import { useSettings } from "../store/settings";
@@ -37,23 +44,46 @@ export function CapacityBar({ v }: { v: VolumeInfo }) {
       const b = v.categoryBytes[String(c.id)] ?? 0;
       if (b <= 0) continue;
       accounted += b;
-      segments.push({ label: c.label, bytes: b, color: dark ? c.dark : c.light });
+      segments.push({
+        label: c.label,
+        bytes: b,
+        color: dark ? c.dark : c.light,
+      });
     }
     // The gap between used space and what the scan found is shown, never hidden.
-    if (used > accounted) segments.push({ label: "Unaccounted / system reserved", bytes: used - accounted, color: "var(--unaccounted)" });
+    if (used > accounted)
+      segments.push({
+        label: "Unaccounted / system reserved",
+        bytes: used - accounted,
+        color: "var(--unaccounted)",
+      });
   } else {
     segments.push({ label: "Used", bytes: used, color: "var(--used)" });
   }
   const text = `${formatBytes(used, { units })} used of ${formatBytes(v.totalBytes, { units })}, ${formatBytes(v.freeBytes, { units })} free`;
   return (
     <div className="capacity">
-      <div className="capacity__bar" role="img" aria-label={`${text}. ${segments.map((s) => `${s.label} ${formatBytes(s.bytes, { units })}`).join(", ")}`}>
+      <div
+        className="capacity__bar"
+        role="img"
+        aria-label={`${text}. ${segments.map((s) => `${s.label} ${formatBytes(s.bytes, { units })}`).join(", ")}`}
+      >
         {segments.map((s) => (
-          <span key={s.label} style={{ width: `${(s.bytes / total) * 100}%`, background: s.color }} title={`${s.label}: ${formatBytes(s.bytes, { units })}`} />
+          <span
+            key={s.label}
+            style={{
+              width: `${(s.bytes / total) * 100}%`,
+              background: s.color,
+            }}
+            title={`${s.label}: ${formatBytes(s.bytes, { units })}`}
+          />
         ))}
       </div>
       <p className="capacity__text">
-        {text} <span className="detail__muted">({formatPercent(used / total)} full)</span>
+        {text}{" "}
+        <span className="detail__muted">
+          ({formatPercent(used / total)} full)
+        </span>
       </p>
     </div>
   );
@@ -88,15 +118,23 @@ function VolumeCard({ v }: { v: VolumeInfo }) {
             <Icon name="lock" size={12} /> BitLocker locked
           </span>
         )}
-        <span className={`chip-state chip-state--${state}`}>{STATE_LABEL[state]}</span>
+        <span className={`chip-state chip-state--${state}`}>
+          {STATE_LABEL[state]}
+        </span>
       </div>
       <CapacityBar v={v} />
       {state === "scanning" && progress && (
         <div className="volume__progress">
-          <progress max={1} value={progress.fraction ?? undefined} aria-label={`Scanning ${volumeName(v)}`} />
+          <progress
+            max={1}
+            value={progress.fraction ?? undefined}
+            aria-label={`Scanning ${volumeName(v)}`}
+          />
           <span>
             {progress.entries.toLocaleString()} items
-            {progress.etaSecs !== null ? ` · about ${Math.ceil(progress.etaSecs)} s left` : ""}
+            {progress.etaSecs !== null
+              ? ` · about ${Math.ceil(progress.etaSecs)} s left`
+              : ""}
           </span>
         </div>
       )}
@@ -135,7 +173,11 @@ function VolumeCard({ v }: { v: VolumeInfo }) {
             Open map
           </button>
         )}
-        {v.scan.lastScanMs !== null && <span className="detail__muted">Scanned {formatRelative(v.scan.lastScanMs)}</span>}
+        {v.scan.lastScanMs !== null && (
+          <span className="detail__muted">
+            Scanned {formatRelative(v.scan.lastScanMs)}
+          </span>
+        )}
       </div>
     </li>
   );
@@ -171,7 +213,8 @@ function SinceLastScanBanner({ volume }: { volume: VolumeInfo }) {
       {data.biggest && (
         <>
           {" "}
-          — biggest: <code>{data.biggest.path}</code> {data.biggest.deltaBytes > 0 ? "+" : ""}
+          — biggest: <code>{data.biggest.path}</code>{" "}
+          {data.biggest.deltaBytes > 0 ? "+" : ""}
           {formatBytes(data.biggest.deltaBytes, { units })}
         </>
       )}{" "}
@@ -181,7 +224,8 @@ function SinceLastScanBanner({ volume }: { volume: VolumeInfo }) {
           className="linkish"
           onClick={() => {
             const s = useApp.getState();
-            if (volume.scan.rootId !== null && s.volumeId !== volume.id) s.openVolume(volume.id, volume.scan.rootId);
+            if (volume.scan.rootId !== null && s.volumeId !== volume.id)
+              s.openVolume(volume.id, volume.scan.rootId);
             s.setView("history");
           }}
         >
@@ -208,7 +252,11 @@ export function useVolumeSync(): void {
         if (!cancelled) store.setVolumes(v);
       })
       .catch((err: unknown) => {
-        if (!cancelled) store.setError(errorMessage(err), err instanceof BackendUnavailableError);
+        if (!cancelled)
+          store.setError(
+            errorMessage(err),
+            err instanceof BackendUnavailableError,
+          );
       });
     services.volumes
       .helperStatus()
@@ -237,7 +285,9 @@ function Welcome({ volumes }: { volumes: readonly VolumeInfo[] }) {
   const services = useServices();
   const notify = useApp((s) => s.notify);
   const [busy, setBusy] = useState(false);
-  const target = volumes.find((v) => v.isSystem && v.present && v.bitlocker !== "locked") ?? volumes.find((v) => v.present && v.bitlocker !== "locked");
+  const target =
+    volumes.find((v) => v.isSystem && v.present && v.bitlocker !== "locked") ??
+    volumes.find((v) => v.present && v.bitlocker !== "locked");
   return (
     <section className="welcome" aria-labelledby="welcome-title">
       <svg className="welcome__mark" viewBox="0 0 64 64" aria-hidden="true">
@@ -250,8 +300,9 @@ function Welcome({ volumes }: { volumes: readonly VolumeInfo[] }) {
           Start with a scan
         </h2>
         <p>
-          Strata maps what is using each drive, explains what every item is and which app put it there, and helps you clean up safely. Scanning only reads; nothing on
-          disk changes.
+          Strata maps what is using each drive, explains what every item is and
+          which app put it there, and helps you clean up safely. Scanning only
+          reads; nothing on disk changes.
         </p>
         {target && (
           <div className="welcome__actions">
@@ -284,28 +335,42 @@ function Welcome({ volumes }: { volumes: readonly VolumeInfo[] }) {
 /** Volumes overview. */
 export function Home() {
   const services = useServices();
-  const volumes = useVolumes((s) => s.volumes);
+  const all = useVolumes((s) => s.volumes);
+  const [showPartitions, setShowPartitions] = useState(false);
+  const hiddenCount = all?.filter((v) => !isListedVolume(v)).length ?? 0;
+  const volumes = all && !showPartitions ? all.filter(isListedVolume) : all;
   const helper = useVolumes((s) => s.helper);
   const error = useVolumes((s) => s.error);
   const notify = useApp((s) => s.notify);
   const unavailable = useVolumes((s) => s.unavailable);
 
   const units = useSettings((s) => s.units);
-  const scanned = volumes?.find((v) => v.scan.lastScanMs !== null && v.isSystem) ?? volumes?.find((v) => v.scan.lastScanMs !== null);
-  const firstRun = volumes !== null && volumes.length > 0 && volumes.every((v) => v.scan.rootId === null && v.scan.state !== "scanning");
+  const scanned =
+    volumes?.find((v) => v.scan.lastScanMs !== null && v.isSystem) ??
+    volumes?.find((v) => v.scan.lastScanMs !== null);
+  const firstRun =
+    volumes !== null &&
+    volumes.length > 0 &&
+    volumes.every((v) => v.scan.rootId === null && v.scan.state !== "scanning");
   const total = volumes?.reduce((a, v) => a + v.totalBytes, 0) ?? 0;
   const free = volumes?.reduce((a, v) => a + v.freeBytes, 0) ?? 0;
 
   return (
     <section className="home" aria-labelledby="home-title">
       <div className="home__inner">
-        <header className={volumes && volumes.length > 0 ? "home__head" : "visually-hidden"}>
+        <header
+          className={
+            volumes && volumes.length > 0 ? "home__head" : "visually-hidden"
+          }
+        >
           <h1 id="home-title" className="home__title">
             Volumes
           </h1>
           {volumes && volumes.length > 0 && (
             <p className="home__summary">
-              {volumes.length === 1 ? "1 drive" : `${volumes.length} drives`} · {formatBytes(free, { units })} free of {formatBytes(total, { units })}
+              {volumes.length === 1 ? "1 drive" : `${volumes.length} drives`} ·{" "}
+              {formatBytes(free, { units })} free of{" "}
+              {formatBytes(total, { units })}
             </p>
           )}
         </header>
@@ -318,9 +383,11 @@ export function Home() {
               type="button"
               className="linkish"
               onClick={() => {
-                services.volumes.elevate().then(useVolumes.getState().setHelper, (err: unknown) => {
-                  notify(errorMessage(err));
-                });
+                services.volumes
+                  .elevate()
+                  .then(useVolumes.getState().setHelper, (err: unknown) => {
+                    notify(errorMessage(err));
+                  });
               }}
             >
               Enable fast scan
@@ -336,25 +403,39 @@ export function Home() {
         )}
         {error && (
           <section className="empty-state">
-            <svg className="empty-state__mark" viewBox="0 0 64 64" aria-hidden="true">
+            <svg
+              className="empty-state__mark"
+              viewBox="0 0 64 64"
+              aria-hidden="true"
+            >
               <rect x="6" y="10" width="52" height="10" rx="3" />
               <rect x="6" y="27" width="34" height="10" rx="3" />
               <rect x="6" y="44" width="20" height="10" rx="3" />
             </svg>
-            <h2 className="empty-state__title">See everything on your drives</h2>
+            <h2 className="empty-state__title">
+              See everything on your drives
+            </h2>
             <p>
-              Strata maps what is using your disk, explains what each item is and which app put it there, and helps you
-              clean up safely.
+              Strata maps what is using your disk, explains what each item is
+              and which app put it there, and helps you clean up safely.
             </p>
-            <p className="empty-state__hint" role={unavailable ? undefined : "alert"}>
-              {unavailable ? "Drive scanning is not connected in this build yet." : `Couldn’t list volumes: ${error}`}
+            <p
+              className="empty-state__hint"
+              role={unavailable ? undefined : "alert"}
+            >
+              {unavailable
+                ? "Drive scanning is not connected in this build yet."
+                : `Couldn’t list volumes: ${error}`}
             </p>
           </section>
         )}
         {volumes && volumes.length === 0 && (
           <div className="state state--quiet">
             <h2>No volumes found</h2>
-            <p>Strata lists fixed and removable drives. Network drives can be added in Settings.</p>
+            <p>
+              Strata lists fixed and removable drives. Network drives can be
+              added in Settings.
+            </p>
           </div>
         )}
         {volumes && volumes.length > 0 && (
@@ -363,6 +444,21 @@ export function Home() {
               <VolumeCard key={v.id} v={v} />
             ))}
           </ul>
+        )}
+        {hiddenCount > 0 && (
+          <p className="home__partitions">
+            <button
+              type="button"
+              className="linkish"
+              onClick={() => {
+                setShowPartitions((s) => !s);
+              }}
+            >
+              {showPartitions
+                ? "Hide system partitions"
+                : `Show ${hiddenCount === 1 ? "1 system partition" : `${hiddenCount} system partitions`} without a drive letter`}
+            </button>
+          </p>
         )}
       </div>
     </section>

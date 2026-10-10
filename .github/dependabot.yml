@@ -23,6 +23,9 @@ updates:
       # typescript-eslint supports TypeScript < 6.1; lift this once it adds 7.x.
       - dependency-name: typescript
         versions: [">=6.1.0"]
+      # Types must match the Node 22 runtime that CI and the release use.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       npm:
         update-types: [minor, patch]

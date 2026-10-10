@@ -1,9 +1,10 @@
 name: CI
 
 on:
+  # NOTE: tags are not built here. A release tag points at a commit main has
+  # already verified, and release.yml builds the installers for it.
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -24,8 +25,9 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  # PERF: pull requests skip the half of the repo they don't touch. Pushes to main and
-  # tags always run everything, so main is fully verified and needs no git history.
+  # PERF: pull requests skip the half of the repo they don't touch. Pushes to main
+  # always run every check, so main is fully verified; they build installers only
+  # when something that ships in them changed.
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
@@ -34,14 +36,32 @@ jobs:
     outputs:
       rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
       ui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.ui == 'true' }}
+      bundle: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && steps.filter.outputs.bundle == 'true') }}
     steps:
       # NOTE: on pull_request events paths-filter reads the changed files from the
-      # GitHub API, so no checkout (and no credentials) are needed.
+      # GitHub API. Pushes compare against the previous head, which needs history.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         with:
           filters: |
+            bundle:
+              - "crates/**"
+              - "src-tauri/**"
+              - "ui/**"
+              - "rules/**"
+              - "scripts/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - ".github/workflows/ci.yml"
             rust:
               - "crates/**"
               - "src-tauri/**"
@@ -124,10 +144,12 @@ jobs:
       - run: pnpm --dir ui test
 
   # PERF: bundles run in parallel with checks instead of after them, and only for
-  # main, tags and manual runs. Pull requests never pay for a release build.
+  # manual runs and main pushes that change what ships. Pull requests never pay
+  # for a release build.
   bundle:
     name: Bundle (${{ matrix.target }})
-    if: github.event_name != 'pull_request'
+    needs: changes
+    if: needs.changes.outputs.bundle == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -135,10 +157,10 @@ jobs:
       matrix:
         target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
     env:
-      # PERF: full LTO + single codegen unit only for tagged releases; main-branch
-      # artifacts are for smoke testing and build several times faster without them.
-      CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/v') && 'thin' || 'off' }}
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '16' }}
+      # PERF: these artifacts are for smoke testing, so they skip the LTO and single
+      # codegen unit that release.yml uses and build several times faster.
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

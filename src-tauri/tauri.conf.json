@@ -42,6 +42,9 @@
       "nsis": {
         "installMode": "perMachine",
         "installerHooks": "windows/hooks.nsh",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "windows/installer-header.bmp",
+        "sidebarImage": "windows/installer-sidebar.bmp",
         "compression": "lzma"
       }
     }

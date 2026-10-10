@@ -100,7 +100,7 @@ jobs:
       - run: New-Item -ItemType Directory -Force ui/dist | Out-Null
       # NOTE: tauri-build drops a stub msvcrt.lib in its OUT_DIR and cargo leaks that
       # link path into every workspace doctest, so the app crate is tested on its own.
-      - run: cargo test --workspace --exclude strata-app
+      - run: cargo test --workspace --exclude strata-app --no-fail-fast
       - run: cargo test -p strata-app
 
   frontend:

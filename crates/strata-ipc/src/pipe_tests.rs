@@ -630,7 +630,11 @@ fn pipe_security_descriptor_matches_the_policy() {
     let user = sid();
     // NOTE: SDDL abbreviates well-known accounts, so the built-in
     // Administrator (RID 500, as on CI runners) is written as `LA`.
-    let user = if user.ends_with("-500") { "LA".to_owned() } else { user };
+    let user = if user.ends_with("-500") {
+        "LA".to_owned()
+    } else {
+        user
+    };
     assert!(sddl.starts_with("D:P"), "{sddl}");
     assert!(sddl.contains(&format!("(A;;0x120183;;;{user})")), "{sddl}");
     assert!(sddl.contains(";;;SY)"), "{sddl}");

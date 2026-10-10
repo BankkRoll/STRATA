@@ -27,7 +27,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true }
 crossbeam-channel = { workspace = true }
-getrandom = "0.3.4"
+getrandom = "0.4.3"
 strata-core = { path = "../crates/strata-core" }
 strata-index = { path = "../crates/strata-index" }
 strata-layout = { path = "../crates/strata-layout" }

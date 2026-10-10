@@ -173,7 +173,7 @@ User rules are loaded from every `*.toml` file in the user rules folder, in file
 - A built-in `never` rule can be **neither relaxed nor disabled**: an override must keep
   `safety = "never"` (it may reword the explanation), and disabling it is refused. The never tier
   is what keeps Windows, installed programs, browser profiles and git history out of every delete
-  path; a rules file must not be able to remove that protection (SPEC §0 rule 6).
+  path; a rules file must not be able to remove that protection.
 - New user rules cannot relax a built-in `never` either: when user rules are loaded the engine
   also evaluates built-ins alone, and if they say `never` the result is clamped to `never`
   (`Classification::clamped`). User rules may freely relax or tighten the other tiers.

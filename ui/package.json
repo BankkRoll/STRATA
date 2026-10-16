@@ -16,8 +16,8 @@
     "fixtures:large": "cargo run -p strata-layout --example export_fixtures --release -- src/dev/__fixtures__/large --large"
   },
   "dependencies": {
-    "@tanstack/react-virtual": "3.14.14",
-    "@tauri-apps/api": "^2.12.2",
+    "@tanstack/react-virtual": "3.14.19",
+    "@tauri-apps/api": "^2.12.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"
@@ -34,8 +34,8 @@
     "globals": "^17.13.0",
     "jsdom": "^30.1.2",
     "typescript": "~6.0.0",
-    "typescript-eslint": "^8.71.1",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   }
 }

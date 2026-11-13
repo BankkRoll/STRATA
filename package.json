@@ -11,6 +11,6 @@
     "check": "pnpm --dir ui typecheck && pnpm --dir ui lint && pnpm --dir ui test"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.1"
+    "@tauri-apps/cli": "^2.12.4"
   }
 }
